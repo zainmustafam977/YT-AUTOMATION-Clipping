@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Engine Logs{% endblock %}
+{% block content %}
+<style>
+    html, body {
+        height: 100vh;
+        overflow: hidden !important;
+    }
+    nav.navbar {
+        margin-bottom: 0.75rem !important;
+    }
+    .container-fluid.px-4 {
+        height: calc(100vh - 75px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding-bottom: 0.5rem;
+    }
+    .logs-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        flex: 1 1 auto;
+    }
+    .logs-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        margin-bottom: 0 !important;
+    }
+    .logs-card-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+    }
+    #log_container {
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow-y: auto !important;
+    }
+</style>
+<div class="row logs-wrapper">
+    <div class="col-12 d-flex flex-column h-100">
+        <div class="card shadow-sm logs-card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 flex-shrink-0">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold text-light">📜 Engine & Pipeline Logs</span>
+                    <span id="log_sse_badge" class="badge bg-success-subtle text-success border border-success">🟢 Streaming Live</span>
+                    <span class="badge bg-secondary">storage/logs/shorts_engine.log</span>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="live_stream_toggle" checked>
+                        <label class="form-check-label text-muted small" for="live_stream_toggle">Live Stream</label>
+                    </div>
+                    <button class="btn btn-sm btn-outline-info" id="refresh_btn" onclick="fetchLogs()">↻ Refresh</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyLogs()">📋 Copy</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearLogsView()">🗑 Clear View</button>
+                </div>
+            </div>
+            <div class="card-body p-0 position-relative logs-card-body">
+                <div id="scroll_lock_indicator" class="position-absolute bottom-0 end-0 m-3 p-1 px-2 bg-warning text-dark small rounded shadow d-none" style="z-index: 10; font-size: 0.75rem;">
+                    ⏸ Auto-scroll paused (scrolled up) — <a href="javascript:void(0)" onclick="resumeScroll()" class="text-dark fw-bold">Jump to bottom ↓</a>
+                </div>
+                <pre id="log_container" class="m-0 p-3 bg-black text-light" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.8rem; line-height: 1.4; height: 100%; overflow-y: auto; white-space: pre-wrap; word-break: break-all;"><code>{{ logs }}</code></pre>
+            </div>
+            <div class="card-footer d-flex justify-content-between text-muted small flex-wrap gap-1 flex-shrink-0">
+                <span id="last_updated">Buffer: active live tail (capped at 1,500 lines)</span>
+                <span>Active rotating logs (10MB max, 5 backups, Windows-safe atomic reads)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var logSource = null;
+    var maxLines = 1500;
+    var isUserScrolledUp = false;
+
+    function isScrolledToBottom(container) {
+        return (container.scrollHeight - container.scrollTop - container.clientHeight) <= 40;
+    }
+
+    function scrollLogsToBottom() {
+        var container = document.getElementById("log_container");
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function resumeScroll() {
+        isUserScrolledUp = false;
+        var indicator = document.getElementById("scroll_lock_indicator");
+        if (indicator) indicator.classList.add("d-none");
+        scrollLogsToBottom();
+    }
+
+    function trimLogBuffer() {
+        var codeEl = document.querySelector("#log_container code");
+        if (!codeEl) return;
+        var lines = codeEl.textContent.split("\n");
+        if (lines.length > maxLines) {
+            codeEl.textContent = lines.slice(lines.length - maxLines).join("\n");
+        }
+    }
+
+    function appendLogText(newText) {
+        var container = document.getElementById("log_container");
+        var codeEl = document.querySelector("#log_container code");
+        if (!codeEl || !container) return;
+
+        var wasAtBottom = isScrolledToBottom(container);
+
+        codeEl.textContent += newText;
+        trimLogBuffer();
+
+        if (wasAtBottom && !isUserScrolledUp) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function initLogSSE() {
+        if (!window.EventSource) return;
+        if (logSource) {
+            logSource.close();
+        }
+
+        var badge = document.getElementById("log_sse_badge");
+        logSource = new EventSource("/api/events/logs");
+
+        logSource.onopen = function() {
+            if (badge) {
+                badge.className = "badge bg-success-subtle text-success border border-success";
+                badge.textContent = "🟢 Streaming Live";
+            }
+        };
+
+        logSource.onerror = function() {
+            if (badge) {
+                badge.className = "badge bg-warning-subtle text-warning border border-warning";
+                badge.textContent = "🟡 Reconnecting...";
+            }
+        };
+
+        logSource.onmessage = function(e) {
+            try {
+                var data = JSON.parse(e.data);
+                if (data && data.text) {
+                    appendLogText(data.text);
+                    var updateEl = document.getElementById("last_updated");
+                    if (updateEl) {
+                        updateEl.textContent = "Live streamed at " + new Date().toLocaleTimeString();
+                    }
+                }
+            } catch (err) {
+                console.warn("Log SSE parse error:", err);
+            }
+        };
+    }
+
+    function stopLogSSE() {
+        if (logSource) {
+            logSource.close();
+            logSource = null;
+        }
+        var badge = document.getElementById("log_sse_badge");
+        if (badge) {
+            badge.className = "badge bg-secondary";
+            badge.textContent = "⚪ Stream Paused";
+        }
+    }
+
+    function fetchLogs() {
+        var refreshBtn = document.getElementById("refresh_btn");
+        if (refreshBtn) refreshBtn.disabled = true;
+
+        fetch("/api/logs?max_lines=250")
+            .then(function(res) {
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                return res.json();
+            })
+            .then(function(data) {
+                var codeEl = document.querySelector("#log_container code");
+                if (codeEl) {
+                    codeEl.textContent = data.logs || "No logs recorded yet.";
+                }
+                var updateEl = document.getElementById("last_updated");
+                if (updateEl) {
+                    updateEl.textContent = "Last fetched at " + new Date().toLocaleTimeString();
+                }
+                scrollLogsToBottom();
+            })
+            .catch(function(err) {
+                console.error("Log fetch error:", err);
+            })
+            .finally(function() {
+                if (refreshBtn) refreshBtn.disabled = false;
+            });
+    }
+
+    function copyLogs() {
+        var codeEl = document.querySelector("#log_container code");
+        if (codeEl) {
+            navigator.clipboard.writeText(codeEl.textContent).then(function() {
+                alert("Logs copied to clipboard!");
+            });
+        }
+    }
+
+    function clearLogsView() {
+        var codeEl = document.querySelector("#log_container code");
+        if (codeEl) codeEl.textContent = "— Log view cleared. New live logs will appear below —\n";
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var container = document.getElementById("log_container");
+        var indicator = document.getElementById("scroll_lock_indicator");
+
+        if (container) {
+            scrollLogsToBottom();
+
+            container.addEventListener("scroll", function() {
+                if (isScrolledToBottom(container)) {
+                    isUserScrolledUp = false;
+                    if (indicator) indicator.classList.add("d-none");
+                } else {
+                    isUserScrolledUp = true;
+                    if (indicator) indicator.classList.remove("d-none");
+                }
+            });
+        }
+
+        var liveToggle = document.getElementById("live_stream_toggle");
+        if (liveToggle) {
+            liveToggle.addEventListener("change", function() {
+                if (this.checked) {
+                    initLogSSE();
+                } else {
+                    stopLogSSE();
+                }
+            });
+        }
+
+        initLogSSE();
+    });
+</script>
+{% endblock %}

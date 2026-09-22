@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% block title %}Channels{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="text-light m-0">Channel Manager</h4>
+    {% if not websub_public %}
+    <span class="badge bg-warning text-dark">RSS Poller Active (Every {{ rss_interval }}m)</span>
+    {% else %}
+    <span class="badge bg-success">WebSub Push Active</span>
+    {% endif %}
+</div>
+
+{% if not websub_public %}
+<div class="alert alert-warning d-flex align-items-center mb-4 shadow-sm" role="alert">
+    <div>
+        <strong>⚠️ WebSub Hub Notice:</strong>
+        <code>WEBSUB_CALLBACK_URL</code> is {% if not websub_url %}not configured{% else %}set to localhost (<code>{{ websub_url }}</code>){% endif %}.
+        Google's WebSub Hub requires a publicly accessible webhook endpoint (e.g. ngrok or a live domain) to receive instantaneous push notifications.
+        <strong>Periodic RSS polling fallback is active and checking for new videos every {{ rss_interval }} minutes.</strong>
+    </div>
+</div>
+{% endif %}
+
+<div class="card p-3 mb-4">
+    <h6 class="text-light mb-3">Add Channel to Watch</h6>
+    <form method="post" action="/channels/add" class="row g-3 align-items-center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="col-md-4">
+            <input type="text" name="youtube_channel_id" class="form-control bg-dark text-light border-secondary" placeholder="YouTube Channel ID (e.g. UC...)" required>
+            <div class="form-text text-muted small">Must begin with UC (e.g. UC_x5XG1OV2P6uZZ5FSM9Ttw).</div>
+        </div>
+        <div class="col-md-3">
+            <input type="text" name="name" class="form-control bg-dark text-light border-secondary" placeholder="Channel Display Name" required>
+        </div>
+        <div class="col-md-3">
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" name="human_review" id="hrCheck" checked>
+                <label class="form-check-label text-light small" for="hrCheck">Human Review Required</label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="only_new_uploads" id="skipBackfillCheck" checked>
+                <label class="form-check-label text-light small" for="skipBackfillCheck" title="Set last seen video to newest video immediately so old uploads are skipped">Skip Backfill (New Only)</label>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100 fw-bold" style="background: #7c4dff; border-color: #7c4dff;">+ Add Channel</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-responsive">
+<table class="table table-dark table-hover align-middle">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th class="text-nowrap">YouTube Channel ID</th>
+            <th>Watching</th>
+            <th>Human Review</th>
+            <th class="text-nowrap">Last Seen Video</th>
+            <th style="min-width: 440px; white-space: nowrap;">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for ch in channels %}
+    <tr id="channel-row-{{ ch.id }}">
+        <td class="text-nowrap">
+            <a href="https://www.youtube.com/channel/{{ ch.youtube_channel_id }}" target="_blank" class="text-light text-decoration-none fw-bold" title="Open YouTube Channel">
+                {{ ch.name }} ↗
+            </a>
+        </td>
+        <td class="text-nowrap">
+            <a href="https://www.youtube.com/channel/{{ ch.youtube_channel_id }}" target="_blank" class="text-info text-decoration-none small">
+                <code>{{ ch.youtube_channel_id }}</code> ↗
+            </a>
+        </td>
+        <td>
+            <span class="badge {% if ch.watch_enabled %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ 'ON' if ch.watch_enabled else 'OFF' }}
+            </span>
+        </td>
+        <td>
+            <span class="badge {% if ch.human_review_required %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                {{ 'REQUIRED' if ch.human_review_required else 'AUTO-PUBLISH' }}
+            </span>
+        </td>
+        <td class="text-nowrap">
+            {% if ch.last_seen_video_id %}
+            <a href="https://www.youtube.com/watch?v={{ ch.last_seen_video_id }}" target="_blank" class="text-info text-decoration-none small" title="Open latest video on YouTube">
+                <code>{{ ch.last_seen_video_id }}</code> ↗
+            </a>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+        </td>
+        <td style="white-space: nowrap;">
+            <div class="d-flex align-items-center gap-1 flex-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-success text-nowrap py-1 px-2 fw-semibold" style="font-size: 0.75rem;" title="Browse public uploads & 1-click ingest"
+                        onclick="openChannelVideosDrawer('{{ ch.id }}', '{{ ch.name }}')">
+                    📺 Videos
+                </button>
+                <form method="post" action="/channels/{{ ch.id }}/toggle-watch" class="m-0"
+                      hx-post="/channels/{{ ch.id }}/toggle-watch" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap py-1 px-2" style="font-size: 0.75rem;" title="Toggle background video polling">
+                        Watch: {{ 'ON' if ch.watch_enabled else 'OFF' }}
+                    </button>
+                </form>
+                <form method="post" action="/channels/{{ ch.id }}/toggle-review" class="m-0"
+                      hx-post="/channels/{{ ch.id }}/toggle-review" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap py-1 px-2" style="font-size: 0.75rem;" title="Toggle human review requirement">
+                        Review: {{ 'REQ' if ch.human_review_required else 'AUTO' }}
+                    </button>
+                </form>
+                <form method="post" action="/channels/{{ ch.id }}/trigger-poll" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-outline-info text-nowrap py-1 px-2" style="font-size: 0.75rem;" title="Immediately fetch newest RSS uploads">
+                        🔄 Poll
+                    </button>
+                </form>
+                <form method="post" action="/channels/{{ ch.id }}/subscribe-websub" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap py-1 px-2" style="font-size: 0.75rem;" title="Send push subscription request to Google WebSub Hub">
+                        📡 WebSub
+                    </button>
+                </form>
+                <button type="button" class="btn btn-sm btn-outline-danger text-nowrap py-1 px-2" style="font-size: 0.75rem;" title="Delete Channel"
+                        onclick="triggerUniversalDelete('/channels/{{ ch.id }}/delete', 'Delete Channel {{ ch.name }}', 'Choose whether to delete the channel record only or wipe all downloaded video files and output directories on disk:', document.getElementById('channel-row-{{ ch.id }}'))">
+                    🗑️
+                </button>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<!-- Offcanvas Drawer for Exploring & Ingesting Channel Videos -->
+<div class="offcanvas offcanvas-end bg-dark text-light border-secondary shadow-lg" tabindex="-1" id="channelVideosDrawer" style="width: 520px;" aria-labelledby="channelVideosDrawerLabel">
+    <div class="offcanvas-header border-bottom border-secondary bg-black">
+        <h5 class="offcanvas-title text-light d-flex align-items-center gap-2" id="channelVideosDrawerLabel">
+            <span>📺</span> <span id="drawerChannelName">Channel Videos</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-3">
+        <div class="mb-3">
+            <input type="text" id="channelVideoSearchInput" class="form-control bg-black text-light border-secondary form-control-sm" placeholder="🔍 Search videos by title or ID...">
+        </div>
+        <div class="mb-3 d-flex align-items-center gap-2">
+            <label for="drawerCaptionPreset" class="text-muted small fw-semibold text-nowrap mb-0">Caption Style:</label>
+            <select id="drawerCaptionPreset" class="form-select form-select-sm bg-black text-light border-secondary">
+                <option value="hormozi_viral" selected>🔥 Hormozi Viral</option>
+                <option value="mrbeast_impact">⚡ MrBeast Impact</option>
+                <option value="cyberpunk_neon">🌆 Cyberpunk Neon</option>
+                <option value="minimalist_editorial">✨ Minimalist Editorial</option>
+                <option value="high_contrast_box">⬛ High Contrast Box</option>
+            </select>
+        </div>
+
+        <!-- Optional Collapsible Per-Video Runtime Tuning in Drawer -->
+        <div class="mb-3">
+            <div class="accordion" id="drawerTuningAccordion">
+                <div class="accordion-item bg-black border-secondary rounded overflow-hidden">
+                    <h2 class="accordion-header" id="headingDrawerTuning">
+                        <button class="accordion-button collapsed bg-dark text-light py-1 px-2 fw-semibold small d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDrawerTuning" aria-expanded="false" aria-controls="collapseDrawerTuning" style="box-shadow: none; font-size: 0.78rem;">
+                            <div class="d-flex align-items-center gap-1">
+                                <span>⚙️</span>
+                                <span>Runtime Tuning (Optional)</span>
+                            </div>
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary fw-normal font-monospace ms-auto me-2" style="font-size:0.68rem;">Default Settings</span>
+                        </button>
+                    </h2>
+                    <div id="collapseDrawerTuning" class="accordion-collapse collapse" aria-labelledby="headingDrawerTuning" data-bs-parent="#drawerTuningAccordion">
+                        <div class="accordion-body bg-black text-light p-2 border-top border-secondary" style="font-size: 0.75rem;">
+                            <div class="mb-2">
+                                <label class="text-muted small mb-0">LLM Provider:</label>
+                                <select id="drawer_override_llm_provider" class="form-select form-select-sm bg-dark text-light border-secondary">
+                                    <option value="" selected>Default (Auto / Saved)</option>
+                                    <option value="auto">⚡ Auto</option>
+                                    <option value="groq">⚡ Groq LPU</option>
+                                    <option value="gemini">🤖 Gemini</option>
+                                    <option value="openrouter">🌐 OpenRouter</option>
+                                    <option value="openai">🟢 OpenAI</option>
+                                </select>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="text-muted small mb-0">Min Dur (s):</label>
+                                    <input type="number" id="drawer_override_min_duration" min="5" max="180" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" placeholder="15">
+                                </div>
+                                <div class="col-6">
+                                    <label class="text-muted small mb-0">Max Dur (s):</label>
+                                    <input type="number" id="drawer_override_max_duration" min="10" max="180" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" placeholder="58">
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="text-muted small mb-0">CRF Quality:</label>
+                                    <input type="number" id="drawer_override_crf" min="15" max="28" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" placeholder="18">
+                                </div>
+                                <div class="col-6">
+                                    <label class="text-muted small mb-0">Resampling:</label>
+                                    <select id="drawer_override_scale_algo" class="form-select form-select-sm bg-dark text-light border-secondary">
+                                        <option value="" selected>Default (Lanczos)</option>
+                                        <option value="lanczos">lanczos</option>
+                                        <option value="bicubic">bicubic</option>
+                                        <option value="bilinear">bilinear</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-1">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" id="drawer_override_enable_sfx" checked>
+                                    <label class="form-check-label text-light small" for="drawer_override_enable_sfx">SFX</label>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-link text-muted p-0 text-decoration-none" style="font-size:0.7rem;" onclick="resetDrawerTuning()">↺ Clear Overrides</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="channelVideosLoading" class="text-center py-5 d-none">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="text-muted small mt-2">Fetching public videos from channel...</div>
+        </div>
+
+        <div id="channelVideosList" class="d-flex flex-column gap-3"></div>
+    </div>
+</div>
+
+<script>
+    var activeDrawerChannelId = null;
+    var cachedChannelVideos = [];
+
+    window.openChannelVideosDrawer = function(channelId, channelName) {
+        activeDrawerChannelId = channelId;
+        document.getElementById('drawerChannelName').innerText = channelName;
+        var drawer = new bootstrap.Offcanvas(document.getElementById('channelVideosDrawer'));
+        drawer.show();
+
+        var loadingEl = document.getElementById('channelVideosLoading');
+        var listEl = document.getElementById('channelVideosList');
+        loadingEl.classList.remove('d-none');
+        listEl.innerHTML = '';
+
+        fetch('/api/channels/' + channelId + '/videos')
+            .then(function(res) {
+                if (!res.ok) throw new Error('Failed to fetch videos');
+                return res.json();
+            })
+            .then(function(data) {
+                cachedChannelVideos = data.videos || [];
+                renderChannelVideos(cachedChannelVideos);
+            })
+            .catch(function(err) {
+                listEl.innerHTML = '<div class="alert alert-danger py-2 small">❌ ' + err.message + '</div>';
+            })
+            .finally(function() {
+                loadingEl.classList.add('d-none');
+            });
+    };
+
+    function renderChannelVideos(videos) {
+        var listEl = document.getElementById('channelVideosList');
+        if (!videos || videos.length === 0) {
+            listEl.innerHTML = '<div class="text-muted text-center py-4 small">No videos found for this channel.</div>';
+            return;
+        }
+
+        var html = '';
+        videos.forEach(function(v) {
+            var ingestAction = '';
+            if (v.is_ingested) {
+                var badgeClass = v.status === 'DONE' ? 'bg-success' : 'bg-warning text-dark';
+                ingestAction = '<div class="d-flex align-items-center gap-1 mt-2">' +
+                    '<span class="badge ' + badgeClass + '">' + v.status_label + ' (' + v.clips_count + ' clips)</span>' +
+                    (v.queue_url ? '<a href="' + v.queue_url + '" class="btn btn-sm btn-outline-warning py-0 px-2 fw-semibold" style="font-size:0.75rem;">View Queue ↗</a>' : '') +
+                '</div>';
+            } else {
+                ingestAction = '<button type="button" class="btn btn-sm btn-primary mt-2 py-1 px-3 fw-bold w-100" style="background:#7c4dff; border-color:#7c4dff; font-size:0.8rem;" ' +
+                    'onclick="ingestChannelVideo(\'' + v.video_id + '\', this)">' +
+                    '⚡ Ingest & Process' +
+                '</button>';
+            }
+
+            var thumbUrl = '/api/thumbnails/' + v.video_id;
+            html += '<div class="card bg-black border-secondary p-2 shadow-sm">' +
+                '<div class="d-flex gap-2">' +
+                    '<img src="' + thumbUrl + '" width="112" height="63" class="rounded object-fit-cover border border-secondary flex-shrink-0" alt="Thumb" onerror="this.onerror=null; this.src=\'/api/thumbnails/' + v.video_id + '\';">' +
+                    '<div class="overflow-hidden flex-grow-1">' +
+                        '<div class="fw-semibold text-light text-truncate small" title="' + v.title + '">' + v.title + '</div>' +
+                        '<div class="text-muted small mt-1" style="font-size:0.72rem;">📅 ' + v.published_at + ' • <code>' + v.video_id + '</code></div>' +
+                        ingestAction +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+        listEl.innerHTML = html;
+    }
+
+    document.getElementById('channelVideoSearchInput')?.addEventListener('input', function(e) {
+        var q = (e.target.value || '').toLowerCase().trim();
+        var filtered = cachedChannelVideos.filter(function(v) {
+            return v.title.toLowerCase().includes(q) || v.video_id.toLowerCase().includes(q);
+        });
+        renderChannelVideos(filtered);
+    });
+
+    window.resetDrawerTuning = function() {
+        var elProv = document.getElementById('drawer_override_llm_provider'); if (elProv) elProv.value = '';
+        var elMinD = document.getElementById('drawer_override_min_duration'); if (elMinD) elMinD.value = '';
+        var elMaxD = document.getElementById('drawer_override_max_duration'); if (elMaxD) elMaxD.value = '';
+        var elCrf = document.getElementById('drawer_override_crf'); if (elCrf) elCrf.value = '';
+        var elScale = document.getElementById('drawer_override_scale_algo'); if (elScale) elScale.value = '';
+        var elSfx = document.getElementById('drawer_override_enable_sfx'); if (elSfx) elSfx.checked = true;
+    };
+
+    window.ingestChannelVideo = function(videoId, btnEl) {
+        var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = tokenMeta ? tokenMeta.content : '';
+        var preset = document.getElementById('drawerCaptionPreset')?.value || 'hormozi_viral';
+
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Ingesting...';
+
+        var fd = new FormData();
+        fd.append('video_input', videoId);
+        if (activeDrawerChannelId) fd.append('channel_id', activeDrawerChannelId);
+        fd.append('caption_preset', preset);
+        fd.append('csrf_token', csrfToken);
+
+        // Optional drawer runtime tuning overrides
+        var prov = document.getElementById('drawer_override_llm_provider')?.value;
+        var minDur = document.getElementById('drawer_override_min_duration')?.value;
+        var maxDur = document.getElementById('drawer_override_max_duration')?.value;
+        var crf = document.getElementById('drawer_override_crf')?.value;
+        var scaleAlgo = document.getElementById('drawer_override_scale_algo')?.value;
+        var enableSfx = document.getElementById('drawer_override_enable_sfx')?.checked;
+
+        if (prov) fd.append('override_llm_provider', prov);
+        if (minDur) fd.append('override_min_duration', minDur);
+        if (maxDur) fd.append('override_max_duration', maxDur);
+        if (crf) fd.append('override_crf', crf);
+        if (scaleAlgo) fd.append('override_scale_algo', scaleAlgo);
+        if (enableSfx !== undefined) fd.append('override_enable_sfx', enableSfx ? 'true' : 'false');
+
+        fetch('/process-video', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'HX-Request': 'true'
+            },
+            body: fd
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error('Ingestion trigger failed');
+            window.showToast('Started processing video ' + videoId + '!', 'success');
+            btnEl.className = 'btn btn-sm btn-outline-success mt-2 py-1 px-3 fw-bold w-100 disabled';
+            btnEl.innerText = '🚀 Ingesting...';
+        })
+        .catch(function(err) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = '⚡ Ingest & Process';
+            window.showToast('Error: ' + err.message, 'danger');
+        });
+    };
+</script>
+{% endblock %}

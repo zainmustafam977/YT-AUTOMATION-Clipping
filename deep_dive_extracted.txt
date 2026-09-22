@@ -1,0 +1,102 @@
+YouTube Shorts Automation Platform
+Dashboard Deep-Dive: Log Analysis, Confirmed Bugs & Feature Backlog
+Reference: manual testing session (screenshots + shorts_engine.log, 2026-09-14/15) plus itemized operator feedback.
+Document version: 1.0   |   Status: For vendor action
+This document is based on an actual line-by-line review of the production log and the six dashboard screenshots provided — not just the items explicitly listed. Two findings below (Sections 1.1 and 1.2) are root causes that explain several of the symptoms reported separately; they're placed first because fixing them will likely resolve more than one complaint at once.
+1. Critical Findings From Log Analysis (Not Previously Reported)
+These were found by reading the log directly, not by taking any prior claim at face value.
+1.1 The Gemini API key appears to be on a 20-requests-per-day free tier — this is likely the root cause of “slow” and “not smart” results
+Throughout the log, nearly every Gemini call for clip selection, title generation, and semantic quality checking fails with 429 RESOURCE_EXHAUSTED, citing “GenerateRequestsPerDayPerProjectPerModel-FreeTier... quotaValue: 20.” This is not the 503 “high demand” error seen elsewhere — 429 with this specific quota message means the API key's daily allowance for that model is being exhausted, repeatedly, across the whole session. Each failure triggers a 3-model waterfall (gemini-3.8-flash → gemini-3.6-flash → gemini-flash-latest) with real network round-trips before falling back to the heuristic selector or deterministic titles — which is exactly why processing feels slow, and why clip selection and titles are frequently generic (the heuristic fallback, not the AI, is doing the actual work most of the time).
+Requested action: confirm whether the configured GEMINI_API_KEY is a free-tier key, and if so, upgrade to a paid-tier key with a realistic daily quota before judging AI output quality or speed — the system may currently be running on fallbacks far more often than on the actual model.
+1.2 A real crash: concurrent/duplicate processing corrupts a video's pipeline state
+The log shows video WBhyV0qMsVU manually triggered three separate times (12:17, 12:37, 13:30) while earlier runs were presumably still referencing the same clip rows. At 13:32:45 this produced a real, unhandled exception: sqlalchemy.orm.exc.StaleDataError — “UPDATE statement on table 'clips' expected to update 1 row(s); 0 were matched” — followed by a PendingRollbackError that aborted the whole background job. This is a genuine data-integrity bug, not a cosmetic one.
+Directly related: the same clip files were rendered twice each — WBhyV0qMsVU_short_0_56530.mp4, _623040_680620.mp4, _831820_888160.mp4, and _1040920_1093740.mp4 all show two full “Executing FFmpeg render” entries. Each re-render repeats the entire render + Quality Gate cycle (30–90+ seconds, plus more Gemini calls), which is a large, avoidable source of the slowness you're seeing — the pipeline is not skipping work that already completed successfully.
+Likely structural cause: the manual “Process Video” button (dashboard/routes/status.py) appears to call orchestration/runner.py directly in a background thread, which is a separate code path from the Milestone 3 WorkerRunner queue that has the FOR UPDATE SKIP LOCKED / atomic-CAS protections built specifically to prevent exactly this class of clash. Please confirm directly — does manual video processing go through the same locked job queue as the background worker, or does it bypass it entirely?
+1.3 Failed actions are silently reported as success
+WEBSUB_CALLBACK_URL is not configured. Cannot subscribe. appears repeatedly in the log every time “WebSub Subscribe” is clicked — but nothing in the dashboard tells the operator this failed. Similarly, a channel was added with an invalid ID (“BenShapiro” instead of a UC... ID), and every RSS poll against it failed with a 404 — but the operator-facing result was “found 0 new videos,” which reads as a benign no-op, not an error. This is the exact category of problem raised in the original usability note (no visible success/failure per action) — these two are concrete, reproducible examples of it.
+Requested action: validate channel IDs on add (reject anything not matching YouTube's UC… format), and surface WebSub/RSS failures as visible errors in the dashboard, not just log lines.
+1.4 Test-suite output and live production activity are being written to the same log file
+Large sections of the log are pytest fixture output (paths like pytest-of-ZACODEC\pytest-52\test_runtime_settings...), including deliberately-triggered failures like “Failed to decrypt secret” and “Bulk secret rotation failed” that are expected test assertions, not real errors. These are interleaved with genuine production activity in the same shorts_engine.log, which makes the live log very difficult to read and makes real errors easy to miss. Please route test runs to a separate log file or filter them out of the production log.
+2. Confirmed From Screenshots
+#
+Observation
+Evidence
+2.1
+Review Queue “Rendered File” is plain text, not a clickable/playable link.
+Screenshot 2: filenames shown as inert text, no player or link.
+2.2
+Quality Gate badges show only the check name, not pass/fail status.
+Screenshot 2: “Technical Check / Framing Check / Semantic Check” all render identically regardless of outcome.
+2.3
+Settings page help text shows stale/incorrect defaults.
+Screenshot 5: “(default: 1)” and “(default: 4)” for segments, “(default: 60s)” for max duration — the canonical values established over this project are 3 / 5–6 / 58s.
+2.4
+Channel Manager's “Last Seen Video” is a single plain-text ID, not a browsable/clickable list.
+Screenshot 4: one static value per channel, no link, no history.
+2.5
+API Quota widget correctly reflects real usage.
+Screenshot 1 (16.0%, 1600/10000) matches the 1600-unit dry-run publish recorded in the log — this part is working correctly.
+3. Your Reported Items — Status & Notes
+Each item below is either independently confirmed against the log/screenshots, or logged as a straightforward feature request.
+Item
+Status
+Note
+Clickable link to play/review generated clip
+Confirmed gap
+See 2.1. Needs an embedded video player or direct file link per row.
+Clips not organized into per-video folders
+Confirmed
+All renders write flatly to storage/outputs/ with no subfolder per source video.
+Clips not renamed by content
+Confirmed
+Filenames are timestamp-range only (e.g. _short_0_56530.mp4); no descriptive title embedded.
+SEO tags/keywords for original + generated clips
+New feature
+Not built. TitleGenerator exists; a tag/keyword generator does not.
+No subtitle style/template options
+Confirmed gap
+Captioning uses one fixed style; no operator-facing style picker exists.
+Can't configure duration/segments/captions/SFX per video
+Confirmed gap
+/settings is global only; no per-channel or per-video override.
+No live progress tracker per video
+Confirmed gap
+Status page is a static table; requires manual reload to see stage changes.
+Nothing updates without a full page reload
+Confirmed gap
+No polling/WebSocket/SSE anywhere in the dashboard; applies to Status, Queue, and Logs equally.
+Want multiple AI providers (OpenAI + Gemini) with intelligent failover and separate/combined quota display
+New feature
+Only a 3-model Gemini waterfall exists today; no OpenAI integration, despite it being one of the three provider options named in the original discovery document.
+System picks the latest Short instead of the latest long-form video
+Plausible confirmed bug
+See 3.1 below — likely root cause identified.
+Only shows latest video, not last 24h/2–3 days/week, with clickable links
+New feature
+Channel Manager currently tracks one “last seen” value only; see 2.4.
+Per-channel-video button to queue/process with custom or default params
+New feature
+Directly related to the above — needs a video browser view per channel.
+Processing is slow; want intelligent multitasking without clashes
+Confirmed and worse than described
+See 1.1 and 1.2 — both a real crash risk and large wasted-compute source, not just a performance preference.
+Logs page doesn't show latest entries until refreshed
+Confirmed gap
+Same root cause as the general “nothing updates live” issue.
+Add a professional logo + browser tab favicon
+New feature
+Straightforward branding request.
+3.1 Likely cause: the RSS feed doesn't distinguish long-form videos from Shorts
+YouTube's public upload RSS feed lists all uploads — long-form videos and Shorts — in one combined, undifferentiated list. If the detection logic simply takes the newest entry in that feed as “the latest video,” it will occasionally pick up a Short the channel published instead of the intended long-form source video, exactly matching what was reported. Please confirm whether the RSS/WebSub parsing filters entries by content type or duration before treating something as a new source video to process.
+4. Additional Gaps Identified From Usage-Flow Analysis
+Not explicitly reported, but surfaced by walking through how the system would actually be operated day-to-day.
+Bulk approve/reject and basic filtering/sorting in the Review Queue — at 11 items already and growing, one-row-at-a-time review won't scale.
+Pagination for the Review Queue once volume increases beyond a single screen.
+A distinct, visible quota indicator for the AI provider(s) (Gemini/OpenAI), separate from the YouTube publish quota already shown — given finding 1.1, this is arguably more important to see at a glance than the YouTube quota is.
+Disk space / storage monitoring, since outputs currently accumulate in one unorganized folder with no visible cleanup policy.
+A short “undo” window after Reject, in case of an accidental click.
+Visible retry/backoff status for clips currently in a retry loop, rather than only appearing once they land in Dead-Letter.
+A safeguard against re-triggering “Process Video” on a video that's already in progress or already fully processed — directly prevents the 1.2 crash class.
+An explicit “only process new uploads from now on” option when first adding a channel, separate from a deliberate backfill — the log shows a newly-added channel immediately queuing all 15 of its existing videos as “new,” which may not be the intended default.
+5. Standing Note for the Team
+As with prior rounds: if anything here requires a decision or input only the client can provide (API provider/key upgrade, brand assets for the logo, which subtitle style templates to offer, etc.), state that explicitly and ask for it directly. Do not proceed on an assumption, a placeholder, or a claim that something is fixed without it being independently demonstrable — the verification approach used throughout this project (fresh extraction, live test run, actual click-through) should continue to apply to this batch of fixes as well.

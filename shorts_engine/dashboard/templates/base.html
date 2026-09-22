@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Shorts Engine{% endblock %} — Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- HTMX 2.x, HTMX SSE, Alpine.js 3.x for No-Reload Reactive UX -->
+    <script src="https://unpkg.com/htmx.org@2.0.2"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+    {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+    <style>
+        :root {
+            --bs-body-color: #e8eaf6;
+            --bs-secondary-color: #b0bec5;
+        }
+        body { background: #0f1117; color: #e8eaf6; }
+        .text-muted { color: #b0bec5 !important; }
+        .navbar { background: #1a1d27 !important; border-bottom: 1px solid #2d3148; }
+        .navbar-brand { color: #7c4dff !important; font-weight: 700; letter-spacing: 1px; }
+        .navbar-nav .nav-link { color: #b0bec5 !important; }
+        .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active { color: #7c4dff !important; }
+        .nav-pills .nav-link {
+            color: #b0bec5 !important;
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-pills .nav-link:hover {
+            color: #ffffff !important;
+            background-color: rgba(124, 77, 255, 0.15) !important;
+        }
+        .nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+            color: #ffffff !important;
+            background-color: #7c4dff !important;
+            font-weight: 600 !important;
+            box-shadow: 0 2px 8px rgba(124, 77, 255, 0.4) !important;
+        }
+        .card { background: #1a1d27; border: 1px solid #2d3148; }
+        .card-header { background: #22263a; border-bottom: 1px solid #2d3148; }
+        .stat-card { border-left: 4px solid #7c4dff; }
+        .stat-card.warning { border-left-color: #ff9800; }
+        .stat-card.danger { border-left-color: #f44336; }
+        .stat-card.success { border-left-color: #4caf50; }
+        .stat-number { font-size: 2rem; font-weight: 700; }
+        .badge-status { font-size: 0.75rem; }
+        table { color: #e8eaf6; }
+        .table-dark {
+            --bs-table-bg: #1a1d27;
+            --bs-table-color: #e8eaf6;
+            color: #e8eaf6;
+        }
+        .table-dark th {
+            color: #b0bec5 !important;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table-dark td {
+            color: #e8eaf6 !important;
+        }
+        .table-dark .text-muted {
+            color: #b0bec5 !important;
+        }
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #3b3f58 transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b3f58;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #7c4dff;
+        }
+        .btn-approve { background: #4caf50; border-color: #4caf50; color: #fff; }
+        .btn-reject { background: #f44336; border-color: #f44336; color: #fff; }
+        .btn-retry { background: #ff9800; border-color: #ff9800; color: #fff; }
+        code { color: #80cbc4; }
+        @media (min-width: 992px) {
+            .border-start-lg { border-left: 1px solid #2d3148 !important; }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+            <span style="color:#ffb300;">⚡</span> <span>Shorts Engine</span>
+        </a>
+        <button class="navbar-toggler border-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <div class="navbar-nav ms-auto align-items-lg-center pt-2 pt-lg-0 gap-1">
+                <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">Status</a>
+                <a class="nav-link {% if '/queue' in request.url.path %}active{% endif %}" href="/queue">Review Queue</a>
+                <a class="nav-link {% if '/calendar' in request.url.path %}active{% endif %}" href="/calendar">Calendar</a>
+                <a class="nav-link {% if '/dead-letter' in request.url.path %}active{% endif %}" href="/dead-letter">Dead-Letter</a>
+                <a class="nav-link {% if '/channels' in request.url.path %}active{% endif %}" href="/channels">Channels</a>
+                <a class="nav-link {% if '/settings' in request.url.path %}active{% endif %}" href="/settings">Settings</a>
+                <a class="nav-link {% if '/logs' in request.url.path %}active{% endif %}" href="/logs">Logs</a>
+
+                {% if current_user and (current_user.role.value if current_user.role.value is defined else current_user.role)|string|lower == 'admin' %}
+                <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users">Users</a>
+                {% endif %}
+                {% if current_user %}
+                <div class="nav-item d-flex align-items-center gap-2 ps-lg-3 ms-lg-2 border-start-lg pt-2 pt-lg-0">
+                    <span class="text-light small" title="Logged in as {{ current_user.username }}">
+                        👤 {{ current_user.username }} <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">{{ current_user.role.value if current_user.role else 'user' }}</span>
+                    </span>
+                    <a class="btn btn-sm btn-outline-danger py-0 px-2 small" href="/logout" title="Sign out" style="font-size:0.75rem;">Logout</a>
+                </div>
+                {% else %}
+                <a class="nav-link text-info ms-lg-2" href="/login">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>
+<div class="container-fluid px-4">
+    {% if request.query_params.get('msg') %}
+    <div class="alert alert-{{ request.query_params.get('type', 'info') }} alert-dismissible fade show mb-4 shadow-sm" role="alert">
+        <strong>
+            {% if request.query_params.get('type') == 'danger' %}❌ Error:
+            {% elif request.query_params.get('type') == 'success' %}✅ Success:
+            {% elif request.query_params.get('type') == 'warning' %}⚠️ Warning:
+            {% else %}ℹ️ Notice:
+            {% endif %}
+        </strong>
+        {{ request.query_params.get('msg') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+</div>
+
+<!-- Global Toast Notification Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;" id="toast-container"></div>
+
+<!-- Universal Soft Deletion Modal -->
+<div class="modal fade" id="universalDeleteModal" tabindex="-1" aria-labelledby="universalDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border border-secondary shadow-lg">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-danger d-flex align-items-center gap-2" id="universalDeleteModalLabel">
+                    <span>🗑️</span> <span id="deleteModalTitle">Confirm Deletion</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteModalPrompt" class="mb-3 text-light">Choose how you want to handle this item and its associated files:</p>
+                
+                <div class="list-group mb-2">
+                    <label class="list-group-item list-group-item-action bg-black text-light border-secondary d-flex gap-3 align-items-start p-3" style="cursor:pointer;">
+                        <input class="form-check-input flex-shrink-0 mt-1" type="radio" name="delete_choice" id="deleteChoiceRecordOnly" value="false" checked>
+                        <div>
+                            <strong class="d-block text-success">🛡️ Option 1: Delete Record Only (Recommended)</strong>
+                            <small class="text-muted">Safely clears the database entry and removes it from the queue. All media files, video downloads, audio, and clips remain securely preserved on disk.</small>
+                        </div>
+                    </label>
+                    <label class="list-group-item list-group-item-action bg-black text-light border-secondary d-flex gap-3 align-items-start p-3" style="cursor:pointer;">
+                        <input class="form-check-input flex-shrink-0 mt-1" type="radio" name="delete_choice" id="deleteChoiceWipeFiles" value="true">
+                        <div>
+                            <strong class="d-block text-danger">⚠️ Option 2: Delete Record & Wipe Files on Disk</strong>
+                            <small class="text-muted">Permanently deletes the database entry AND irrevocably purges all corresponding media files, thumbnails, and rendered clips from disk storage.</small>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="btn btn-sm btn-danger fw-bold px-3">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Global Toast Function
+    window.showToast = function(msg, type) {
+        type = type || 'info';
+        var bgClass = type === 'success' ? 'bg-success' : type === 'warning' ? 'bg-warning' : type === 'danger' ? 'bg-danger' : 'bg-info';
+        var icon = type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'danger' ? '❌' : 'ℹ️';
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+        var el = document.createElement('div');
+        var textClass = (type === 'warning' || type === 'info') ? 'text-dark' : 'text-white';
+        var closeClass = (type === 'warning' || type === 'info') ? 'btn-close' : 'btn-close btn-close-white';
+        el.className = 'toast align-items-center ' + textClass + ' ' + bgClass + ' border-0 show shadow-lg mb-2';
+        el.setAttribute('role', 'alert');
+        el.innerHTML = '<div class="d-flex"><div class="toast-body fw-semibold">' + icon + ' ' + msg + '</div><button type="button" class="' + closeClass + ' me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+        container.appendChild(el);
+        if (window.htmx) { htmx.process(el); }
+        setTimeout(function() {
+            el.classList.remove('show');
+            setTimeout(function() { el.remove(); }, 300);
+        }, 4000);
+    };
+
+    // HTMX Global Hooks
+    document.body.addEventListener('showToast', function(evt) {
+        if (evt.detail) {
+            window.showToast(evt.detail.message, evt.detail.type);
+        }
+    });
+
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        if (tokenMeta && tokenMeta.content) {
+            evt.detail.headers['X-CSRF-Token'] = tokenMeta.content;
+            if (evt.detail.parameters) {
+                evt.detail.parameters['csrf_token'] = tokenMeta.content;
+            }
+        }
+    });
+
+    // Universal Soft Delete Modal Handler
+    var pendingDeleteAction = null;
+    var pendingDeleteTargetEl = null;
+
+    window.triggerUniversalDelete = function(actionUrl, title, prompt, targetElementToFade) {
+        pendingDeleteAction = actionUrl;
+        pendingDeleteTargetEl = targetElementToFade;
+        document.getElementById('deleteModalTitle').innerText = title || 'Confirm Deletion';
+        document.getElementById('deleteModalPrompt').innerText = prompt || 'Choose how you want to handle this item and its associated files:';
+        document.getElementById('deleteChoiceRecordOnly').checked = true;
+        var modal = new bootstrap.Modal(document.getElementById('universalDeleteModal'));
+        modal.show();
+    };
+
+    document.getElementById('confirmDeleteBtn')?.addEventListener('click', function() {
+        if (!pendingDeleteAction) return;
+        var deleteFiles = document.getElementById('deleteChoiceWipeFiles').checked;
+        var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = tokenMeta ? tokenMeta.content : '';
+
+        var formData = new FormData();
+        formData.append('delete_files', deleteFiles ? 'true' : 'false');
+        formData.append('csrf_token', csrfToken);
+
+        var modalEl = document.getElementById('universalDeleteModal');
+        var modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+
+        fetch(pendingDeleteAction, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken,
+                'HX-Request': 'true'
+            },
+            body: formData
+        })
+        .then(function(res) {
+            if (!res.ok) throw new Error('Delete failed with status ' + res.status);
+            var hxTrigger = res.headers.get('HX-Trigger');
+            if (hxTrigger) {
+                try {
+                    var data = JSON.parse(hxTrigger);
+                    if (data.showToast) window.showToast(data.showToast.message, data.showToast.type);
+                } catch(e) {}
+            } else {
+                window.showToast(deleteFiles ? 'Item and files deleted.' : 'Record deleted (files kept on disk).', 'info');
+            }
+            if (pendingDeleteTargetEl) {
+                pendingDeleteTargetEl.style.transition = 'all 0.3s ease';
+                pendingDeleteTargetEl.style.opacity = '0';
+                pendingDeleteTargetEl.style.transform = 'scale(0.95)';
+                setTimeout(function() { pendingDeleteTargetEl.remove(); }, 350);
+            } else {
+                setTimeout(function() { window.location.reload(); }, 600);
+            }
+        })
+        .catch(function(err) {
+            window.showToast('Error deleting item: ' + err.message, 'danger');
+        });
+    });
+
+    // Global Open Clip Folder Helper
+    window.openClipFolder = function(clipId) {
+        var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = tokenMeta ? tokenMeta.content : '';
+        fetch('/api/clip/' + clipId + '/open-folder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                window.showToast('Opened folder: ' + data.folder, 'success');
+            } else if (data.status === 'fallback') {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(data.path);
+                }
+                window.showToast('Copied path to clipboard: ' + data.path, 'info');
+            } else {
+                window.showToast('Could not open folder: ' + data.message, 'danger');
+            }
+        })
+        .catch(function(err) {
+            window.showToast('Folder error: ' + err.message, 'danger');
+        });
+    };
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        if (tokenMeta && tokenMeta.content) {
+            var forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
+            forms.forEach(function(form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = tokenMeta.content;
+                    form.appendChild(input);
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>

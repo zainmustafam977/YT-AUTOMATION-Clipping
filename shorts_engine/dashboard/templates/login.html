@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-lg">
+            <div class="card-header text-center">
+                <h4 class="mb-0">⚡ Operator Login</h4>
+            </div>
+            <div class="card-body p-4">
+                <form id="loginForm" method="POST" action="/login">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="username" name="username" required autocomplete="username">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control bg-dark text-light border-secondary" id="password" name="password" required autocomplete="current-password">
+                    </div>
+                    <div id="errorAlert" class="alert alert-danger d-none" role="alert"></div>
+                    <button type="submit" class="btn btn-primary w-100" style="background-color: #7c4dff; border-color: #7c4dff;">Sign In</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const errorAlert = document.getElementById('errorAlert');
+    errorAlert.classList.add('d-none');
+
+    try {
+        const response = await fetch('/login', {
+            method: 'POST',
+            body: formData
+        });
+        if (response.ok) {
+            const data = await response.json();
+            const nextUrl = new URLSearchParams(window.location.search).get('next') || '/';
+            window.location.href = nextUrl;
+        } else {
+            const err = await response.json();
+            errorAlert.textContent = err.detail || 'Login failed';
+            errorAlert.classList.remove('d-none');
+        }
+    } catch (err) {
+        errorAlert.textContent = 'Network or server error';
+        errorAlert.classList.remove('d-none');
+    }
+});
+</script>
+{% endblock %}

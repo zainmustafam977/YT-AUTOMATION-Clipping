@@ -1,0 +1,149 @@
+# ==============================================================================
+# YouTube Shorts Automation Platform -- Docker Compose Setup
+# ==============================================================================
+#
+# QUICKSTART DEPLOYMENT & BOOTSTRAP INSTRUCTIONS:
+#
+# 1. Configure Environment:
+#    cp .env.example .env (or populate environment variables)
+#    - For local testing: Set ENV=development in .env.
+#    - For production: Set ENV=production in .env.
+#    Ensure MASTER_ENCRYPTION_KEY, DASHBOARD_SECRET_KEY, and POSTGRES_PASSWORD
+#    are set to strong secrets (minimum 12 chars for passwords, 32 chars for secret keys).
+#
+#    Note: Postgres (5432) and Redis (6379) ports are unmapped from the host for
+#    strict network isolation, reachable only internally by dashboard/worker.
+#
+# 2. Launch Stack:
+#    - Local Dev / Test (Direct access via http://localhost:8000):
+#        docker compose up -d --build
+#    - Production (Terminated at Caddy reverse proxy with automated ACME TLS):
+#        docker compose --profile production up -d --build
+#
+# 3. FIRST DEPLOYMENT STEP -- Bootstrap Initial Admin User:
+#    Because HTTP Basic Auth has been fully decommissioned, the platform enforces
+#    strict user-table RBAC. Run the following command once to bootstrap your
+#    initial administrator account:
+#
+#    docker compose exec dashboard python run.py create-user \
+#        --username admin \
+#        --password "YourStrongPassword123!" \
+#        --role admin
+#
+# 4. Access the Dashboard:
+#    - Local testing: http://localhost:8000/login
+#    - Production:    https://<DOMAIN>/login
+#    Sign in with your bootstrapped admin credentials, and manage review queues,
+#    channel watches, or invite additional operators/viewers.
+# ==============================================================================
+
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yt-shorts-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ytuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in your .env}
+      POSTGRES_DB: ${POSTGRES_DB:-ytshorts}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/002_m3_postgres_scale.sql:/docker-entrypoint-initdb.d/002_m3_postgres_scale.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ytuser} -d ${POSTGRES_DB:-ytshorts}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: yt-shorts-redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt-shorts-dashboard
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ENV=${ENV:-development}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ytuser}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ytshorts}
+      - REDIS_URL=redis://redis:6379/0
+      - DASHBOARD_HOST=0.0.0.0
+      - DASHBOARD_PORT=8000
+      - DASHBOARD_SECRET_KEY=${DASHBOARD_SECRET_KEY}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
+    volumes:
+      - ./storage:/app/storage
+      - ./assets:/app/assets
+    ports:
+      - "8000:8000"
+    expose:
+      - "8000"
+    command: ["uvicorn", "shorts_engine.dashboard.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt-shorts-worker
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ENV=${ENV:-development}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ytuser}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ytshorts}
+      - REDIS_URL=redis://redis:6379/0
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DRY_RUN_PUBLISHING=${DRY_RUN_PUBLISHING:-true}
+    volumes:
+      - ./storage:/app/storage
+      - ./assets:/app/assets
+    command: ["python", "cli.py", "worker", "--concurrency", "1", "--poll-interval", "5"]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: yt-shorts-caddy
+    restart: always
+    profiles:
+      - production
+      - tls
+    depends_on:
+      - dashboard
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

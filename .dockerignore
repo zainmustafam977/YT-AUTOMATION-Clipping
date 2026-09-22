@@ -1,0 +1,16 @@
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+storage/downloads/
+storage/temp/
+storage/outputs/
+storage/*.db
+*.docx
+*.md

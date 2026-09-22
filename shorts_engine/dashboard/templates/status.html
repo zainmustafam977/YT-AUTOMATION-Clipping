@@ -1,0 +1,1761 @@
+{% extends "base.html" %}
+
+{% block title %}Pipeline Status{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-0 fw-bold text-light">Pipeline Status</h2>
+        <div class="text-muted small">Real-time telemetry, AI model provenance & execution overview</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span id="sse-status" class="badge bg-secondary">Connecting...</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.location.reload();" title="Hard Refresh Dashboard">
+            🔄 Refresh
+        </button>
+    </div>
+</div>
+
+{% if msg %}
+<div class="alert alert-{{ msg_type or 'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+<!-- Top Telemetry Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div id="stat-total-card" class="card stat-card h-100 p-3">
+            <div class="text-muted small">Total Videos</div>
+            <div id="stat-total-videos" class="stat-number text-light">{{ total_videos }}</div>
+            <small class="text-muted">Tracked in engine</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div id="stat-progress-card" class="card stat-card warning h-100 p-3">
+            <div class="text-muted small">In Progress</div>
+            <div id="stat-in-progress" class="stat-number text-warning">{{ in_progress }}</div>
+            <small class="text-muted">Active ingestion jobs</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div id="stat-waiting-card" class="card stat-card h-100 p-3">
+            <div class="text-muted small">Waiting Approval</div>
+            <div id="stat-waiting-approval" class="stat-number text-light">{{ waiting_approval }}</div>
+            <a href="/queue" class="btn btn-sm btn-outline-primary mt-2">Open Queue →</a>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div id="stat-published-card" class="card stat-card success h-100 p-3">
+            <div class="text-muted small">Published</div>
+            <div id="stat-published-today" class="stat-number text-success">{{ published_today }}</div>
+            <small class="text-muted">Pushed to YouTube</small>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div id="stat-failed-card" class="card stat-card {% if failed_clips > 0 or failed_videos > 0 %}danger{% endif %} h-100 p-3">
+            <div class="text-muted small">Failed</div>
+            <div id="stat-failed-total" class="stat-number text-danger">{{ failed_clips + failed_videos }}</div>
+            {% if failed_clips + failed_videos > 0 %}
+            <a href="/dead-letter" class="btn btn-sm btn-outline-danger mt-2">Inspect →</a>
+            {% else %}
+            <small class="text-muted">Zero fatal errors</small>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div id="stat-quota-card" class="card stat-card {% if quota_warning %}warning{% endif %} h-100 p-3">
+            <div class="text-muted small">API Quota (Today)</div>
+            <div id="stat-quota-pct" class="stat-number {% if quota_warning %}text-warning{% else %}text-light{% endif %}">
+                {{ quota_pct }}%
+            </div>
+            <div class="progress mt-2" style="height:6px">
+                <div id="stat-quota-bar" class="progress-bar {% if quota_warning %}bg-warning{% else %}bg-success{% endif %}"
+                     style="width:{{ quota_pct }}%"></div>
+            </div>
+            <small id="stat-quota-text" class="text-muted text-truncate d-block mt-1" title="{{ quota_subtext }}">{{ quota_used }} / {{ quota_limit }} reqs</small>
+        </div>
+    </div>
+</div>
+
+<!-- AI & API Key Quota Tracker Breakdown -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold text-light">🔑 AI & API Key Quota Monitor</span>
+                    <span class="badge bg-secondary font-monospace" id="active-keys-count">{{ api_key_metrics|length }} active key(s)</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small d-none d-md-inline font-monospace" id="quota-subtext-display">{{ quota_subtext }}</span>
+                    <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.75rem;" hx-post="/api/analytics/sync" hx-swap="none" title="Sync Live YouTube Views, Likes & Retention">📊 Sync Analytics</button>
+                    <a href="/settings" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.75rem;">+ Manage Keys</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <!-- Real-Time AI Model Behaviour & In-Flight Telemetry Banner -->
+                <div id="ai-live-telemetry-banner" class="bg-dark border-bottom border-secondary px-3 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2" style="font-size:0.8rem;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="ai-live-pulse-dot" class="spinner-grow spinner-grow-sm text-success" role="status" style="width: 0.65rem; height: 0.65rem;"></span>
+                        <span id="ai-live-telemetry-text" class="text-light fw-medium">All AI models idle & healthy</span>
+                    </div>
+                    <div id="ai-live-telemetry-meta" class="d-flex align-items-center gap-2">
+                        <span id="ai-live-failover-pill" class="badge bg-secondary d-none">🔀 Failover active</span>
+                        <span id="ai-live-cooldown-pill" class="badge bg-warning text-dark d-none">0 keys cooling</span>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th style="min-width: 170px;">Provider & Model</th>
+                                <th>API Key (Masked)</th>
+                                <th>Status</th>
+                                <th style="min-width: 220px;">Requests Today</th>
+                                <th>Latency</th>
+                                <th>Last Used</th>
+                            </tr>
+                        </thead>
+                        <tbody id="api-keys-tbody">
+                            {% for km in api_key_metrics %}
+                            <tr id="key-row-{{ km.id }}">
+                                <td>
+                                    <div class="fw-semibold text-light">{{ km.provider_label }}</div>
+                                    <small class="text-muted font-monospace" style="font-size:0.72rem;">{{ km.last_model_used }}</small>
+                                </td>
+                                <td>
+                                    <code class="text-info user-select-all font-monospace">{{ km.key_masked }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ km.status_class }}-subtle text-{{ km.status_class }} border border-{{ km.status_class }} status-badge">
+                                        {{ km.status_badge }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex justify-content-between small text-muted mb-1">
+                                        <span class="key-requests-text">{{ km.requests_today }} / {{ km.daily_limit }} reqs</span>
+                                        <span class="key-pct-text fw-bold text-light">{{ km.pct }}%</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar {% if km.pct >= 90 %}bg-danger{% elif km.pct >= 75 %}bg-warning{% else %}bg-success{% endif %}"
+                                             style="width: {{ km.pct }}%;"></div>
+                                    </div>
+                                    {% if km.remaining_tokens_minute is not none %}
+                                    <div class="d-flex justify-content-between text-muted small mt-1 key-tokens-row" style="font-size:0.70rem;">
+                                        <span class="key-tokens-text text-info font-monospace">{{ "{:,}".format(km.remaining_tokens_minute) }} tpm left</span>
+                                        {% if km.reset_tokens_sec %}
+                                        <span class="key-reset-text text-muted font-monospace">resets {{ km.reset_tokens_sec|round(1) }}s</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-light font-monospace key-latency-cell">{% if km.last_latency_ms %}{{ km.last_latency_ms }} ms{% else %}—{% endif %}</small>
+                                    {% if km.last_tokens_per_sec %}
+                                    <div class="text-info font-monospace small key-tps-cell" style="font-size:0.70rem;">⚡ {{ km.last_tokens_per_sec|round(1) }} t/s</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted key-used-cell" style="font-size:0.75rem;">{{ km.last_used_at }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Storage & Disk Usage Monitor -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold text-light">💾 Storage & Disk Monitor</span>
+                <span id="storage-health-badge" class="badge {% if storage_stats.is_low_space %}bg-danger{% else %}bg-success-subtle text-success border border-success{% endif %}">
+                    {{ 'Low Disk Space Warning' if storage_stats.is_low_space else 'Storage Healthy' }}
+                </span>
+            </div>
+            <div class="card-body py-3">
+                <div class="row align-items-center g-3">
+                    <div class="col-md-4 border-end border-secondary">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                            <span id="storage-volume-header" class="text-muted small">Disk Volume ({{ storage_stats.free_gb }} GB free)</span>
+                            <span id="storage-percent-used" class="small fw-bold {% if storage_stats.is_low_space %}text-danger{% else %}text-light{% endif %}">{{ storage_stats.percent_used }}%</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div id="storage-progress-bar" class="progress-bar {% if storage_stats.is_low_space %}bg-danger{% else %}bg-primary{% endif %}"
+                                 role="progressbar" style="width: {{ storage_stats.percent_used }}%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small id="storage-used-gb" class="text-muted" style="font-size:0.75rem;">Used: {{ storage_stats.used_gb }} GB</small>
+                            <small id="storage-total-gb" class="text-muted" style="font-size:0.75rem;">Total: {{ storage_stats.total_gb }} GB</small>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="p-2 bg-dark rounded border border-secondary">
+                                    <div class="text-muted" style="font-size:0.75rem;">🎬 Rendered Outputs</div>
+                                    <div id="storage-outputs-mb" class="fw-bold text-light fs-6">{{ storage_stats.outputs_mb }} MB</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 bg-dark rounded border border-secondary">
+                                    <div class="text-muted" style="font-size:0.75rem;">📥 Raw Videos</div>
+                                    <div id="storage-raw-mb" class="fw-bold text-light fs-6">{{ storage_stats.raw_mb }} MB</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 bg-dark rounded border border-secondary">
+                                    <div class="text-muted" style="font-size:0.75rem;">⚙️ Temp Workspace</div>
+                                    <div id="storage-temp-mb" class="fw-bold text-light fs-6">{{ storage_stats.temp_mb }} MB</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Video Processing Trigger Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-light">⚡ Manual Video Ingestion & Processing</span>
+                <span class="badge bg-secondary">Operator Action</span>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/process-video" class="row g-3 align-items-start" id="manual-ingest-form"
+                      hx-post="/process-video" hx-target="#manual-ingest-feedback" hx-swap="innerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" id="register_channel" name="register_channel" value="">
+                    <input type="hidden" id="detected_channel_name" name="detected_channel_name" value="">
+                    <input type="hidden" id="detected_channel_id" name="detected_channel_id" value="">
+                    <div class="col-12" id="manual-ingest-feedback"></div>
+                    <div class="col-md-3">
+                        <label for="video_input" class="form-label text-muted small fw-semibold">YouTube URL or Video ID</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="video_input" name="video_input"
+                               placeholder="e.g. https://www.youtube.com/watch?v=tphyf6Y3OcY or tphyf6Y3OcY" required autocomplete="off">
+                        <!-- Intelligent Real-Time Pre-Flight Feedback Card -->
+                        <div id="video-preflight-card" class="mt-2 p-2 rounded border border-secondary bg-black d-none" style="font-size:0.78rem;">
+                            <div id="video-preflight-content"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="channel_id" class="form-label text-muted small fw-semibold">Target Channel (Optional)</label>
+                        <select class="form-select bg-dark text-light border-secondary" id="channel_id" name="channel_id">
+                            <option value="">— Auto / Creator Channel —</option>
+                            {% for ch in channels %}
+                            <option value="{{ ch.id }}">{{ ch.name }} ({{ ch.youtube_channel_id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="caption_preset" class="form-label text-muted small fw-semibold">Caption Style</label>
+                        <select class="form-select bg-dark text-light border-secondary" id="caption_preset" name="caption_preset">
+                            <option value="hormozi_viral" selected>🔥 Hormozi Viral</option>
+                            <option value="mrbeast_impact">⚡ MrBeast Impact</option>
+                            <option value="cyberpunk_neon">🌆 Cyberpunk Neon</option>
+                            <option value="minimalist_editorial">✨ Minimalist Editorial</option>
+                            <option value="high_contrast_box">⬛ High Contrast Box</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex flex-column gap-1 pt-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="dry_run" name="dry_run">
+                            <label class="form-check-label text-light small" for="dry_run">Dry Run</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="force" name="force">
+                            <label class="form-check-label text-light small fw-semibold" for="force" id="force-label" title="Force reprocessing of already completed videos">
+                                Force Re-run
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 pt-4">
+                        <button type="submit" class="btn btn-primary w-100 fw-bold" style="background: #7c4dff; border-color: #7c4dff;">
+                            ▶ Ingest & Run
+                        </button>
+                    </div>
+
+                    <!-- Collapsible Per-Video Runtime Tuning & Engine Tuning (Optional) -->
+                    <div class="col-12 mt-2">
+                        <div class="accordion" id="perVideoTuningAccordion">
+                            <div class="accordion-item bg-black border-secondary rounded overflow-hidden">
+                                <h2 class="accordion-header" id="headingPerVideoTuning">
+                                    <button class="accordion-button collapsed bg-dark text-light py-2 px-3 fw-semibold small d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePerVideoTuning" aria-expanded="false" aria-controls="collapsePerVideoTuning" style="box-shadow: none;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span>⚙️</span>
+                                            <span>Runtime Settings & Engine Tuning</span>
+                                            <span class="badge bg-secondary-subtle text-secondary border border-secondary fw-normal font-monospace" style="font-size:0.72rem;">Optional</span>
+                                        </div>
+                                        <span class="text-muted small fw-normal ms-auto me-3 font-monospace" style="font-size:0.75rem;">Default: Global Settings</span>
+                                    </button>
+                                </h2>
+                                <div id="collapsePerVideoTuning" class="accordion-collapse collapse" aria-labelledby="headingPerVideoTuning" data-bs-parent="#perVideoTuningAccordion">
+                                    <div class="accordion-body bg-black text-light p-3 border-top border-secondary">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                            <div class="text-muted small">
+                                                <span>💡 Any field left blank or unset will automatically use your saved global settings.</span>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 font-monospace" style="font-size:0.75rem;" onclick="resetPerVideoTuningForm('manual-ingest-form')">
+                                                ↺ Reset to Global Defaults
+                                            </button>
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <!-- Column 1: AI Provider & Bounds -->
+                                            <div class="col-md-4 border-end border-secondary pe-3">
+                                                <div class="text-info fw-bold small mb-2 d-flex align-items-center gap-1">
+                                                    <span>🤖</span> AI Model & LLM Strategy
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">LLM Provider</label>
+                                                    <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_llm_provider">
+                                                        <option value="" selected>— Global Default ({{ settings.LLM_PROVIDER }}) —</option>
+                                                        <option value="auto">⚡ Auto (Multi-Tier Failover)</option>
+                                                        <option value="groq">⚡ Groq LPU (Ultra-Fast)</option>
+                                                        <option value="gemini">🤖 Google Gemini</option>
+                                                        <option value="openrouter">🌐 OpenRouter</option>
+                                                        <option value="openai">🟢 OpenAI</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Model Override (Optional)</label>
+                                                    <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_llm_model" placeholder="Default: {{ settings.LLM_MODEL_NAME }}">
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">LLM Temperature (0.0 - 1.0)</label>
+                                                    <input type="number" step="0.05" min="0.0" max="1.0" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_llm_temperature" placeholder="Default: {{ settings.LLM_TEMPERATURE }}">
+                                                </div>
+                                            </div>
+
+                                            <!-- Column 2: Duration & Segment Yield Bounds -->
+                                            <div class="col-md-4 border-end border-secondary px-3">
+                                                <div class="text-warning fw-bold small mb-2 d-flex align-items-center gap-1">
+                                                    <span>⏱️</span> Duration & Segment Bounds
+                                                </div>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Min Duration (s)</label>
+                                                        <input type="number" min="5" max="180" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_min_duration" placeholder="{{ settings.TARGET_DURATION_MIN_SEC }}s">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Max Duration (s)</label>
+                                                        <input type="number" min="10" max="180" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_max_duration" placeholder="{{ settings.TARGET_DURATION_MAX_SEC }}s">
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Min Clips</label>
+                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_min_segments" placeholder="{{ settings.MIN_SEGMENTS_PER_VIDEO }}">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Max Clips</label>
+                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_max_segments" placeholder="{{ settings.MAX_SEGMENTS_PER_VIDEO }}">
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Whisper Size</label>
+                                                        <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_whisper_model">
+                                                            <option value="" selected>Default ({{ settings.WHISPER_MODEL_SIZE }})</option>
+                                                            <option value="tiny">tiny</option>
+                                                            <option value="base">base</option>
+                                                            <option value="small">small</option>
+                                                            <option value="medium">medium</option>
+                                                            <option value="large-v3">large-v3</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Language</label>
+                                                        <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_whisper_language" placeholder="Default: {{ settings.WHISPER_LANGUAGE }}">
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Column 3: Mastering & Encoding -->
+                                            <div class="col-md-4 ps-3">
+                                                <div class="text-success fw-bold small mb-2 d-flex align-items-center gap-1">
+                                                    <span>🎬</span> Video & Audio Mastering
+                                                </div>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">CRF (15-28)</label>
+                                                        <input type="number" min="15" max="28" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_crf" placeholder="Default: {{ settings.VIDEO_ENCODING_CRF }}">
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Preset</label>
+                                                        <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_preset">
+                                                            <option value="" selected>Default ({{ settings.VIDEO_ENCODING_PRESET }})</option>
+                                                            <option value="veryslow">veryslow</option>
+                                                            <option value="slow">slow</option>
+                                                            <option value="medium">medium</option>
+                                                            <option value="fast">fast</option>
+                                                            <option value="veryfast">veryfast</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Resampling</label>
+                                                        <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_scale_algo">
+                                                            <option value="" selected>Default ({{ settings.VIDEO_SCALE_ALGORITHM }})</option>
+                                                            <option value="lanczos">lanczos (sharpest)</option>
+                                                            <option value="bicubic">bicubic</option>
+                                                            <option value="bilinear">bilinear</option>
+                                                            <option value="neighbor">neighbor</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Target FPS</label>
+                                                        <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_target_fps">
+                                                            <option value="" selected>Default ({{ settings.VIDEO_TARGET_FPS }})</option>
+                                                            <option value="24">24 fps</option>
+                                                            <option value="30">30 fps</option>
+                                                            <option value="60">60 fps</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2 align-items-center">
+                                                    <div class="col-6">
+                                                        <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Audio Bitrate</label>
+                                                        <select class="form-select form-select-sm bg-dark text-light border-secondary" name="override_audio_bitrate">
+                                                            <option value="" selected>Default ({{ settings.AUDIO_BITRATE }})</option>
+                                                            <option value="128k">128k</option>
+                                                            <option value="192k">192k</option>
+                                                            <option value="256k">256k</option>
+                                                            <option value="320k">320k (Studio)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6 pt-3">
+                                                        <div class="form-check form-switch">
+                                                            <input class="form-check-input" type="checkbox" id="override_enable_sfx" name="override_enable_sfx" value="true" {% if settings.ENABLE_SFX %}checked{% endif %}>
+                                                            <label class="form-check-label text-light small" for="override_enable_sfx" style="font-size:0.75rem;">SFX Generation</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Pipeline & Recent Video Activity Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header py-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-light fs-6">📋 Recent Ingestion & Pipeline Activity</span>
+                        <span id="tracked-videos-count" class="badge bg-info text-dark">{{ recent_videos|length }} tracked</span>
+                    </div>
+                    <!-- Status Filter Pills -->
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Status Filters" id="status-filter-pills">
+                        <button type="button" class="btn btn-outline-secondary active text-light" data-filter="all">
+                            All (<span id="pill-count-all">{{ recent_videos|length }}</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-warning text-light" data-filter="running">
+                            ⏳ Running (<span id="pill-count-running">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary text-light" data-filter="review">
+                            ⭐ Review Ready (<span id="pill-count-review">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-success text-light" data-filter="done">
+                            ✓ Done (<span id="pill-count-done">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-info text-light" data-filter="skipped">
+                            ⏭️ Skipped (<span id="pill-count-skipped">0</span>)
+                        </button>
+                        <button type="button" class="btn btn-outline-danger text-light" data-filter="failed">
+                            ✗ Failed (<span id="pill-count-failed">0</span>)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Comprehensive Multi-Faceted Filters Toolbar -->
+                <div class="d-flex flex-wrap align-items-center gap-2 pt-2 border-top border-secondary">
+                    <!-- Instant Search Input -->
+                    <input type="text" id="activity-search-input" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           style="width: 200px;" placeholder="🔍 Search video/ID...">
+
+                    <!-- Channel Filter -->
+                    <select id="activity-channel-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 150px;">
+                        <option value="">All Channels</option>
+                        {% for ch in channels %}
+                        <option value="{{ ch.id }}">{{ ch.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- AI Model / Provider Filter -->
+                    <select id="activity-ai-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 155px;">
+                        <option value="">All AI Models</option>
+                        <option value="groq">⚡ Groq LPU</option>
+                        <option value="gemini">🤖 Gemini</option>
+                        <option value="openrouter">🌐 OpenRouter</option>
+                        <option value="openai">🟢 OpenAI</option>
+                        <option value="failover">🔀 Failovers Only</option>
+                        <option value="heuristic">⚙️ Heuristic</option>
+                        <option value="error">❌ Error</option>
+                    </select>
+
+                    <!-- Origin Filter -->
+                    <select id="activity-origin-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 140px;">
+                        <option value="">All Origins</option>
+                        <option value="Watched Channel">📡 Watched</option>
+                        <option value="Manual Trigger">⚡ Manual</option>
+                    </select>
+
+                    <!-- Sort Order Filter -->
+                    <select id="activity-sort-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 145px;">
+                        <option value="newest">Sort: Newest</option>
+                        <option value="oldest">Sort: Oldest</option>
+                        <option value="duration">Sort: Duration</option>
+                        <option value="clips">Sort: Most Clips</option>
+                    </select>
+
+                    <!-- Reset Filters Button -->
+                    <button type="button" id="activity-reset-filters-btn" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" style="font-size:0.75rem;">
+                        ✕ Clear Filters
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div id="no-videos-alert" class="p-4 text-center text-muted {% if recent_videos %}d-none{% endif %}">
+                    No videos found matching your filters. <button class="btn btn-sm btn-link text-info p-0" onclick="document.getElementById('activity-reset-filters-btn').click();">Clear all filters</button>
+                </div>
+                <div class="table-responsive {% if not recent_videos %}d-none{% endif %}" id="recent-videos-table-wrapper">
+                    <table class="table table-dark table-hover mb-0 align-middle" id="recent-activity-table">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th style="min-width: 360px;">Source Video</th>
+                                <th>Channel</th>
+                                <th>Status & Stage</th>
+                                <th>Duration</th>
+                                <th>Clips Pipeline</th>
+                                <th>Updated</th>
+                                <th class="text-end" style="min-width: 140px; white-space: nowrap;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-videos-tbody">
+                            {% for v in recent_videos %}
+                            <tr id="video-row-{{ v.youtube_video_id }}" 
+                                class="video-activity-row"
+                                data-video-id="{{ v.youtube_video_id }}"
+                                data-status="{{ v.status }}"
+                                data-is-skipped="{{ 'true' if v.is_skipped_short else 'false' }}"
+                                data-has-review="{{ 'true' if v.waiting_clips > 0 else 'false' }}"
+                                data-channel-id="{{ v.channel_id or '' }}"
+                                data-ai-provider="{{ v.ai_provider }}"
+                                data-is-failover="{{ 'true' if v.is_failover else 'false' }}"
+                                data-is-heuristic="{{ 'true' if v.is_heuristic else 'false' }}"
+                                data-origin="{{ v.origin }}"
+                                data-duration-sec="{{ v.duration_sec }}"
+                                data-clips-count="{{ v.total_clips }}"
+                                data-updated-raw="{{ v.updated_at_raw or '' }}"
+                                data-title="{{ v.title|lower }}"
+                                data-yt-id="{{ v.youtube_video_id|lower }}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <!-- Enlarged 140x79 px 16:9 Thumbnail -->
+                                        <img src="{{ v.thumbnail_url }}" alt="Thumbnail" width="140" height="79"
+                                             class="rounded-2 object-fit-cover flex-shrink-0 border border-secondary shadow-sm"
+                                             referrerpolicy="no-referrer"
+                                             data-vid="{{ v.youtube_video_id }}"
+                                             onerror="if (!this.dataset.tried) { this.dataset.tried='1'; this.src='https://i.ytimg.com/vi/' + this.dataset.vid + '/hqdefault.jpg'; } else { this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'140\' height=\'79\' viewBox=\'0 0 140 79\' fill=\'%232b2b36\'><rect width=\'140\' height=\'79\' rx=\'4\' fill=\'%23262630\'/><polygon points=\'56,28 88,40 56,52\' fill=\'%23888\'/></svg>'; }">
+                                        <div class="overflow-hidden">
+                                            <div class="fw-bold text-light text-truncate" style="max-width: 270px;" title="{{ v.title }}">
+                                                {{ v.title }}
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                                                <a href="https://www.youtube.com/watch?v={{ v.youtube_video_id }}" target="_blank" class="text-info text-decoration-none small text-nowrap">
+                                                    <code class="d-inline-block text-truncate align-middle" style="max-width: 140px;" title="{{ v.youtube_video_id }}">{{ v.youtube_video_id }}</code> ↗
+                                                </a>
+                                                <span class="badge bg-dark border {% if v.origin == 'Watched Channel' %}border-info text-info{% else %}border-secondary text-muted{% endif %} text-nowrap" style="font-size: 0.65rem;">
+                                                    {{ '📡 Watched' if v.origin == 'Watched Channel' else '⚡ Manual' }}
+                                                </span>
+                                                <span class="badge {% if v.ai_provider == 'groq' %}bg-primary-subtle text-primary border border-primary{% elif v.ai_provider == 'gemini' %}bg-info-subtle text-info border border-info{% elif v.ai_provider == 'openrouter' %}bg-warning-subtle text-warning border border-warning{% elif v.ai_provider == 'openai' %}bg-success-subtle text-success border border-success{% elif v.ai_provider == 'heuristic' %}bg-secondary text-light border border-secondary{% elif v.ai_provider == 'error' %}bg-danger text-light border border-danger{% else %}bg-dark text-muted border border-secondary{% endif %} text-nowrap" style="font-size: 0.65rem;" title="AI Model: {{ v.ai_model }}">
+                                                    {{ v.ai_badge }}
+                                                </span>
+                                                {% if v.latency_ms %}
+                                                <span class="badge bg-dark text-light border border-secondary text-nowrap font-monospace" style="font-size: 0.65rem;">⚡ {{ v.latency_ms }}ms</span>
+                                                {% endif %}
+                                                {% if v.is_failover %}
+                                                <span class="badge bg-warning text-dark text-nowrap" style="font-size: 0.65rem;" title="Model failover triggered: {{ v.failover_trail or 'Switched provider' }}">🔀 Failover</span>
+                                                {% endif %}
+                                                {% if v.has_tuning_overrides %}
+                                                <span class="badge bg-info text-dark text-nowrap" style="font-size: 0.65rem;" title="Custom Tuning: {{ v.runtime_overrides }}">⚙️ Tuned</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if (v.raw_size_mb and v.raw_size_mb != '—') or (v.transcript_words and v.transcript_words > 0) %}
+                                            <div class="d-flex align-items-center gap-1 mt-1 text-muted text-nowrap" style="font-size: 0.7rem;">
+                                                {% if v.raw_size_mb and v.raw_size_mb != '—' %}
+                                                <span>💾 {{ v.raw_size_mb }}</span>
+                                                {% endif %}
+                                                {% if v.transcript_words and v.transcript_words > 0 %}
+                                                <span>• 📝 {{ v.transcript_words }} words ({{ v.language }})</span>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if v.channel_yt_id %}
+                                    <a href="https://www.youtube.com/channel/{{ v.channel_yt_id }}" target="_blank" class="text-info text-decoration-none small fw-semibold text-nowrap" title="Open YouTube Channel">
+                                        {{ v.channel_name }} ↗
+                                    </a>
+                                    {% else %}
+                                    <span class="text-light small text-nowrap">{{ v.channel_name }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                                            {% if v.is_skipped_short %}
+                                                <span class="badge bg-info-subtle text-info border border-info text-nowrap" title="Skipped by Pre-ingestion Shorts filter (already short / #shorts)">⏭️ Skipped Short</span>
+                                            {% elif v.status in ['COMPLETED', 'DONE'] %}
+                                                <span class="badge bg-success text-nowrap">✓ PROCESSED</span>
+                                            {% elif v.status in ['DOWNLOADING', 'TRANSCRIBING', 'ANALYZING', 'DETECTED', 'SEGMENTS_SELECTED'] %}
+                                                <span class="badge bg-warning text-dark text-nowrap"><span class="spinner-grow spinner-grow-sm" role="status"></span> {{ v.status }}</span>
+                                            {% elif v.status == 'FAILED' %}
+                                                <span class="badge bg-danger text-nowrap">FAILED</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary text-nowrap">{{ v.status }}</span>
+                                            {% endif %}
+                                            {% if v.retry_count and v.retry_count > 0 %}
+                                                <span class="badge bg-secondary text-nowrap" title="Retried {{ v.retry_count }} times">↺ {{ v.retry_count }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% if v.status in ['DOWNLOADING', 'TRANSCRIBING', 'ANALYZING', 'DETECTED', 'SEGMENTS_SELECTED'] %}
+                                        <div class="progress mt-1" style="height: 14px; width: 140px; background-color: rgba(255,255,255,0.1); border-radius: 4px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark fw-bold" style="width: {{ v.progress_pct }}%; font-size: 0.65rem; line-height: 14px;">{{ v.progress_pct }}%</div>
+                                        </div>
+                                        <div class="text-info mt-1" style="font-size: 0.7rem; font-weight: 500;">{{ v.stage_label }}</div>
+                                        {% if v.speed or v.eta_seconds %}
+                                        <div class="text-muted" style="font-size: 0.68rem;">
+                                            {% if v.speed %}⚡ {{ v.speed }}{% endif %}
+                                            {% if v.eta_seconds %} • ETA: {{ v.eta_seconds }}s{% endif %}
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
+                                        {% if v.pipeline_stages %}
+                                        <div class="pipeline-stepper d-flex align-items-center gap-1 mt-1 p-1 bg-black rounded border border-secondary" style="font-size: 0.62rem; max-width: 270px;" title="Live Pipeline Stepper">
+                                            <span class="badge {% if v.pipeline_stages.ingest == 'done' %}bg-success-subtle text-success border border-success{% elif v.pipeline_stages.ingest == 'active' %}bg-warning-subtle text-warning border border-warning{% elif v.pipeline_stages.ingest == 'failed' %}bg-danger-subtle text-danger border border-danger{% else %}bg-dark text-secondary border border-secondary opacity-50{% endif %} py-0 px-1">
+                                                {% if v.pipeline_stages.ingest == 'done' %}✓{% elif v.pipeline_stages.ingest == 'active' %}<span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span>{% elif v.pipeline_stages.ingest == 'failed' %}✗{% endif %} Ingest
+                                            </span>
+                                            <span class="text-secondary" style="font-size:0.5rem;">→</span>
+                                            <span class="badge {% if v.pipeline_stages.transcribe == 'done' %}bg-success-subtle text-success border border-success{% elif v.pipeline_stages.transcribe == 'active' %}bg-warning-subtle text-warning border border-warning{% elif v.pipeline_stages.transcribe == 'failed' %}bg-danger-subtle text-danger border border-danger{% else %}bg-dark text-secondary border border-secondary opacity-50{% endif %} py-0 px-1">
+                                                {% if v.pipeline_stages.transcribe == 'done' %}✓{% elif v.pipeline_stages.transcribe == 'active' %}<span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span>{% elif v.pipeline_stages.transcribe == 'failed' %}✗{% endif %} Audio
+                                            </span>
+                                            <span class="text-secondary" style="font-size:0.5rem;">→</span>
+                                            <span class="badge {% if v.pipeline_stages.select == 'done' %}bg-success-subtle text-success border border-success{% elif v.pipeline_stages.select == 'active' %}bg-warning-subtle text-warning border border-warning{% elif v.pipeline_stages.select == 'failed' %}bg-danger-subtle text-danger border border-danger{% else %}bg-dark text-secondary border border-secondary opacity-50{% endif %} py-0 px-1">
+                                                {% if v.pipeline_stages.select == 'done' %}✓{% elif v.pipeline_stages.select == 'active' %}<span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span>{% elif v.pipeline_stages.select == 'failed' %}✗{% endif %} AI
+                                            </span>
+                                            <span class="text-secondary" style="font-size:0.5rem;">→</span>
+                                            <span class="badge {% if v.pipeline_stages.render == 'done' %}bg-success-subtle text-success border border-success{% elif v.pipeline_stages.render == 'active' %}bg-warning-subtle text-warning border border-warning{% elif v.pipeline_stages.render == 'failed' %}bg-danger-subtle text-danger border border-danger{% else %}bg-dark text-secondary border border-secondary opacity-50{% endif %} py-0 px-1">
+                                                {% if v.pipeline_stages.render == 'done' %}✓{% elif v.pipeline_stages.render == 'active' %}<span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span>{% elif v.pipeline_stages.render == 'failed' %}✗{% endif %} Render
+                                            </span>
+                                            <span class="text-secondary" style="font-size:0.5rem;">→</span>
+                                            <span class="badge {% if v.pipeline_stages.gate == 'done' %}bg-success-subtle text-success border border-success{% elif v.pipeline_stages.gate == 'active' %}bg-warning-subtle text-warning border border-warning{% elif v.pipeline_stages.gate == 'failed' %}bg-danger-subtle text-danger border border-danger{% else %}bg-dark text-secondary border border-secondary opacity-50{% endif %} py-0 px-1">
+                                                {% if v.pipeline_stages.gate == 'done' %}✓{% elif v.pipeline_stages.gate == 'active' %}<span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span>{% elif v.pipeline_stages.gate == 'failed' %}✗{% endif %} Gate
+                                            </span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="text-muted text-nowrap mt-1" style="font-size: 0.7rem;">🕒 {{ v.turnaround_text }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="small text-light text-nowrap">{{ v.duration_formatted }}</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap align-items-center">
+                                        <span class="badge bg-secondary text-nowrap" title="Total Generated Clips">Total: {{ v.total_clips }}</span>
+                                        {% if v.waiting_clips > 0 %}
+                                            <a href="/queue?tab=active&source_video_id={{ v.youtube_video_id }}" class="badge bg-warning text-dark text-decoration-none fw-bold text-nowrap" title="Click to review clips for this video">⏳ {{ v.waiting_clips }} Review</a>
+                                        {% endif %}
+                                        {% if v.approved_clips > 0 %}
+                                            <span class="badge bg-primary text-nowrap" title="Approved">✓ {{ v.approved_clips }} Approved</span>
+                                        {% endif %}
+                                        {% if v.published_clips > 0 %}
+                                            <span class="badge bg-success text-nowrap" title="Published to YouTube">🚀 {{ v.published_clips }} Published</span>
+                                        {% endif %}
+                                        {% if v.failed_clips > 0 %}
+                                            <a href="/dead-letter" class="badge bg-danger text-decoration-none text-nowrap" title="Failed">✗ {{ v.failed_clips }} Failed</a>
+                                        {% endif %}
+                                        {% if v.total_clips > 0 %}
+                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 ms-1 toggle-clips-btn text-nowrap" onclick="toggleClipDrawer('{{ v.youtube_video_id }}')" style="font-size: 0.72rem;">
+                                                ▼ Clips ({{ v.total_clips }})
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <small class="text-muted text-nowrap">{{ v.updated_at }}</small>
+                                </td>
+                                <td class="text-end" style="white-space: nowrap;">
+                                    <div class="d-inline-flex align-items-center gap-1 flex-nowrap">
+                                        {% if v.can_cancel %}
+                                        <form method="post" action="/process-video/{{ v.youtube_video_id }}/cancel" onsubmit="return confirm('Cancel active ingestion for {{ v.youtube_video_id }}?');" class="m-0">
+                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Cancel running pipeline job">
+                                                ⏹ Cancel
+                                            </button>
+                                        </form>
+                                        {% elif v.can_resume %}
+                                        <form method="post" action="/process-video/{{ v.youtube_video_id }}/resume" class="m-0">
+                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-info py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="Resume processing from last completed checkpoint">
+                                                ⚡ Resume
+                                            </button>
+                                        </form>
+                                        {% if v.can_retry %}
+                                        <form method="post" action="/process-video/{{ v.youtube_video_id }}/retry" class="m-0">
+                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="1-Click Retry Ingestion">
+                                                ↺ Retry
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        {% if v.can_delete %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss & Delete Record"
+                                                onclick="triggerUniversalDelete('/process-video/{{ v.youtube_video_id }}/delete', 'Delete Video {{ v.youtube_video_id }}', 'Choose whether to delete the database record only or wipe all downloaded files and clips from disk:', document.getElementById('video-row-{{ v.youtube_video_id }}'))">
+                                            🗑 Dismiss
+                                        </button>
+                                        {% endif %}
+                                        {% elif v.can_retry %}
+                                        <form method="post" action="/process-video/{{ v.youtube_video_id }}/retry" class="m-0">
+                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="1-Click Retry Ingestion">
+                                                ↺ Retry
+                                            </button>
+                                        </form>
+                                        <form method="post" action="/process-video/{{ v.youtube_video_id }}/clean-retry" class="m-0">
+                                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-info py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Purge partial fragments & Clean Re-Ingest">
+                                                🧹 Clean Re-Ingest
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss & Delete Failed Record"
+                                                onclick="triggerUniversalDelete('/process-video/{{ v.youtube_video_id }}/delete', 'Delete Video {{ v.youtube_video_id }}', 'Choose whether to delete the database record only or wipe all downloaded files and clips from disk:', document.getElementById('video-row-{{ v.youtube_video_id }}'))">
+                                            🗑 Dismiss
+                                        </button>
+                                        {% if v.error_message %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-1 text-nowrap" onclick="toggleClipDrawer('{{ v.youtube_video_id }}')" style="font-size: 0.72rem;" title="View Error Diagnostics">
+                                             ⚠️ Error
+                                        </button>
+                                        {% endif %}
+                                        {% elif v.status in ['DONE', 'COMPLETED'] and not v.is_skipped_short %}
+                                        <form method="post" action="/process-video" class="m-0">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="video_input" value="{{ v.youtube_video_id }}">
+                                            <input type="hidden" name="force" value="true">
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Force Reprocess Video">
+                                                ▶ Re-run
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Delete Video & Clean Storage"
+                                                onclick="triggerUniversalDelete('/process-video/{{ v.youtube_video_id }}/delete', 'Delete Video {{ v.youtube_video_id }}', 'Choose whether to delete the database record only or wipe all downloaded files and clips from disk:', document.getElementById('video-row-{{ v.youtube_video_id }}'))">
+                                            🗑
+                                        </button>
+                                        {% elif v.is_skipped_short %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss Skipped Video"
+                                                onclick="triggerUniversalDelete('/process-video/{{ v.youtube_video_id }}/delete', 'Dismiss Skipped Video {{ v.youtube_video_id }}', 'Dismiss and clear this skipped video record:', document.getElementById('video-row-{{ v.youtube_video_id }}'))">
+                                            🗑 Dismiss
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            <!-- Sub-table drawer for generated clips -->
+                            <tr id="drawer-row-{{ v.youtube_video_id }}" class="clip-drawer-row d-none bg-black">
+                                <td colspan="7" class="p-3 border-top-0">
+                                    <div class="card bg-dark border-secondary p-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="fw-bold text-info" style="font-size:0.85rem;">
+                                                🎬 Generated Shorts for "{{ v.title }}" ({{ v.youtube_video_id }})
+                                            </span>
+                                            <button type="button" class="btn-close btn-close-white" onclick="toggleClipDrawer('{{ v.youtube_video_id }}')" aria-label="Close"></button>
+                                        </div>
+                                        {% if v.candidates %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-dark table-striped mb-0" style="font-size: 0.78rem;">
+                                                <thead>
+                                                    <tr class="text-secondary">
+                                                        <th>Timing & Duration</th>
+                                                        <th>Viral Hook Quote</th>
+                                                        <th>AI Model Provenance</th>
+                                                        <th>Score</th>
+                                                        <th>Clip Status</th>
+                                                        <th class="text-end">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for c in v.candidates %}
+                                                    <tr>
+                                                        <td class="font-monospace text-light">
+                                                            {{ c.start_sec }}s – {{ c.end_sec }}s ({{ c.duration_sec }}s)
+                                                        </td>
+                                                        <td>
+                                                            <div class="text-light fw-semibold text-truncate" style="max-width: 320px;" title="{{ c.hook_text }}">
+                                                                "{{ c.hook_text }}"
+                                                            </div>
+                                                            <div class="text-muted small text-truncate" style="max-width: 320px;" title="{{ c.reason }}">
+                                                                {{ c.reason }}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                                                <span class="badge {% if c.ai_provider == 'groq' %}bg-primary-subtle text-primary border border-primary{% elif c.ai_provider == 'gemini' %}bg-info-subtle text-info border border-info{% elif c.ai_provider == 'openrouter' %}bg-warning-subtle text-warning border border-warning{% elif c.ai_provider == 'openai' %}bg-success-subtle text-success border border-success{% elif c.ai_provider == 'heuristic' %}bg-secondary text-light border border-secondary{% else %}bg-dark text-muted border border-secondary{% endif %}" title="Model: {{ c.ai_model }}">
+                                                                    {{ c.ai_badge }}
+                                                                </span>
+                                                                {% if c.latency_ms %}
+                                                                <span class="badge bg-dark text-light border border-secondary font-monospace" style="font-size: 0.68rem;">⚡ {{ c.latency_ms }}ms</span>
+                                                                {% endif %}
+                                                                {% if c.is_failover %}
+                                                                <span class="badge bg-warning text-dark" style="font-size: 0.68rem;" title="Failover candidate">🔀 Failover</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-secondary font-monospace">{{ c.score }}</span>
+                                                        </td>
+                                                        <td>
+                                                            {% if c.status == 'WAITING_APPROVAL' %}
+                                                                <span class="badge bg-warning text-dark">WAITING REVIEW</span>
+                                                            {% elif c.status == 'APPROVED' %}
+                                                                <span class="badge bg-primary">APPROVED</span>
+                                                            {% elif c.status == 'PUBLISHED' %}
+                                                                <span class="badge bg-success">PUBLISHED</span>
+                                                            {% elif c.status == 'REJECTED' %}
+                                                                <span class="badge bg-danger">REJECTED</span>
+                                                            {% else %}
+                                                                <span class="badge bg-secondary">{{ c.status }}</span>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td class="text-end">
+                                                            {% if c.clip_id %}
+                                                            <div class="d-inline-flex gap-1 align-items-center">
+                                                                {% if c.has_rendered %}
+                                                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;" title="Open clip in File Explorer" onclick="openClipFolder('{{ c.clip_id }}')">
+                                                                    📁 Folder
+                                                                </button>
+                                                                {% endif %}
+                                                                <a href="/queue?tab={% if c.status == 'REJECTED' %}rejected{% else %}active{% endif %}&source_video_id={{ v.youtube_video_id }}" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.72rem;">
+                                                                    Inspect In Queue →
+                                                                </a>
+                                                            </div>
+                                                            {% else %}
+                                                            <span class="text-muted">—</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {% else %}
+                                        <div class="text-muted small">
+                                            {% if v.status == 'FAILED' %}
+                                                <div class="text-danger">Failed to generate clips: {{ v.error_message or 'Check system logs for details.' }}</div>
+                                            {% else %}
+                                                No clip candidates generated yet for this source video.
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        var openDrawers = new Set();
+        var currentFilter = "all";
+        var currentSearch = "";
+        var currentChannel = "";
+        var currentAi = "";
+        var currentOrigin = "";
+        var currentSort = "newest";
+
+        window.toggleClipDrawer = function(videoId) {
+            var drawer = document.getElementById("drawer-row-" + videoId);
+            if (!drawer) return;
+            if (drawer.classList.contains("d-none")) {
+                drawer.classList.remove("d-none");
+                openDrawers.add(videoId);
+            } else {
+                drawer.classList.add("d-none");
+                openDrawers.delete(videoId);
+            }
+        };
+
+        // Filter pills listener
+        var pills = document.querySelectorAll("#status-filter-pills button");
+        pills.forEach(function(pill) {
+            pill.addEventListener("click", function() {
+                pills.forEach(function(p) { p.classList.remove("active"); });
+                pill.classList.add("active");
+                currentFilter = pill.getAttribute("data-filter");
+                applyActivityFilters();
+            });
+        });
+
+        // Search input listener
+        var searchInput = document.getElementById("activity-search-input");
+        if (searchInput) {
+            searchInput.addEventListener("input", function(e) {
+                currentSearch = (e.target.value || "").trim().toLowerCase();
+                applyActivityFilters();
+            });
+        }
+
+        // Channel select listener
+        var channelSelect = document.getElementById("activity-channel-select");
+        if (channelSelect) {
+            channelSelect.addEventListener("change", function(e) {
+                currentChannel = e.target.value || "";
+                applyActivityFilters();
+            });
+        }
+
+        // AI Model select listener
+        var aiSelect = document.getElementById("activity-ai-select");
+        if (aiSelect) {
+            aiSelect.addEventListener("change", function(e) {
+                currentAi = e.target.value || "";
+                applyActivityFilters();
+            });
+        }
+
+        // Origin select listener
+        var originSelect = document.getElementById("activity-origin-select");
+        if (originSelect) {
+            originSelect.addEventListener("change", function(e) {
+                currentOrigin = e.target.value || "";
+                applyActivityFilters();
+            });
+        }
+
+        // Sort select listener
+        var sortSelect = document.getElementById("activity-sort-select");
+        if (sortSelect) {
+            sortSelect.addEventListener("change", function(e) {
+                currentSort = e.target.value || "newest";
+                sortActivityRows();
+            });
+        }
+
+        // Reset filters button listener
+        var resetBtn = document.getElementById("activity-reset-filters-btn");
+        if (resetBtn) {
+            resetBtn.addEventListener("click", function() {
+                currentFilter = "all";
+                currentSearch = "";
+                currentChannel = "";
+                currentAi = "";
+                currentOrigin = "";
+                currentSort = "newest";
+
+                pills.forEach(function(p) {
+                    p.classList.toggle("active", p.getAttribute("data-filter") === "all");
+                });
+                if (searchInput) searchInput.value = "";
+                if (channelSelect) channelSelect.value = "";
+                if (aiSelect) aiSelect.value = "";
+                if (originSelect) originSelect.value = "";
+                if (sortSelect) sortSelect.value = "newest";
+
+                applyActivityFilters();
+                sortActivityRows();
+            });
+        }
+
+        function applyActivityFilters() {
+            var rows = document.querySelectorAll(".video-activity-row");
+            var visibleCount = 0;
+
+            rows.forEach(function(row) {
+                var vId = row.getAttribute("data-video-id");
+                var status = row.getAttribute("data-status");
+                var isSkipped = row.getAttribute("data-is-skipped") === "true";
+                var hasReview = row.getAttribute("data-has-review") === "true";
+                var channelId = row.getAttribute("data-channel-id");
+                var aiProv = (row.getAttribute("data-ai-provider") || "").toLowerCase();
+                var origin = row.getAttribute("data-origin") || "";
+                var title = row.getAttribute("data-title") || "";
+                var ytId = row.getAttribute("data-yt-id") || "";
+
+                var matchesFilter = true;
+                if (currentFilter === "running") {
+                    matchesFilter = ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "DETECTED", "SEGMENTS_SELECTED"].indexOf(status) !== -1;
+                } else if (currentFilter === "review") {
+                    matchesFilter = hasReview;
+                } else if (currentFilter === "done") {
+                    matchesFilter = (status === "DONE" || status === "COMPLETED") && !isSkipped;
+                } else if (currentFilter === "skipped") {
+                    matchesFilter = isSkipped;
+                } else if (currentFilter === "failed") {
+                    matchesFilter = status === "FAILED";
+                }
+
+                var matchesSearch = true;
+                if (currentSearch) {
+                    matchesSearch = (title && title.indexOf(currentSearch) !== -1) || (ytId && ytId.indexOf(currentSearch) !== -1);
+                }
+
+                var matchesChannel = true;
+                if (currentChannel) {
+                    matchesChannel = channelId === currentChannel;
+                }
+
+                var matchesAi = true;
+                if (currentAi) {
+                    if (currentAi === "failover") {
+                        matchesAi = row.getAttribute("data-is-failover") === "true";
+                    } else {
+                        matchesAi = aiProv === currentAi;
+                    }
+                }
+
+                var matchesOrigin = true;
+                if (currentOrigin) {
+                    matchesOrigin = origin === currentOrigin;
+                }
+
+                var show = matchesFilter && matchesSearch && matchesChannel && matchesAi && matchesOrigin;
+                row.classList.toggle("d-none", !show);
+                if (show) visibleCount++;
+
+                var drawer = document.getElementById("drawer-row-" + vId);
+                if (drawer && !show) {
+                    drawer.classList.add("d-none");
+                } else if (drawer && show && openDrawers.has(vId)) {
+                    drawer.classList.remove("d-none");
+                }
+            });
+
+            var noAlert = document.getElementById("no-videos-alert");
+            var tableWrapper = document.getElementById("recent-videos-table-wrapper");
+            if (noAlert && tableWrapper) {
+                if (visibleCount === 0 && rows.length > 0) {
+                    noAlert.classList.remove("d-none");
+                    tableWrapper.classList.add("d-none");
+                } else if (rows.length > 0) {
+                    noAlert.classList.add("d-none");
+                    tableWrapper.classList.remove("d-none");
+                }
+            }
+        }
+
+        function sortActivityRows() {
+            var tbody = document.getElementById("recent-videos-tbody");
+            if (!tbody) return;
+            var rows = Array.from(tbody.querySelectorAll(".video-activity-row"));
+            
+            rows.sort(function(a, b) {
+                if (currentSort === "oldest") {
+                    var aTime = a.getAttribute("data-updated-raw") || "";
+                    var bTime = b.getAttribute("data-updated-raw") || "";
+                    return aTime.localeCompare(bTime);
+                } else if (currentSort === "duration") {
+                    var aDur = parseFloat(a.getAttribute("data-duration-sec")) || 0;
+                    var bDur = parseFloat(b.getAttribute("data-duration-sec")) || 0;
+                    return bDur - aDur;
+                } else if (currentSort === "clips") {
+                    var aClips = parseInt(a.getAttribute("data-clips-count")) || 0;
+                    var bClips = parseInt(b.getAttribute("data-clips-count")) || 0;
+                    return bClips - aClips;
+                } else {
+                    // newest default
+                    var aTime = a.getAttribute("data-updated-raw") || "";
+                    var bTime = b.getAttribute("data-updated-raw") || "";
+                    return bTime.localeCompare(aTime);
+                }
+            });
+
+            rows.forEach(function(row) {
+                var vId = row.getAttribute("data-video-id");
+                var drawer = document.getElementById("drawer-row-" + vId);
+                tbody.appendChild(row);
+                if (drawer) tbody.appendChild(drawer);
+            });
+        }
+
+        function updateFilterPillCounts(videos) {
+            if (!Array.isArray(videos)) return;
+            var cAll = videos.length;
+            var cRunning = 0;
+            var cReview = 0;
+            var cDone = 0;
+            var cSkipped = 0;
+            var cFailed = 0;
+
+            videos.forEach(function(v) {
+                if (["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "DETECTED", "SEGMENTS_SELECTED"].indexOf(v.status) !== -1) {
+                    cRunning++;
+                }
+                if (v.waiting_clips > 0) cReview++;
+                if (v.is_skipped_short) cSkipped++;
+                else if (v.status === "DONE" || v.status === "COMPLETED") cDone++;
+                if (v.status === "FAILED") cFailed++;
+            });
+
+            setElText("pill-count-all", cAll);
+            setElText("pill-count-running", cRunning);
+            setElText("pill-count-review", cReview);
+            setElText("pill-count-done", cDone);
+            setElText("pill-count-skipped", cSkipped);
+            setElText("pill-count-failed", cFailed);
+        }
+
+        function renderPipelineStepperHtml(stages) {
+            if (!stages) return '';
+            function getBadge(state, label) {
+                if (state === 'done') return '<span class="badge bg-success-subtle text-success border border-success py-0 px-1">✓ ' + label + '</span>';
+                if (state === 'active') return '<span class="badge bg-warning-subtle text-warning border border-warning py-0 px-1"><span class="spinner-grow spinner-grow-sm" style="width:0.35rem;height:0.35rem;"></span> ' + label + '</span>';
+                if (state === 'failed') return '<span class="badge bg-danger-subtle text-danger border border-danger py-0 px-1">✗ ' + label + '</span>';
+                return '<span class="badge bg-dark text-secondary border border-secondary py-0 px-1 opacity-50">' + label + '</span>';
+            }
+            return '<div class="pipeline-stepper d-flex align-items-center gap-1 mt-1 p-1 bg-black rounded border border-secondary" style="font-size: 0.62rem; max-width: 270px;" title="Live Pipeline Stepper">' +
+                getBadge(stages.ingest, 'Ingest') +
+                '<span class="text-secondary" style="font-size:0.5rem;">→</span>' +
+                getBadge(stages.transcribe, 'Audio') +
+                '<span class="text-secondary" style="font-size:0.5rem;">→</span>' +
+                getBadge(stages.select, 'AI') +
+                '<span class="text-secondary" style="font-size:0.5rem;">→</span>' +
+                getBadge(stages.render, 'Render') +
+                '<span class="text-secondary" style="font-size:0.5rem;">→</span>' +
+                getBadge(stages.gate, 'Gate') +
+            '</div>';
+        }
+
+        function updateVideoActivityRows(videos) {
+            if (!Array.isArray(videos)) return;
+            var tbody = document.getElementById("recent-videos-tbody");
+            if (!tbody) return;
+
+            var tableWrapper = document.getElementById("recent-videos-table-wrapper");
+            var noVideosAlert = document.getElementById("no-videos-alert");
+            if (videos.length > 0) {
+                if (tableWrapper) tableWrapper.classList.remove("d-none");
+                if (noVideosAlert) noVideosAlert.classList.add("d-none");
+            }
+
+            var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+            var csrfToken = tokenMeta ? tokenMeta.content : '';
+
+            videos.forEach(function(v) {
+                var rowId = "video-row-" + v.youtube_video_id;
+                var row = document.getElementById(rowId);
+
+                if (row) {
+                    // 1. Update data attributes
+                    row.setAttribute("data-status", v.status);
+                    row.setAttribute("data-is-skipped", v.is_skipped_short ? "true" : "false");
+                    row.setAttribute("data-has-review", v.waiting_clips > 0 ? "true" : "false");
+                    row.setAttribute("data-channel-id", v.channel_id || "");
+                    row.setAttribute("data-ai-provider", v.ai_provider || "");
+                    row.setAttribute("data-is-failover", v.is_failover ? "true" : "false");
+                    row.setAttribute("data-is-heuristic", v.is_heuristic ? "true" : "false");
+                    row.setAttribute("data-origin", v.origin || "");
+                    row.setAttribute("data-duration-sec", v.duration_sec || 0);
+                    row.setAttribute("data-clips-count", v.total_clips || 0);
+                    row.setAttribute("data-updated-raw", v.updated_at_raw || "");
+                    row.setAttribute("data-title", (v.title || "").toLowerCase());
+                    row.setAttribute("data-yt-id", (v.youtube_video_id || "").toLowerCase());
+
+                    // 2. Title & Thumbnail
+                    var titleEl = row.querySelector(".fw-bold.text-light.text-truncate");
+                    if (titleEl && v.title && titleEl.textContent.trim() !== v.title) {
+                        titleEl.textContent = v.title;
+                        titleEl.title = v.title;
+                    }
+                    var imgEl = row.querySelector("img[data-vid]");
+                    if (imgEl && v.thumbnail_url && !imgEl.src.includes(v.thumbnail_url)) {
+                        imgEl.src = v.thumbnail_url;
+                    }
+
+                    // 3. Status & Stage
+                    var statusCell = row.cells[2];
+                    if (statusCell) {
+                        var isRunning = ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "DETECTED", "SEGMENTS_SELECTED"].indexOf(v.status) !== -1;
+                        var badgeHtml = '';
+                        if (v.is_skipped_short) {
+                            badgeHtml = '<span class="badge bg-info-subtle text-info border border-info text-nowrap" title="Skipped by Pre-ingestion Shorts filter">⏭️ Skipped Short</span>';
+                        } else if (v.status === 'COMPLETED' || v.status === 'DONE') {
+                            badgeHtml = '<span class="badge bg-success text-nowrap">✓ PROCESSED</span>';
+                        } else if (isRunning) {
+                            badgeHtml = '<span class="badge bg-warning text-dark text-nowrap"><span class="spinner-grow spinner-grow-sm" role="status"></span> ' + v.status + '</span>';
+                        } else if (v.status === 'FAILED') {
+                            badgeHtml = '<span class="badge bg-danger text-nowrap">FAILED</span>';
+                        } else {
+                            badgeHtml = '<span class="badge bg-secondary text-nowrap">' + v.status + '</span>';
+                        }
+
+                        if (v.retry_count && v.retry_count > 0) {
+                            badgeHtml += ' <span class="badge bg-secondary text-nowrap" title="Retried ' + v.retry_count + ' times">↺ ' + v.retry_count + '</span>';
+                        }
+
+                        var progressHtml = '';
+                        if (isRunning) {
+                            var pct = Math.max(0, Math.min(100, Math.round(v.progress_pct || 10)));
+                            progressHtml = '<div class="progress mt-1" style="height: 14px; width: 140px; background-color: rgba(255,255,255,0.1); border-radius: 4px;">' +
+                                '<div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark fw-bold" style="width: ' + pct + '%; font-size: 0.65rem; line-height: 14px;">' + pct + '%</div>' +
+                            '</div>' +
+                            '<div class="text-info mt-1" style="font-size: 0.7rem; font-weight: 500;">' + (v.stage_label || v.status) + '</div>';
+                            if (v.speed || v.eta_seconds) {
+                                progressHtml += '<div class="text-muted" style="font-size: 0.68rem;">' +
+                                    (v.speed ? '⚡ ' + v.speed : '') +
+                                    (v.eta_seconds ? ' • ETA: ' + v.eta_seconds + 's' : '') +
+                                '</div>';
+                            }
+                        }
+
+                        var stepperHtml = renderPipelineStepperHtml(v.pipeline_stages);
+                        var turnaroundHtml = '<div class="text-muted text-nowrap" style="font-size: 0.7rem;">🕒 ' + (v.turnaround_text || '—') + '</div>';
+                        statusCell.innerHTML = '<div class="d-flex flex-column gap-1"><div class="d-flex align-items-center gap-1 flex-wrap">' + badgeHtml + '</div>' + progressHtml + stepperHtml + turnaroundHtml + '</div>';
+                    }
+
+                    // 4. Duration
+                    if (row.cells[3]) {
+                        row.cells[3].innerHTML = '<span class="small text-light text-nowrap">' + (v.duration_formatted || '—') + '</span>';
+                    }
+
+                    // 5. Clips Pipeline
+                    if (row.cells[4]) {
+                        var clipsHtml = '<span class="badge bg-secondary text-nowrap" title="Total Generated Clips">Total: ' + v.total_clips + '</span>';
+                        if (v.waiting_clips > 0) {
+                            clipsHtml += ' <a href="/queue?tab=active&source_video_id=' + v.youtube_video_id + '" class="badge bg-warning text-dark text-decoration-none fw-bold text-nowrap" title="Click to review clips for this video">⏳ ' + v.waiting_clips + ' Review</a>';
+                        }
+                        if (v.approved_clips > 0) {
+                            clipsHtml += ' <span class="badge bg-primary text-nowrap" title="Approved">✓ ' + v.approved_clips + ' Approved</span>';
+                        }
+                        if (v.published_clips > 0) {
+                            clipsHtml += ' <span class="badge bg-success text-nowrap" title="Published to YouTube">🚀 ' + v.published_clips + ' Published</span>';
+                        }
+                        if (v.failed_clips > 0) {
+                            clipsHtml += ' <a href="/dead-letter" class="badge bg-danger text-decoration-none text-nowrap" title="Failed">✗ ' + v.failed_clips + ' Failed</a>';
+                        }
+                        if (v.total_clips > 0) {
+                            clipsHtml += ' <button type="button" class="btn btn-sm btn-outline-info py-0 px-2 ms-1 toggle-clips-btn text-nowrap" onclick="toggleClipDrawer(\'' + v.youtube_video_id + '\')" style="font-size: 0.72rem;">▼ Clips (' + v.total_clips + ')</button>';
+                        }
+                        row.cells[4].innerHTML = '<div class="d-flex gap-1 flex-wrap align-items-center">' + clipsHtml + '</div>';
+                    }
+
+                    // 6. Updated
+                    if (row.cells[5]) {
+                        row.cells[5].innerHTML = '<small class="text-muted text-nowrap">' + (v.updated_at || '—') + '</small>';
+                    }
+
+                    // 7. Actions
+                    if (row.cells[6]) {
+                        var actionsHtml = '';
+                        if (v.can_cancel) {
+                            actionsHtml += '<form method="post" action="/process-video/' + v.youtube_video_id + '/cancel" onsubmit="return confirm(\'Cancel active ingestion for ' + v.youtube_video_id + '?\');" class="m-0">' +
+                                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Cancel running job">⏹ Cancel</button>' +
+                            '</form>';
+                        } else if (v.can_resume) {
+                            actionsHtml += '<form method="post" action="/process-video/' + v.youtube_video_id + '/resume" class="m-0">' +
+                                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-info py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="Resume processing from last checkpoint">⚡ Resume</button>' +
+                            '</form>';
+                            if (v.can_retry) {
+                                actionsHtml += '<form method="post" action="/process-video/' + v.youtube_video_id + '/retry" class="m-0">' +
+                                    '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                    '<button type="submit" class="btn btn-sm btn-outline-warning py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="1-Click Retry">↺ Retry</button>' +
+                                '</form>';
+                            }
+                            if (v.can_delete) {
+                                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss & Delete"' +
+                                    ' onclick="triggerUniversalDelete(\'/process-video/' + v.youtube_video_id + '/delete\', \'Delete Video ' + v.youtube_video_id + '\', \'Choose whether to delete database record or wipe files:\', document.getElementById(\'' + rowId + '\'))">🗑 Dismiss</button>';
+                            }
+                        } else if (v.can_retry) {
+                            actionsHtml += '<form method="post" action="/process-video/' + v.youtube_video_id + '/retry" class="m-0">' +
+                                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-warning py-1 px-2 fw-bold text-nowrap" style="font-size: 0.75rem;" title="1-Click Retry">↺ Retry</button>' +
+                            '</form>' +
+                            '<form method="post" action="/process-video/' + v.youtube_video_id + '/clean-retry" class="m-0">' +
+                                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-info py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Clean Re-Ingest">🧹 Clean Re-Ingest</button>' +
+                            '</form>' +
+                            '<button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss & Delete"' +
+                                ' onclick="triggerUniversalDelete(\'/process-video/' + v.youtube_video_id + '/delete\', \'Delete Video ' + v.youtube_video_id + '\', \'Choose whether to delete database record or wipe files:\', document.getElementById(\'' + rowId + '\'))">🗑 Dismiss</button>';
+                        } else if ((v.status === 'DONE' || v.status === 'COMPLETED') && !v.is_skipped_short) {
+                            actionsHtml += '<form method="post" action="/process-video" class="m-0">' +
+                                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                                '<input type="hidden" name="video_input" value="' + v.youtube_video_id + '">' +
+                                '<input type="hidden" name="force" value="true">' +
+                                '<button type="submit" class="btn btn-sm btn-outline-secondary py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Force Reprocess">▶ Re-run</button>' +
+                            '</form>' +
+                            '<button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Delete Video"' +
+                                ' onclick="triggerUniversalDelete(\'/process-video/' + v.youtube_video_id + '/delete\', \'Delete Video ' + v.youtube_video_id + '\', \'Choose whether to delete database record or wipe files:\', document.getElementById(\'' + rowId + '\'))">🗑</button>';
+                        } else if (v.is_skipped_short) {
+                            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 text-nowrap" style="font-size: 0.75rem;" title="Dismiss Skipped Video"' +
+                                ' onclick="triggerUniversalDelete(\'/process-video/' + v.youtube_video_id + '/delete\', \'Dismiss Skipped Video ' + v.youtube_video_id + '\', \'Dismiss and clear this skipped video record:\', document.getElementById(\'' + rowId + '\'))">🗑 Dismiss</button>';
+                        }
+                        row.cells[6].innerHTML = '<div class="d-inline-flex align-items-center gap-1 flex-nowrap">' + actionsHtml + '</div>';
+                    }
+                } else {
+                    // Prepend new row if not present
+                    var newRowHtml = buildVideoRowHtml(v, csrfToken);
+                    tbody.insertAdjacentHTML("afterbegin", newRowHtml);
+                }
+            });
+
+            // Re-apply active filters and update tracked count
+            applyActivityFilters();
+            var countBadge = document.getElementById("tracked-videos-count");
+            if (countBadge) countBadge.textContent = videos.length + " tracked";
+        }
+
+        function buildVideoRowHtml(v, csrfToken) {
+            var rowId = "video-row-" + v.youtube_video_id;
+            var isRunning = ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "DETECTED", "SEGMENTS_SELECTED"].indexOf(v.status) !== -1;
+            var badgeHtml = '';
+            if (v.is_skipped_short) {
+                badgeHtml = '<span class="badge bg-info-subtle text-info border border-info text-nowrap">⏭️ Skipped Short</span>';
+            } else if (v.status === 'COMPLETED' || v.status === 'DONE') {
+                badgeHtml = '<span class="badge bg-success text-nowrap">✓ PROCESSED</span>';
+            } else if (isRunning) {
+                badgeHtml = '<span class="badge bg-warning text-dark text-nowrap"><span class="spinner-grow spinner-grow-sm" role="status"></span> ' + v.status + '</span>';
+            } else if (v.status === 'FAILED') {
+                badgeHtml = '<span class="badge bg-danger text-nowrap">FAILED</span>';
+            } else {
+                badgeHtml = '<span class="badge bg-secondary text-nowrap">' + v.status + '</span>';
+            }
+
+            var pct = Math.max(0, Math.min(100, Math.round(v.progress_pct || 10)));
+            var progressHtml = '';
+            if (isRunning) {
+                progressHtml = '<div class="progress mt-1" style="height: 14px; width: 140px; background-color: rgba(255,255,255,0.1); border-radius: 4px;">' +
+                    '<div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark fw-bold" style="width: ' + pct + '%; font-size: 0.65rem; line-height: 14px;">' + pct + '%</div>' +
+                '</div>' +
+                '<div class="text-info mt-1" style="font-size: 0.7rem; font-weight: 500;">' + (v.stage_label || v.status) + '</div>';
+            }
+
+            var chanHtml = v.channel_yt_id ?
+                '<a href="https://www.youtube.com/channel/' + v.channel_yt_id + '" target="_blank" class="text-info text-decoration-none small fw-semibold text-nowrap">' + v.channel_name + ' ↗</a>' :
+                '<span class="text-light small text-nowrap">' + (v.channel_name || 'Default Channel') + '</span>';
+
+            return '<tr id="' + rowId + '" class="video-activity-row" data-video-id="' + v.youtube_video_id + '" data-status="' + v.status + '" data-is-skipped="' + (v.is_skipped_short ? 'true' : 'false') + '" data-has-review="' + (v.waiting_clips > 0 ? 'true' : 'false') + '" data-channel-id="' + (v.channel_id || '') + '" data-ai-provider="' + (v.ai_provider || '') + '" data-is-failover="' + (v.is_failover ? 'true' : 'false') + '" data-is-heuristic="' + (v.is_heuristic ? 'true' : 'false') + '" data-origin="' + (v.origin || '') + '" data-duration-sec="' + (v.duration_sec || 0) + '" data-clips-count="' + (v.total_clips || 0) + '" data-updated-raw="' + (v.updated_at_raw || '') + '" data-title="' + (v.title || '').toLowerCase() + '" data-yt-id="' + (v.youtube_video_id || '').toLowerCase() + '">' +
+                '<td>' +
+                    '<div class="d-flex align-items-center gap-3">' +
+                        '<img src="' + v.thumbnail_url + '" alt="Thumbnail" width="140" height="79" class="rounded-2 object-fit-cover flex-shrink-0 border border-secondary shadow-sm" data-vid="' + v.youtube_video_id + '">' +
+                        '<div class="overflow-hidden">' +
+                            '<div class="fw-bold text-light text-truncate" style="max-width: 270px;" title="' + (v.title || '') + '">' + (v.title || v.youtube_video_id) + '</div>' +
+                            '<div class="d-flex align-items-center gap-1 mt-1 flex-wrap">' +
+                                '<a href="https://www.youtube.com/watch?v=' + v.youtube_video_id + '" target="_blank" class="text-info text-decoration-none small text-nowrap"><code>' + v.youtube_video_id + '</code> ↗</a>' +
+                                '<span class="badge bg-dark border border-secondary text-muted" style="font-size:0.65rem;">' + (v.origin === 'Watched Channel' ? '📡 Watched' : '⚡ Manual') + '</span>' +
+                                (v.has_tuning_overrides ? ' <span class="badge bg-info text-dark text-nowrap" style="font-size:0.65rem;" title="Custom Tuning Overrides Applied">⚙️ Tuned</span>' : '') +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' + chanHtml + '</td>' +
+                '<td><div class="d-flex flex-column gap-1"><div class="d-flex align-items-center gap-1 flex-wrap">' + badgeHtml + '</div>' + progressHtml + renderPipelineStepperHtml(v.pipeline_stages) + '<div class="text-muted text-nowrap" style="font-size: 0.7rem;">🕒 ' + (v.turnaround_text || '—') + '</div></div></td>' +
+                '<td><span class="small text-light text-nowrap">' + (v.duration_formatted || '—') + '</span></td>' +
+                '<td><div class="d-flex gap-1 flex-wrap align-items-center"><span class="badge bg-secondary text-nowrap">Total: ' + v.total_clips + '</span></div></td>' +
+                '<td><small class="text-muted text-nowrap">' + (v.updated_at || '—') + '</small></td>' +
+                '<td class="text-end" style="white-space: nowrap;"><div class="d-inline-flex align-items-center gap-1 flex-nowrap"></div></td>' +
+            '</tr>' +
+            '<tr id="drawer-row-' + v.youtube_video_id + '" class="clip-drawer-row d-none bg-black"><td colspan="7" class="p-3 border-top-0"></td></tr>';
+        }
+
+        window.resetPerVideoTuningForm = function(formId) {
+            var form = document.getElementById(formId);
+            if (!form) return;
+            form.querySelectorAll('[name^="override_"]').forEach(function(el) {
+                if (el.type === 'checkbox') {
+                    el.checked = true;
+                } else {
+                    el.value = '';
+                }
+            });
+        };
+
+        // Initialize pill counts from SSR
+        var initialVideos = [];
+        document.querySelectorAll(".video-activity-row").forEach(function(r) {
+            initialVideos.push({
+                status: r.getAttribute("data-status"),
+                is_skipped_short: r.getAttribute("data-is-skipped") === "true",
+                waiting_clips: r.getAttribute("data-has-review") === "true" ? 1 : 0
+            });
+        });
+        updateFilterPillCounts(initialVideos);
+
+        // Intelligent Live Ingestion Pre-Flight Checker
+        var videoInput = document.getElementById("video_input");
+        var preflightCard = document.getElementById("video-preflight-card");
+        var preflightContent = document.getElementById("video-preflight-content");
+        var forceCheckbox = document.getElementById("force");
+        var forceLabel = document.getElementById("force-label");
+        var preflightTimer = null;
+
+        if (videoInput && preflightCard && preflightContent) {
+            videoInput.addEventListener("input", function() {
+                clearTimeout(preflightTimer);
+                var val = (videoInput.value || "").trim();
+                var ingestBtn = document.querySelector("#manual-ingest-form button[type='submit']");
+                if (!val) {
+                    preflightCard.classList.add("d-none");
+                    if (ingestBtn) ingestBtn.disabled = false;
+                    return;
+                }
+                // Debounce check by 250ms
+                preflightTimer = setTimeout(function() {
+                    fetch("/api/video-status/" + encodeURIComponent(val))
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (!data) return;
+                            if (data.is_valid === false) {
+                                preflightCard.classList.remove("d-none");
+                                preflightCard.className = "mt-2 p-2 rounded border border-danger bg-black";
+                                preflightContent.innerHTML = 
+                                    "<div class='d-flex align-items-center gap-2 text-danger'>" +
+                                        "<span class='badge bg-danger'>❌ Invalid Video</span>" +
+                                        "<span>" + (data.error || "Invalid YouTube link or video not found / private.") + "</span>" +
+                                    "</div>";
+                                if (ingestBtn) ingestBtn.disabled = true;
+                                return;
+                            }
+                            if (ingestBtn) ingestBtn.disabled = false;
+
+                            if (!data.exists) {
+                                preflightCard.classList.remove("d-none");
+                                preflightCard.className = "mt-2 p-2 rounded border border-success bg-black";
+                                var authorInfo = data.author ? " <span class='text-muted small'>(" + data.author + ")</span>" : "";
+                                
+                                var chanPrompt = "";
+                                if (data.channel) {
+                                    if (data.channel.exists) {
+                                        chanPrompt = "<div class='mt-1 text-light small d-flex align-items-center gap-2'>" +
+                                            "<span>🏷️ Channel: <strong>" + data.channel.channel_name + "</strong></span>" +
+                                            "<span class='badge bg-secondary'>Registered</span>" +
+                                        "</div>";
+                                        var chanSelect = document.getElementById("channel_id");
+                                        if (chanSelect && data.channel.channel_id) {
+                                            chanSelect.value = data.channel.channel_id;
+                                        }
+                                        var regInput = document.getElementById("register_channel");
+                                        if (regInput) regInput.value = "";
+                                    } else if (data.channel.detected_name) {
+                                        chanPrompt = "<div class='mt-2 p-2 rounded border border-warning bg-black text-warning'>" +
+                                            "<div class='fw-semibold'>✨ New Channel Detected: <strong class='text-light'>" + data.channel.detected_name + "</strong> <code class='text-info'>(" + (data.channel.detected_id || '') + ")</code></div>" +
+                                            "<div class='form-check mt-1'>" +
+                                                "<input class='form-check-input' type='checkbox' id='confirm_register_chan' checked onchange='document.getElementById(\"register_channel\").value = this.checked ? \"on\" : \"\";'>" +
+                                                "<label class='form-check-label text-light small' for='confirm_register_chan'>" +
+                                                    "Register <strong>" + data.channel.detected_name + "</strong> in Channel Manager & assign video to it" +
+                                                "</label>" +
+                                            "</div>" +
+                                        "</div>";
+                                        var regInput = document.getElementById("register_channel");
+                                        if (regInput) regInput.value = "on";
+                                        var dName = document.getElementById("detected_channel_name");
+                                        if (dName) dName.value = data.channel.detected_name;
+                                        var dId = document.getElementById("detected_channel_id");
+                                        if (dId) dId.value = data.channel.detected_id || "";
+                                    }
+                                }
+
+                                preflightContent.innerHTML = 
+                                    "<div class='d-flex align-items-center gap-2'>" +
+                                        "<span class='badge bg-success'>✨ Valid YouTube Video</span>" +
+                                        "<strong class='text-light text-truncate' style='max-width:320px;'>" + (data.title || data.video_id) + "</strong>" +
+                                        authorInfo +
+                                    "</div>" +
+                                    chanPrompt +
+                                    "<div class='text-muted small mt-1'>Ready for automated download, transcription & hook extraction.</div>";
+                                if (forceCheckbox) forceCheckbox.checked = false;
+                                return;
+                            }
+                            var tierBadge = "";
+                            if (data.recommended_tier) {
+                                tierBadge = "<div class='mt-1 text-muted small d-flex align-items-center gap-2 flex-wrap'>" +
+                                    "<span>Estimated Tokens: <strong class='text-light'>~" + (data.estimated_tokens ? data.estimated_tokens.toLocaleString() : "0") + "</strong></span>" +
+                                    "<span class='badge bg-dark border border-secondary text-info'>" + data.recommended_tier + "</span>" +
+                                "</div>";
+                            }
+
+                            preflightCard.classList.remove("d-none");
+                            if (data.is_done) {
+                                preflightCard.className = "mt-2 p-2 rounded border border-warning bg-black";
+                                var authorInfo = data.author ? " <span class='text-muted small'>(" + data.author + ")</span>" : "";
+                                preflightContent.innerHTML = 
+                                    "<div class='d-flex justify-content-between align-items-center flex-wrap gap-1'>" +
+                                        "<div>" +
+                                            "<span class='badge bg-success me-1'>✓ Already Processed</span>" +
+                                            "<strong class='text-light'>" + (data.title || data.video_id) + "</strong>" + authorInfo +
+                                            "<div class='text-muted small mt-1'>Yield: " + data.clips_count + " clips generated (" + data.waiting_clips + " waiting review). Finished " + data.updated_at + ".</div>" +
+                                            tierBadge +
+                                        "</div>" +
+                                        "<div class='d-flex gap-1 align-items-center mt-1'>" +
+                                            "<a href='" + data.queue_url + "' class='btn btn-sm btn-outline-warning py-0 px-2 fw-bold' style='font-size:0.75rem;'>View in Queue ↗</a>" +
+                                        "</div>" +
+                                    "</div>" +
+                                    "<div class='text-info small mt-1'>👉 Toggle <strong>Force Re-run</strong> below if you want to re-process this video.</div>";
+                                if (forceCheckbox) {
+                                    forceCheckbox.checked = true;
+                                    if (forceLabel) forceLabel.classList.add("text-warning");
+                                }
+                            } else if (data.is_in_progress) {
+                                preflightCard.className = "mt-2 p-2 rounded border border-info bg-black";
+                                preflightContent.innerHTML = 
+                                    "<span class='badge bg-warning text-dark me-1'><span class='spinner-grow spinner-grow-sm'></span> In Progress</span>" +
+                                    "<strong class='text-light'>" + (data.title || data.video_id) + "</strong>: Currently in stage <code>" + data.status + "</code>." +
+                                    tierBadge;
+                            } else if (data.is_failed) {
+                                preflightCard.className = "mt-2 p-2 rounded border border-danger bg-black";
+                                preflightContent.innerHTML = 
+                                    "<span class='badge bg-danger me-1'>⚠️ Previously Failed</span>" +
+                                    "<strong class='text-light'>" + (data.title || data.video_id) + "</strong>" +
+                                    "<div class='text-danger small mt-1'>" + (data.error_message || "Encountered fatal error") + "</div>" +
+                                    tierBadge;
+                            }
+                        })
+                        .catch(function(err) {
+                            console.warn("Pre-flight check error:", err);
+                        });
+                }, 250);
+            });
+        }
+
+        document.body.addEventListener('clearInput', function() {
+            var vIn = document.getElementById("video_input");
+            if (vIn) vIn.value = "";
+            var pCard = document.getElementById("video-preflight-card");
+            if (pCard) pCard.classList.add("d-none");
+            var rChan = document.getElementById("register_channel");
+            if (rChan) rChan.value = "";
+            var dName = document.getElementById("detected_channel_name");
+            if (dName) dName.value = "";
+            var dId = document.getElementById("detected_channel_id");
+            if (dId) dId.value = "";
+        });
+
+        // Server-Sent Events (SSE) Stream
+        (function initDashboardSSE() {
+            var sseStatusEl = document.getElementById("sse-status");
+            if (!window.EventSource) {
+                if (sseStatusEl) {
+                    sseStatusEl.textContent = "Manual Reload";
+                    sseStatusEl.className = "badge bg-secondary ms-2";
+                }
+                return;
+            }
+
+            var source = new EventSource("/api/events/dashboard");
+
+            source.onopen = function() {
+                if (sseStatusEl) {
+                    sseStatusEl.className = "badge bg-success-subtle text-success border border-success ms-2";
+                    sseStatusEl.textContent = "🟢 Live";
+                }
+            };
+
+            source.onerror = function() {
+                if (sseStatusEl) {
+                    sseStatusEl.className = "badge bg-warning-subtle text-warning border border-warning ms-2";
+                    sseStatusEl.textContent = "🟡 Reconnecting...";
+                }
+            };
+
+            source.onmessage = function(event) {
+                try {
+                    var data = JSON.parse(event.data);
+                    if (!data) return;
+
+                    var c = data.counters;
+                    if (c) {
+                        setElText("stat-total-videos", c.total_videos);
+                        setElText("stat-in-progress", c.in_progress);
+                        setElText("stat-waiting-approval", c.waiting_approval);
+                        setElText("stat-published-today", c.published_today);
+                        setElText("stat-failed-total", c.failed_total);
+
+                        setElText("stat-quota-pct", c.quota_pct + "%");
+                        setElText("stat-quota-text", c.quota_used + " / " + c.quota_limit + " reqs");
+                        if (c.quota_subtext) {
+                            setElText("quota-subtext-display", c.quota_subtext);
+                        }
+
+                        var quotaBar = document.getElementById("stat-quota-bar");
+                        if (quotaBar) {
+                            quotaBar.style.width = c.quota_pct + "%";
+                            quotaBar.className = c.quota_warning ? "progress-bar bg-warning" : "progress-bar bg-success";
+                        }
+                    }
+
+                    // Live Model Activity Telemetry Banner
+                    var act = data.live_model_activity;
+                    if (act) {
+                        var telText = document.getElementById("ai-live-telemetry-text");
+                        var pulseDot = document.getElementById("ai-live-pulse-dot");
+                        var failoverPill = document.getElementById("ai-live-failover-pill");
+                        var cooldownPill = document.getElementById("ai-live-cooldown-pill");
+
+                        if (telText && pulseDot) {
+                            if (act.in_flight_count > 0) {
+                                pulseDot.className = "spinner-grow spinner-grow-sm text-info";
+                                var callers = (act.active_calls || []).map(function(c) {
+                                    return c.provider + " (" + c.model + ") " + c.elapsed_sec + "s";
+                                }).join(", ");
+                                telText.innerHTML = "<span class='text-info fw-bold'>⚡ INVOKING:</span> " + callers;
+                            } else if (act.is_cooldown_active) {
+                                pulseDot.className = "spinner-grow spinner-grow-sm text-warning";
+                                telText.innerHTML = "<span class='text-warning fw-bold'>🟡 COOLDOWN ACTIVE:</span> Next request dynamically routed to ready providers.";
+                            } else {
+                                pulseDot.className = "spinner-grow spinner-grow-sm text-success";
+                                telText.textContent = "All AI models idle & healthy";
+                            }
+                        }
+
+                        if (failoverPill) {
+                            if (act.recent_failovers && act.recent_failovers.length > 0) {
+                                failoverPill.classList.remove("d-none");
+                                var lastF = act.recent_failovers[0];
+                                failoverPill.textContent = "🔀 " + lastF.from + " ➔ " + lastF.to;
+                                failoverPill.title = "Reason: " + lastF.reason + " (" + lastF.time + ")";
+                            } else {
+                                failoverPill.classList.add("d-none");
+                            }
+                        }
+
+                        if (cooldownPill) {
+                            if (act.cooling_keys_count > 0) {
+                                cooldownPill.classList.remove("d-none");
+                                cooldownPill.textContent = act.cooling_keys_count + " key(s) cooling";
+                            } else {
+                                cooldownPill.classList.add("d-none");
+                            }
+                        }
+                    }
+
+                    // Update API Keys Table live
+                    var keys = data.api_key_metrics;
+                    if (Array.isArray(keys)) {
+                        setElText("active-keys-count", keys.length + " active key(s)");
+                        var keysTbody = document.getElementById("api-keys-tbody");
+                        if (keysTbody) {
+                            keys.forEach(function(km) {
+                                var row = document.getElementById("key-row-" + km.id);
+                                if (row) {
+                                    var reqsEl = row.querySelector(".key-requests-text");
+                                    var pctEl = row.querySelector(".key-pct-text");
+                                    var barEl = row.querySelector(".progress-bar");
+                                    var badgeEl = row.querySelector(".status-badge");
+                                    var latEl = row.querySelector(".key-latency-cell");
+                                    var usedEl = row.querySelector(".key-used-cell");
+
+                                    if (reqsEl) reqsEl.textContent = km.requests_today + " / " + km.daily_limit + " reqs";
+                                    if (pctEl) pctEl.textContent = km.pct + "%";
+                                    if (barEl) {
+                                        barEl.style.width = km.pct + "%";
+                                        barEl.className = km.pct >= 90 ? "progress-bar bg-danger" : (km.pct >= 75 ? "progress-bar bg-warning" : "progress-bar bg-success");
+                                    }
+                                    if (badgeEl) {
+                                        badgeEl.className = "badge bg-" + km.status_class + "-subtle text-" + km.status_class + " border border-" + km.status_class + " status-badge";
+                                        badgeEl.textContent = km.status_badge;
+                                    }
+                                    if (latEl && km.last_latency_ms) {
+                                        latEl.textContent = km.last_latency_ms + " ms";
+                                    }
+                                    var tpsEl = row.querySelector(".key-tps-cell");
+                                    if (km.last_tokens_per_sec) {
+                                        if (!tpsEl && latEl && latEl.parentElement) {
+                                            tpsEl = document.createElement("div");
+                                            tpsEl.className = "text-info font-monospace small key-tps-cell";
+                                            tpsEl.style.fontSize = "0.70rem";
+                                            latEl.parentElement.appendChild(tpsEl);
+                                        }
+                                        if (tpsEl) tpsEl.textContent = "⚡ " + Number(km.last_tokens_per_sec).toFixed(1) + " t/s";
+                                    }
+                                    var tokEl = row.querySelector(".key-tokens-text");
+                                    var resetEl = row.querySelector(".key-reset-text");
+                                    if (km.remaining_tokens_minute !== undefined && km.remaining_tokens_minute !== null) {
+                                        if (tokEl) tokEl.textContent = Number(km.remaining_tokens_minute).toLocaleString() + " tpm left";
+                                        if (resetEl && km.reset_tokens_sec) resetEl.textContent = "resets " + Number(km.reset_tokens_sec).toFixed(1) + "s";
+                                    }
+                                    if (usedEl && km.last_used_at) {
+                                        usedEl.textContent = km.last_used_at;
+                                    }
+                                }
+                            });
+                        }
+                    }
+
+                    if (data.recent_videos) {
+                        updateFilterPillCounts(data.recent_videos);
+                        updateVideoActivityRows(data.recent_videos);
+                    }
+                } catch (err) {
+                    console.error("SSE parse error:", err);
+                }
+            };
+        })();
+
+        function setElText(id, text) {
+            var el = document.getElementById(id);
+            if (el && text !== undefined && text !== null) {
+                el.textContent = text;
+            }
+        }
+    })();
+
+    // Drag-and-Drop Ingestion
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        document.body.style.border = '2px dashed #0dcaf0';
+    });
+    
+    document.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        document.body.style.border = 'none';
+    });
+
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        document.body.style.border = 'none';
+        
+        var url = e.dataTransfer.getData('text');
+        if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+            var input = document.getElementById('video_input');
+            if (input) {
+                input.value = url;
+                // Trigger HTMX form submission
+                var form = document.getElementById('manual-ingest-form');
+                if (form && window.htmx) {
+                    htmx.trigger(form, 'submit');
+                    window.showToast('Dropped URL detected! Starting ingestion...', 'info');
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

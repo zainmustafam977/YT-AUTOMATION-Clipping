@@ -1,0 +1,756 @@
+{% extends "base.html" %}
+{% block title %}Runtime Settings{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9 col-xl-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-light">⚙️ Runtime Settings & Engine Tuning</span>
+                <span class="badge bg-primary">Dynamic Hot-Reload</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-4">
+                    Adjust safe operational pipeline parameters in real-time. Changes are persisted to
+                    <code>storage/config/runtime_settings.json</code> and automatically picked up by background workers and pipeline runners on their next job cycle without requiring process or container restarts.
+                </p>
+
+                <div id="settings-feedback"></div>
+
+                <form method="post" action="/settings" class="needs-validation"
+                      hx-post="/settings"
+                      hx-target="#settings-feedback"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                    <!-- Clip Slicing & Duration -->
+                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Clip Duration & Slicing Limits</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="target_duration_min_sec" class="form-label text-light small fw-semibold mb-0">
+                                    Min Target Duration (sec)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 5s – 120s</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="target_duration_min_sec" name="target_duration_min_sec"
+                                   value="{{ settings.TARGET_DURATION_MIN_SEC }}" min="5" max="120" required>
+                            <div class="form-text text-muted small">Minimum allowed clip length in seconds. Candidates shorter than this threshold are pruned (min: 5s, max: 120s, default: 15s).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="target_duration_max_sec" class="form-label text-light small fw-semibold mb-0">
+                                    Max Target Duration (sec)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 10s – 180s</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="target_duration_max_sec" name="target_duration_max_sec"
+                                   value="{{ settings.TARGET_DURATION_MAX_SEC }}" min="10" max="180" required>
+                            <div class="form-text text-muted small">Maximum allowed clip length in seconds. YouTube Shorts strict cap is 60s; landscape clips allow up to 180s (min: 10s, max: 180s, default: 58s).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="min_segments_per_video" class="form-label text-light small fw-semibold mb-0">
+                                    Min Segments Per Video
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 1 – 20</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="min_segments_per_video" name="min_segments_per_video"
+                                   value="{{ settings.MIN_SEGMENTS_PER_VIDEO }}" min="1" max="20" required>
+                            <div class="form-text text-muted small">Minimum viral clip candidates to extract per source video (min: 1, max: 20, default: 3).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="max_segments_per_video" class="form-label text-light small fw-semibold mb-0">
+                                    Max Segments Per Video
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 1 – 20</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="max_segments_per_video" name="max_segments_per_video"
+                                   value="{{ settings.MAX_SEGMENTS_PER_VIDEO }}" min="1" max="20" required>
+                            <div class="form-text text-muted small">Upper limit on candidates extracted per source video to conserve processing resources (min: 1, max: 20, default: 5).</div>
+                        </div>
+                    </div>
+
+                    <!-- Rendering, Captions & Sound Effects -->
+                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Rendering, Captions & Sound Effects</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="default_caption_preset" class="form-label text-light small fw-semibold mb-0">
+                                    Default Caption Style Preset
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">5 Presets</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="default_caption_preset" name="default_caption_preset">
+                                {% for pid, pname in allowed_caption_presets %}
+                                <option value="{{ pid }}" {% if settings.DEFAULT_CAPTION_PRESET == pid %}selected{% endif %}>{{ pname }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Active subtitle style generated for all new clips. Can be hot-swapped per clip in Review Queue.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="caption_margin_vertical" class="form-label text-light small fw-semibold mb-0">
+                                    Caption Vertical Margin (px)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 200px – 600px</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="caption_margin_vertical" name="caption_margin_vertical"
+                                   value="{{ settings.CAPTION_MARGIN_VERTICAL }}" min="200" max="600" step="10" required>
+                            <div class="form-text text-muted small">Vertical offset in 9:16 canvas to prevent YouTube UI overlay collision (default: 420px).</div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <div class="form-check form-switch mt-3">
+                                <input class="form-check-input" type="checkbox" id="enable_sfx" name="enable_sfx"
+                                       {% if settings.ENABLE_SFX %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="enable_sfx">
+                                    Enable Audio SFX Mixing
+                                </label>
+                                <div class="form-text text-muted small">When checked, transitions mix sound effects (whoosh, pop, ding) into rendered audio.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Studio Mastering & Video Encoding -->
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom border-secondary pb-2 mb-3">
+                        <h6 class="text-info mb-0">Studio Mastering & Video Encoding (Max Quality)</h6>
+                        <span class="badge bg-secondary-subtle text-warning border border-warning" style="font-size:0.75rem;">Lanczos 3-lobe • CRF 18 • 320 kbps AAC</span>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="video_scale_algorithm" class="form-label text-light small fw-semibold mb-0">
+                                    Resampling Filter
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">FFmpeg sws_flags</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="video_scale_algorithm" name="video_scale_algorithm">
+                                {% for algo in allowed_scale_algorithms %}
+                                <option value="{{ algo }}" {% if settings.VIDEO_SCALE_ALGORITHM == algo %}selected{% endif %}>{{ algo|capitalize }} {% if algo == 'lanczos' %}(Studio Sharpest){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Filter used for 9:16 crop scaling. Lanczos maintains maximum sharpness.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="video_encoding_crf" class="form-label text-light small fw-semibold mb-0">
+                                    Video Constant Rate Factor (CRF)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 0 – 51</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="video_encoding_crf" name="video_encoding_crf"
+                                   value="{{ settings.VIDEO_ENCODING_CRF }}" min="0" max="51" required>
+                            <div class="form-text text-muted small">Visually lossless factor (14 = master, 18 = broadcast standard, 23 = default).</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="video_encoding_preset" class="form-label text-light small fw-semibold mb-0">
+                                    H.264 / NVENC Preset
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Compression</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="video_encoding_preset" name="video_encoding_preset">
+                                {% for pr in allowed_encoding_presets %}
+                                <option value="{{ pr }}" {% if settings.VIDEO_ENCODING_PRESET == pr %}selected{% endif %}>{{ pr }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Encoder compression speed vs file size (default: slow).</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="video_target_fps" class="form-label text-light small fw-semibold mb-0">
+                                    Target Framerate (FPS)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 15 – 60</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="video_target_fps" name="video_target_fps"
+                                   value="{{ settings.VIDEO_TARGET_FPS }}" min="15" max="60" required>
+                            <div class="form-text text-muted small">Output frame rate for vertical clips (default: 30 fps).</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="audio_bitrate" class="form-label text-light small fw-semibold mb-0">
+                                    Audio Bitrate
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">AAC Bitrate</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="audio_bitrate" name="audio_bitrate">
+                                <option value="128k" {% if settings.AUDIO_BITRATE == '128k' %}selected{% endif %}>128 kbps (Standard)</option>
+                                <option value="192k" {% if settings.AUDIO_BITRATE == '192k' %}selected{% endif %}>192 kbps (High)</option>
+                                <option value="256k" {% if settings.AUDIO_BITRATE == '256k' %}selected{% endif %}>256 kbps (Very High)</option>
+                                <option value="320k" {% if settings.AUDIO_BITRATE == '320k' %}selected{% endif %}>320 kbps (Studio Master)</option>
+                            </select>
+                            <div class="form-text text-muted small">Audio mastering encoding bitrate (default: 320k).</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="audio_sample_rate" class="form-label text-light small fw-semibold mb-0">
+                                    Audio Sample Rate (Hz)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Resampling</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="audio_sample_rate" name="audio_sample_rate">
+                                <option value="44100" {% if settings.AUDIO_SAMPLE_RATE == 44100 %}selected{% endif %}>44,100 Hz (CD Audio)</option>
+                                <option value="48000" {% if settings.AUDIO_SAMPLE_RATE == 48000 %}selected{% endif %}>48,000 Hz (Broadcast / Pro Video)</option>
+                            </select>
+                            <div class="form-text text-muted small">Mastering sample rate for dialogue and audio (default: 48000 Hz).</div>
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Resilience & Quota -->
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom border-secondary pb-2 mb-3">
+                        <h6 class="text-info mb-0">Resilience, Quota & AI Models</h6>
+                        <span class="badge bg-secondary-subtle text-info border border-info text-wrap" style="font-size:0.75rem; white-space: normal; line-height: 1.4; max-width: 100%;">Multi-Tier Protected: Groq ⚡ (LPU 8K TPM) ➔ Gemini 🤖 (Interactions API 1M TPM) ➔ OpenRouter 🌐 (Free Slugs) ➔ Heuristic ⚙️</span>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="max_retry_count" class="form-label text-light small fw-semibold mb-0">
+                                    Max Retry Count
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 1 – 10</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="max_retry_count" name="max_retry_count"
+                                   value="{{ settings.MAX_RETRY_COUNT }}" min="1" max="10" required>
+                            <div class="form-text text-muted small">Max automatic retries before moving to Dead-Letter (lower bound: 1, upper bound: 10, default: 3).</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="quota_warning_threshold" class="form-label text-light small fw-semibold mb-0">
+                                    Quota Warning Ratio
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 0.10 – 1.00</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="quota_warning_threshold" name="quota_warning_threshold"
+                                   value="{{ settings.QUOTA_WARNING_THRESHOLD }}" min="0.1" max="1.0" step="0.05" required>
+                            <div class="form-text text-muted small">Threshold (0.10 – 1.00) for quota alert trigger (current: {{ settings.QUOTA_WARNING_THRESHOLD }}, default: 0.80 = 80%).</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="gemini_pacing_sec" class="form-label text-light small fw-semibold mb-0">
+                                    Gemini Client Pacing (sec)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 1.0s – 10.0s</span>
+                            </div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="gemini_pacing_sec" name="gemini_pacing_sec"
+                                   value="{{ settings.GEMINI_PACING_SEC if settings.GEMINI_PACING_SEC is defined else 4.0 }}" min="1.0" max="10.0" step="0.5" required>
+                            <div class="form-text text-muted small">Minimum interval per key to prevent exceeding the 15 RPM Free Tier ceiling (default: 4.0s).</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="llm_model_name" class="form-label text-light small fw-semibold mb-0">
+                                    Gemini LLM Model
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Allowed: 3 Models</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="llm_model_name" name="llm_model_name" required>
+                                {% for m in allowed_models %}
+                                <option value="{{ m }}" {% if settings.LLM_MODEL_NAME == m %}selected{% endif %}>{{ m }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Gemini model used for segment intelligence & metadata (default: gemini-3.8-flash).</div>
+                        </div>
+                    </div>
+
+                    <!-- Multi-Provider LLM & Transparent Failover -->
+                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Multi-Provider LLM & Rate-Limit Failover (Intelligent Tiered Routing)</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="llm_provider" class="form-label text-light small fw-semibold">
+                                Provider Strategy
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="llm_provider" name="llm_provider">
+                                <option value="auto" {% if settings.LLM_PROVIDER == 'auto' %}selected{% endif %}>Auto (Intelligent Tiered: Groq ⚡ -> Gemini 🤖 -> OpenRouter 🌐 -> OpenAI 🟢 -> Heuristic ⚙️)</option>
+                                <option value="groq" {% if settings.LLM_PROVIDER == 'groq' %}selected{% endif %}>Groq LPU Only (Fastest Free Inference)</option>
+                                <option value="gemini" {% if settings.LLM_PROVIDER == 'gemini' %}selected{% endif %}>Gemini Only</option>
+                                <option value="openrouter" {% if settings.LLM_PROVIDER == 'openrouter' %}selected{% endif %}>OpenRouter Only</option>
+                                <option value="openai" {% if settings.LLM_PROVIDER == 'openai' %}selected{% endif %}>OpenAI Only</option>
+                            </select>
+                            <div class="form-text text-muted small">Auto mode prioritizes free, blazingly fast LPU inference and seamlessly cascades on rate limits.</div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="llm_fallback_on_rate_limit" name="llm_fallback_on_rate_limit"
+                                       {% if settings.LLM_FALLBACK_ON_RATE_LIMIT %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="llm_fallback_on_rate_limit">
+                                    429 Rate-Limit Cascading Failover
+                                </label>
+                                <div class="form-text text-muted small">Auto-switch to next available provider if current hits HTTP 429 quota.</div>
+                            </div>
+                        </div>
+
+                        <!-- Groq Config -->
+                        <div class="col-md-6">
+                            <label for="groq_model_name" class="form-label text-light small fw-semibold">
+                                ⚡ Groq Model (Tier 1 Free LPU)
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="groq_model_name" name="groq_model_name">
+                                {% for gm in allowed_groq_models %}
+                                <option value="{{ gm }}" {% if settings.GROQ_MODEL_NAME == gm %}selected{% endif %}>{{ gm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Ultra-fast inference (sub-300ms, ~500 tokens/sec).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    Groq API Key Pool
+                                </label>
+                                {% if groq_key_items %}
+                                <span class="badge bg-success-subtle text-success border border-success">{{ groq_key_items|length }} Key(s) Configured</span>
+                                {% else %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning">None Configured</span>
+                                {% endif %}
+                            </div>
+
+                            {% for item in groq_key_items %}
+                            <div class="card bg-dark-subtle border-secondary-subtle mb-2 shadow-sm">
+                                <div class="card-body p-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div class="d-flex align-items-center flex-wrap gap-1">
+                                        <span class="badge bg-secondary">#{{ item.index }}</span>
+                                        <code class="text-info font-monospace small">{{ item.masked }}</code>
+                                        <span id="test-status-{{ item.hash }}" class="badge {% if item.is_cooling %}bg-warning-subtle text-warning border border-warning{% elif item.calls > 0 %}bg-success-subtle text-success border border-success{% else %}bg-secondary-subtle text-secondary border border-secondary{% endif %}" style="font-size: 0.72rem;">
+                                            {% if item.is_cooling %}
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Cooldown (429)
+                                            {% elif item.calls > 0 %}
+                                            <i class="bi bi-check-circle me-1"></i>Active ({{ item.calls }} reqs)
+                                            {% else %}
+                                            <i class="bi bi-dash-circle me-1"></i>Ready
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 ms-auto">
+                                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.75rem;" onclick="testApiKey('groq', '{{ item.hash }}')">
+                                            <i class="bi bi-lightning-charge"></i> Test
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;" onclick="removeApiKey('groq', '{{ item.hash }}')">
+                                            <i class="bi bi-trash3"></i> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="password" class="form-control bg-dark text-light border-secondary" id="new-key-groq" placeholder="Paste new Groq API key (gsk_...)" autocomplete="off">
+                                <button class="btn btn-outline-success" type="button" onclick="addApiKey('groq')">
+                                    <i class="bi bi-plus-circle me-1"></i>+ Add Key
+                                </button>
+                            </div>
+
+                            <details class="mt-1 mb-2">
+                                <summary class="text-muted small" style="cursor: pointer;">Advanced: Bulk Edit / Paste Multiple Keys</summary>
+                                <textarea class="form-control bg-dark text-light border-secondary form-control-sm mt-1" id="groq_api_keys" name="groq_api_keys" rows="2" placeholder="One key per line or comma-separated"></textarea>
+                            </details>
+                        </div>
+
+                        <!-- Gemini Config -->
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    🤖 Gemini Model (Tier 2 Free)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Active: {{ settings.LLM_MODEL_NAME }}</span>
+                            </div>
+                            <div class="p-2 rounded bg-dark border border-secondary text-light small font-monospace d-flex justify-content-between align-items-center">
+                                <span><span class="text-info fw-bold">{{ settings.LLM_MODEL_NAME }}</span> <span class="badge bg-success-subtle text-success border border-success ms-2">Configured</span></span>
+                                <span class="text-muted small" style="font-size:0.75rem;">Selected in Resilience section above</span>
+                            </div>
+                            <div class="form-text text-muted small">Google Gemini multimodal model via Interactions API. Client-side pacing: <strong>{{ settings.GEMINI_PACING_SEC if settings.GEMINI_PACING_SEC is defined else 4.0 }}s</strong> (15 RPM guard).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    Gemini API Key Pool
+                                </label>
+                                {% if gemini_key_items %}
+                                <span class="badge bg-info-subtle text-info border border-info">{{ gemini_key_items|length }} Key(s) Configured</span>
+                                {% else %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning">None Configured</span>
+                                {% endif %}
+                            </div>
+
+                            {% for item in gemini_key_items %}
+                            <div class="card bg-dark-subtle border-secondary-subtle mb-2 shadow-sm">
+                                <div class="card-body p-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div class="d-flex align-items-center flex-wrap gap-1">
+                                        <span class="badge bg-secondary">#{{ item.index }}</span>
+                                        <code class="text-info font-monospace small">{{ item.masked }}</code>
+                                        <span id="test-status-{{ item.hash }}" class="badge {% if item.is_cooling %}bg-warning-subtle text-warning border border-warning{% elif item.calls > 0 %}bg-success-subtle text-success border border-success{% else %}bg-secondary-subtle text-secondary border border-secondary{% endif %}" style="font-size: 0.72rem;">
+                                            {% if item.is_cooling %}
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Cooldown (429)
+                                            {% elif item.calls > 0 %}
+                                            <i class="bi bi-check-circle me-1"></i>Active ({{ item.calls }} reqs)
+                                            {% else %}
+                                            <i class="bi bi-dash-circle me-1"></i>Ready
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 ms-auto">
+                                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.75rem;" onclick="testApiKey('gemini', '{{ item.hash }}')">
+                                            <i class="bi bi-lightning-charge"></i> Test
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;" onclick="removeApiKey('gemini', '{{ item.hash }}')">
+                                            <i class="bi bi-trash3"></i> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="password" class="form-control bg-dark text-light border-secondary" id="new-key-gemini" placeholder="Paste new Gemini API key (AIza... / AQ...)" autocomplete="off">
+                                <button class="btn btn-outline-success" type="button" onclick="addApiKey('gemini')">
+                                    <i class="bi bi-plus-circle me-1"></i>+ Add Key
+                                </button>
+                            </div>
+
+                            <details class="mt-1 mb-2">
+                                <summary class="text-muted small" style="cursor: pointer;">Advanced: Bulk Edit / Paste Multiple Keys</summary>
+                                <textarea class="form-control bg-dark text-light border-secondary form-control-sm mt-1" id="gemini_api_keys" name="gemini_api_keys" rows="2" placeholder="One key per line or comma-separated"></textarea>
+                            </details>
+                        </div>
+
+                        <!-- OpenRouter Config -->
+                        <div class="col-md-6">
+                            <label for="openrouter_model_name" class="form-label text-light small fw-semibold">
+                                🌐 OpenRouter Model (Tier 3 Free)
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="openrouter_model_name" name="openrouter_model_name">
+                                {% for orm in allowed_openrouter_models %}
+                                <option value="{{ orm }}" {% if settings.OPENROUTER_MODEL_NAME == orm %}selected{% endif %}>{{ orm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Multi-model free tier backup aggregator.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    OpenRouter API Key Pool
+                                </label>
+                                {% if openrouter_key_items %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning">{{ openrouter_key_items|length }} Key(s) Configured</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary">None Configured</span>
+                                {% endif %}
+                            </div>
+
+                            {% for item in openrouter_key_items %}
+                            <div class="card bg-dark-subtle border-secondary-subtle mb-2 shadow-sm">
+                                <div class="card-body p-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div class="d-flex align-items-center flex-wrap gap-1">
+                                        <span class="badge bg-secondary">#{{ item.index }}</span>
+                                        <code class="text-info font-monospace small">{{ item.masked }}</code>
+                                        <span id="test-status-{{ item.hash }}" class="badge {% if item.is_cooling %}bg-warning-subtle text-warning border border-warning{% elif item.calls > 0 %}bg-success-subtle text-success border border-success{% else %}bg-secondary-subtle text-secondary border border-secondary{% endif %}" style="font-size: 0.72rem;">
+                                            {% if item.is_cooling %}
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Cooldown (429)
+                                            {% elif item.calls > 0 %}
+                                            <i class="bi bi-check-circle me-1"></i>Active ({{ item.calls }} reqs)
+                                            {% else %}
+                                            <i class="bi bi-dash-circle me-1"></i>Ready
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 ms-auto">
+                                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.75rem;" onclick="testApiKey('openrouter', '{{ item.hash }}')">
+                                            <i class="bi bi-lightning-charge"></i> Test
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;" onclick="removeApiKey('openrouter', '{{ item.hash }}')">
+                                            <i class="bi bi-trash3"></i> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="password" class="form-control bg-dark text-light border-secondary" id="new-key-openrouter" placeholder="Paste new OpenRouter API key (sk-or-...)" autocomplete="off">
+                                <button class="btn btn-outline-success" type="button" onclick="addApiKey('openrouter')">
+                                    <i class="bi bi-plus-circle me-1"></i>+ Add Key
+                                </button>
+                            </div>
+
+                            <details class="mt-1 mb-2">
+                                <summary class="text-muted small" style="cursor: pointer;">Advanced: Bulk Edit / Paste Multiple Keys</summary>
+                                <textarea class="form-control bg-dark text-light border-secondary form-control-sm mt-1" id="openrouter_api_keys" name="openrouter_api_keys" rows="2" placeholder="One key per line or comma-separated"></textarea>
+                            </details>
+                        </div>
+
+                        <!-- OpenAI Config -->
+                        <div class="col-md-6">
+                            <label for="openai_model_name" class="form-label text-light small fw-semibold">
+                                🟢 OpenAI Model (Tier 4 Paid Backup)
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="openai_model_name" name="openai_model_name">
+                                {% for om in allowed_openai_models %}
+                                <option value="{{ om }}" {% if settings.OPENAI_MODEL_NAME == om %}selected{% endif %}>{{ om }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">OpenAI model invoked if free tiers are unavailable.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    OpenAI API Key Pool
+                                </label>
+                                {% if openai_key_items %}
+                                <span class="badge bg-success-subtle text-success border border-success">{{ openai_key_items|length }} Key(s) Configured</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary">None Configured</span>
+                                {% endif %}
+                            </div>
+
+                            {% for item in openai_key_items %}
+                            <div class="card bg-dark-subtle border-secondary-subtle mb-2 shadow-sm">
+                                <div class="card-body p-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div class="d-flex align-items-center flex-wrap gap-1">
+                                        <span class="badge bg-secondary">#{{ item.index }}</span>
+                                        <code class="text-info font-monospace small">{{ item.masked }}</code>
+                                        <span id="test-status-{{ item.hash }}" class="badge {% if item.is_cooling %}bg-warning-subtle text-warning border border-warning{% elif item.calls > 0 %}bg-success-subtle text-success border border-success{% else %}bg-secondary-subtle text-secondary border border-secondary{% endif %}" style="font-size: 0.72rem;">
+                                            {% if item.is_cooling %}
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Cooldown (429)
+                                            {% elif item.calls > 0 %}
+                                            <i class="bi bi-check-circle me-1"></i>Active ({{ item.calls }} reqs)
+                                            {% else %}
+                                            <i class="bi bi-dash-circle me-1"></i>Ready
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 ms-auto">
+                                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.75rem;" onclick="testApiKey('openai', '{{ item.hash }}')">
+                                            <i class="bi bi-lightning-charge"></i> Test
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.75rem;" onclick="removeApiKey('openai', '{{ item.hash }}')">
+                                            <i class="bi bi-trash3"></i> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="password" class="form-control bg-dark text-light border-secondary" id="new-key-openai" placeholder="Paste new OpenAI API key (sk-...)" autocomplete="off">
+                                <button class="btn btn-outline-success" type="button" onclick="addApiKey('openai')">
+                                    <i class="bi bi-plus-circle me-1"></i>+ Add Key
+                                </button>
+                            </div>
+
+                            <details class="mt-1 mb-2">
+                                <summary class="text-muted small" style="cursor: pointer;">Advanced: Bulk Edit / Paste Multiple Keys</summary>
+                                <textarea class="form-control bg-dark text-light border-secondary form-control-sm mt-1" id="openai_api_keys" name="openai_api_keys" rows="2" placeholder="One key per line or comma-separated"></textarea>
+                            </details>
+                        </div>
+                    </div>
+
+                    <!-- Audio Transcription, Computer Vision & Publishing Defaults -->
+                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Transcription, Computer Vision & Publishing Defaults</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label for="whisper_model_size" class="form-label text-light small fw-semibold">
+                                Whisper Model Size
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="whisper_model_size" name="whisper_model_size">
+                                {% for wm in allowed_whisper_models %}
+                                <option value="{{ wm }}" {% if settings.WHISPER_MODEL_SIZE == wm %}selected{% endif %}>{{ wm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">Speed vs accuracy (default: base).</div>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="use_groq_whisper" name="use_groq_whisper"
+                                       {% if settings.USE_GROQ_WHISPER %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="use_groq_whisper">
+                                    ⚡ Cloud Whisper (Groq)
+                                </label>
+                                <div class="form-text text-muted small" style="font-size:0.7rem;">Free 28.8k ASD (8 hrs/day). 2s turnaround.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="face_tracking_confidence" class="form-label text-light small fw-semibold">
+                                Face Tracking Confidence
+                            </label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="face_tracking_confidence" name="face_tracking_confidence"
+                                   value="{{ settings.FACE_TRACKING_CONFIDENCE }}" min="0.1" max="1.0" step="0.05" required>
+                            <div class="form-text text-muted small">MediaPipe threshold (0.1 – 1.0, default: 0.6).</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="llm_temperature" class="form-label text-light small fw-semibold">
+                                AI Viral Temperature
+                            </label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="llm_temperature" name="llm_temperature"
+                                   value="{{ settings.LLM_TEMPERATURE }}" min="0.0" max="1.0" step="0.05" required>
+                            <div class="form-text text-muted small">Sampling randomness (0.0 – 1.0, default: 0.2).</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="default_privacy_status" class="form-label text-light small fw-semibold">
+                                Default Privacy Status
+                            </label>
+                            <select class="form-select bg-dark text-light border-secondary" id="default_privacy_status" name="default_privacy_status">
+                                {% for ps in allowed_privacy_statuses %}
+                                <option value="{{ ps }}" {% if settings.DEFAULT_PRIVACY_STATUS == ps %}selected{% endif %}>{{ ps|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">YouTube upload privacy (default: unlisted).</div>
+                        </div>
+                    </div>
+
+                    <!-- Fine-Grained Whisper Tuning -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label for="whisper_beam_size" class="form-label text-light small fw-semibold">
+                                Whisper Beam Size
+                            </label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="whisper_beam_size" name="whisper_beam_size"
+                                   value="{{ settings.WHISPER_BEAM_SIZE }}" min="1" max="10" required>
+                            <div class="form-text text-muted small">Beam search decoding width (1 – 10, default: 5).</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="whisper_language" class="form-label text-light small fw-semibold">
+                                Language Override
+                            </label>
+                            <input type="text" class="form-control bg-dark text-light border-secondary"
+                                   id="whisper_language" name="whisper_language"
+                                   value="{{ settings.WHISPER_LANGUAGE or '' }}" placeholder="Auto-detect (e.g. en)">
+                            <div class="form-text text-muted small">Force ISO language code (e.g. en) or blank for auto-detect.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="whisper_temperature" class="form-label text-light small fw-semibold">
+                                Whisper Temperature
+                            </label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary"
+                                   id="whisper_temperature" name="whisper_temperature"
+                                   value="{{ settings.WHISPER_TEMPERATURE }}" min="0.0" max="1.0" step="0.1" required>
+                            <div class="form-text text-muted small">Decoding sampling temperature (default: 0.0).</div>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="whisper_vad_filter" name="whisper_vad_filter"
+                                       {% if settings.WHISPER_VAD_FILTER %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="whisper_vad_filter">
+                                    Silero VAD Filter
+                                </label>
+                                <div class="form-text text-muted small">Mutes non-speech intervals to prevent hallucinations.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 border-top border-secondary pt-3">
+                        <a href="/" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary fw-bold" style="background: #7c4dff; border-color: #7c4dff;">
+                            💾 Save & Apply Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function testApiKey(provider, keyHash) {
+    const badge = document.getElementById(`test-status-${keyHash}`);
+    if (badge) {
+        badge.className = 'badge bg-warning-subtle text-warning border border-warning';
+        badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Testing...';
+    }
+    try {
+        const formData = new FormData();
+        formData.append('csrf_token', '{{ csrf_token }}');
+        formData.append('provider', provider);
+        formData.append('key_hash', keyHash);
+        const resp = await fetch('/settings/keys/test', {
+            method: 'POST',
+            body: formData,
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await resp.json();
+        if (data.status === 'success') {
+            badge.className = 'badge bg-success-subtle text-success border border-success';
+            badge.innerHTML = `<i class="bi bi-check-circle me-1"></i>Active (${data.latency_ms}ms)`;
+        } else {
+            badge.className = 'badge bg-danger-subtle text-danger border border-danger';
+            badge.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>${data.message || 'Failed'}`;
+        }
+    } catch (err) {
+        if (badge) {
+            badge.className = 'badge bg-danger-subtle text-danger border border-danger';
+            badge.innerHTML = `<i class="bi bi-x-circle me-1"></i>${err.message}`;
+        }
+    }
+}
+
+function removeApiKey(provider, keyHash) {
+    if (!confirm(`Are you sure you want to remove this ${provider.toUpperCase()} API key?`)) {
+        return;
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/settings/keys/delete';
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+
+    const provInput = document.createElement('input');
+    provInput.type = 'hidden';
+    provInput.name = 'provider';
+    provInput.value = provider;
+    form.appendChild(provInput);
+
+    const hashInput = document.createElement('input');
+    hashInput.type = 'hidden';
+    hashInput.name = 'key_hash';
+    hashInput.value = keyHash;
+    form.appendChild(hashInput);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function addApiKey(provider) {
+    const input = document.getElementById(`new-key-${provider}`);
+    if (!input || !input.value.trim()) {
+        alert('Please enter an API key.');
+        return;
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/settings/keys/add';
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+
+    const provInput = document.createElement('input');
+    provInput.type = 'hidden';
+    provInput.name = 'provider';
+    provInput.value = provider;
+    form.appendChild(provInput);
+
+    const keyInput = document.createElement('input');
+    keyInput.type = 'hidden';
+    keyInput.name = 'new_key';
+    keyInput.value = input.value.trim();
+    form.appendChild(keyInput);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}

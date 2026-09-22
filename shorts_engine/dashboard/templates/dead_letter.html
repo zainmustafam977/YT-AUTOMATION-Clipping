@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dead-Letter Queue{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h4 class="mb-1 text-light">Dead-Letter Queue</h4>
+        <div class="small text-muted">Failed source video ingests and rendering pipeline errors requiring retry or dismissal.</div>
+    </div>
+    {% if failed_clips or failed_videos %}
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="triggerUniversalDelete('/dead-letter/clear-all', 'Clear All Dead-Letter Items', 'Are you sure you want to dismiss all failed clips and videos? Choose whether to preserve or wipe media files on disk:')">
+        🗑 Clear All Failed Items
+    </button>
+    {% endif %}
+</div>
+
+<h6 class="text-danger mb-3">Failed Clips <span class="badge bg-danger">{{ failed_clips|length }}</span></h6>
+{% if not failed_clips %}
+<p class="text-muted">No failed clips.</p>
+{% else %}
+<div class="table-responsive mb-4">
+<table class="table table-dark table-hover align-middle">
+    <thead><tr><th>Clip ID</th><th>Retries & Failure Type</th><th>Error</th><th>Updated</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for clip in failed_clips %}
+    <tr>
+        <td><code>{{ clip.id[:8] }}…</code></td>
+        <td>
+            {% if clip.retry_count >= (settings.MAX_RETRY_COUNT if settings else 3) %}
+            <span class="badge bg-danger" title="Automatic retries exhausted">Exhausted ({{ clip.retry_count }}/{{ settings.MAX_RETRY_COUNT if settings else 3 }})</span>
+            {% elif clip.retry_count > 0 %}
+            <span class="badge bg-warning text-dark">{{ clip.retry_count }} / {{ settings.MAX_RETRY_COUNT if settings else 3 }} Retries</span>
+            {% else %}
+            <span class="badge bg-secondary">Manual Failure</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if clip.quality_check_result %}
+            <div class="small text-danger fw-semibold">{{ clip.quality_check_result[:100] }}{% if clip.quality_check_result|length > 100 %}…{% endif %}</div>
+            <details class="mt-1">
+                <summary class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:0.75rem; cursor:pointer;">
+                    🔍 View Full Diagnostic Trace
+                </summary>
+                <pre class="mt-2 p-2 bg-black border border-secondary text-danger rounded" style="font-size:0.75rem; max-height:220px; overflow-y:auto; white-space:pre-wrap;"><code>{{ clip.quality_check_result }}</code></pre>
+            </details>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+        </td>
+        <td><small>{{ clip.updated_at.strftime('%Y-%m-%d %H:%M') if clip.updated_at else '—' }}</small></td>
+        <td>
+            <div class="d-flex gap-2 align-items-center">
+                <form method="post" action="/dead-letter/clip/{{ clip.id }}/retry">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-retry btn-sm"
+                        {% if clip.retry_count >= (settings.MAX_RETRY_COUNT if settings else 3) %}disabled title="Max retries reached"{% endif %}>
+                        ↺ Retry
+                    </button>
+                </form>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Dismiss and remove clip" onclick="triggerUniversalDelete('/dead-letter/clip/{{ clip.id }}/delete', 'Dismiss Failed Clip', 'Dismiss failed clip {{ clip.id[:8] }}? Choose how to handle associated files:', this.closest('tr'))">
+                    🗑 Dismiss
+                </button>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<h6 class="text-danger mb-3">Failed Videos <span class="badge bg-danger">{{ failed_videos|length }}</span></h6>
+{% if not failed_videos %}
+<p class="text-muted">No failed videos.</p>
+{% else %}
+<div class="table-responsive">
+<table class="table table-dark table-hover align-middle">
+    <thead><tr><th>Video ID</th><th>YouTube ID</th><th>Retries & Failure Type</th><th>Error Details & Diagnostics</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for video in failed_videos %}
+    <tr>
+        <td><code>{{ video.id[:8] }}…</code></td>
+        <td>
+            <a href="https://www.youtube.com/watch?v={{ video.youtube_video_id }}" target="_blank" class="text-info text-decoration-none small">
+                <code class="d-inline-block text-truncate align-middle" style="max-width: 180px;" title="{{ video.youtube_video_id }}">{{ video.youtube_video_id }}</code> ↗
+            </a>
+        </td>
+        <td>
+            {% if video.retry_count >= (settings.MAX_RETRY_COUNT if settings else 3) %}
+            <span class="badge bg-danger" title="Automatic retries exhausted">Exhausted ({{ video.retry_count }}/{{ settings.MAX_RETRY_COUNT if settings else 3 }})</span>
+            {% elif video.retry_count > 0 %}
+            <span class="badge bg-warning text-dark">{{ video.retry_count }} / {{ settings.MAX_RETRY_COUNT if settings else 3 }} Retries</span>
+            {% else %}
+            <span class="badge bg-secondary">Manual Failure</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if video.error_message %}
+            <div class="small text-danger fw-semibold">{{ video.error_message[:100] }}{% if video.error_message|length > 100 %}…{% endif %}</div>
+            <details class="mt-1">
+                <summary class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:0.75rem; cursor:pointer;">
+                    🔍 View Full Diagnostic Trace
+                </summary>
+                <pre class="mt-2 p-2 bg-black border border-secondary text-danger rounded" style="font-size:0.75rem; max-height:220px; overflow-y:auto; white-space:pre-wrap;"><code>{{ video.error_message }}</code></pre>
+            </details>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+        </td>
+        <td>
+            <div class="d-flex gap-2 align-items-center">
+                <form method="post" action="/dead-letter/video/{{ video.id }}/retry">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-retry btn-sm"
+                        {% if video.retry_count >= (settings.MAX_RETRY_COUNT if settings else 3) %}disabled title="Max retries reached"{% endif %}>
+                        ↺ Retry
+                    </button>
+                </form>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Dismiss and remove video" onclick="triggerUniversalDelete('/dead-letter/video/{{ video.id }}/delete', 'Dismiss Failed Video', 'Dismiss failed video {{ video.youtube_video_id }}? Choose how to handle associated files:', this.closest('tr'))">
+                    🗑 Dismiss
+                </button>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

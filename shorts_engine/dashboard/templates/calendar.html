@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Content Calendar - Shorts Engine{% endblock %}
+
+{% block head_extra %}
+<!-- FullCalendar 6 Bundle -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<style>
+  .fc {
+    --fc-border-color: #333333;
+    --fc-page-bg-color: #121212;
+    --fc-neutral-bg-color: #1a1a1a;
+    --fc-list-event-hover-bg-color: #262626;
+    --fc-today-bg-color: rgba(13, 202, 240, 0.08);
+    color: #e0e0e0;
+    font-family: inherit;
+  }
+  .fc .fc-toolbar-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+  .fc .fc-button {
+    background-color: #212529;
+    border-color: #495057;
+    color: #f8f9fa;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .fc .fc-button:hover, .fc .fc-button-active {
+    background-color: #0dcaf0 !important;
+    border-color: #0dcaf0 !important;
+    color: #000000 !important;
+  }
+  .fc-event {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    transition: transform 0.15s ease;
+  }
+  .fc-event:hover {
+    transform: scale(1.02);
+    filter: brightness(1.15);
+  }
+  .fc-col-header-cell-cushion {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-4">
+  <!-- Header Bar -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h3 class="fw-bold mb-0 d-flex align-items-center gap-2">
+        <span>📅</span> <span>Content Publication Calendar</span>
+      </h3>
+      <p class="text-muted small mb-0">Drag and drop scheduled Shorts to reschedule them. Green = Published, Cyan = Scheduled.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-info text-dark px-3 py-2 fw-semibold">
+        ⏱️ {{ scheduled_count }} Scheduled
+      </span>
+      <span class="badge bg-success px-3 py-2 fw-semibold">
+        ✓ {{ published_count }} Published
+      </span>
+      <a href="/queue" class="btn btn-sm btn-outline-secondary">
+        ← Back to Queue
+      </a>
+    </div>
+  </div>
+
+  <!-- Calendar Card -->
+  <div class="card bg-black border border-secondary p-3 shadow-lg rounded-3">
+    <div id="calendar"></div>
+  </div>
+</div>
+
+<!-- Event Details Modal -->
+<div class="modal fade" id="calendarEventModal" tabindex="-1" aria-labelledby="calendarEventModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary shadow-lg">
+      <div class="modal-header border-bottom border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2" id="calendarEventModalLabel">
+          <span id="modalEventIcon">⏱️</span> <span id="modalEventHeader">Short Details</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="text-center mb-3">
+          <img id="modalEventThumb" src="" alt="Thumbnail" class="img-fluid rounded border border-secondary" style="max-height: 180px; width: auto; object-fit: cover;">
+        </div>
+        <h6 class="fw-bold text-info mb-2" id="modalEventTitle"></h6>
+        <div class="p-2 bg-black rounded border border-secondary mb-3">
+          <small class="text-muted d-block mb-1">Verbatim Hook Preview:</small>
+          <div class="small text-light fst-italic" id="modalEventHook"></div>
+        </div>
+        <div class="row g-2 small text-muted">
+          <div class="col-6">Channel: <strong class="text-light" id="modalEventChannel"></strong></div>
+          <div class="col-6">Virality Score: <strong class="text-success" id="modalEventScore"></strong></div>
+          <div class="col-12">Publication Time: <strong class="text-light" id="modalEventTime"></strong></div>
+        </div>
+      </div>
+      <div class="modal-footer border-top border-secondary d-flex justify-content-between">
+        <div id="modalEventActions"></div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var calendarEl = document.getElementById('calendar');
+  var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+  var csrfToken = tokenMeta ? tokenMeta.content : '';
+
+  var calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,listMonth'
+    },
+    editable: true,
+    selectable: false,
+    dayMaxEvents: true,
+    events: '/api/calendar/events',
+    eventTimeFormat: {
+      hour: '2-digit',
+      minute: '2-digit',
+      meridiem: 'short'
+    },
+    eventClick: function(info) {
+      var props = info.event.extendedProps;
+      document.getElementById('modalEventHeader').textContent = props.is_published ? 'Published Short' : 'Scheduled Short';
+      document.getElementById('modalEventIcon').textContent = props.is_published ? '✓' : '⏱️';
+      document.getElementById('modalEventTitle').textContent = props.full_title;
+      document.getElementById('modalEventHook').textContent = props.hook_text ? '“' + props.hook_text + '”' : 'No hook text available.';
+      document.getElementById('modalEventChannel').textContent = props.channel_name || 'Channel';
+      document.getElementById('modalEventScore').textContent = props.score ? (props.score * 100).toFixed(0) : 'N/A';
+      document.getElementById('modalEventTime').textContent = info.event.start ? info.event.start.toLocaleString() : 'N/A';
+      document.getElementById('modalEventThumb').src = props.thumbnail_url;
+
+      var actionsDiv = document.getElementById('modalEventActions');
+      if (props.is_published && props.youtube_video_id) {
+        actionsDiv.innerHTML = '<a href="https://youtube.com/shorts/' + props.youtube_video_id + '" target="_blank" class="btn btn-sm btn-danger">▶ Watch on YouTube</a>';
+      } else {
+        actionsDiv.innerHTML = '<a href="/queue?q=' + encodeURIComponent(props.clip_id) + '" class="btn btn-sm btn-info">🔍 View in Queue</a>';
+      }
+
+      var modal = new bootstrap.Modal(document.getElementById('calendarEventModal'));
+      modal.show();
+    },
+    eventDrop: function(info) {
+      if (info.event.extendedProps.is_published) {
+        info.revert();
+        window.showToast('Published clips cannot be rescheduled.', 'warning');
+        return;
+      }
+
+      var clipId = info.event.extendedProps.clip_id;
+      var newDateIso = info.event.start.toISOString();
+
+      var fd = new FormData();
+      fd.append('scheduled_at', newDateIso);
+      fd.append('csrf_token', csrfToken);
+
+      fetch('/api/calendar/reschedule/' + clipId, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: fd
+      })
+      .then(function(r) {
+        if (!r.ok) throw new Error('Reschedule failed: ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        window.showToast('Rescheduled to ' + data.display + '!', 'success');
+      })
+      .catch(function(err) {
+        info.revert();
+        window.showToast('Error: ' + err.message, 'danger');
+      });
+    }
+  });
+
+  calendar.render();
+});
+</script>
+{% endblock %}

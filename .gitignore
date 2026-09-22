@@ -1,0 +1,34 @@
+# Secrets and Configs
+.env
+storage/api_key_usage.json
+storage/config/runtime_settings.json
+
+# Local Databases & States
+storage/*.db
+storage/*.db-shm
+storage/*.db-wal
+storage/*.json
+
+# Heavy AI Models
+storage/models/
+
+# Media, Outputs, and Temporary Data
+storage/downloads/
+storage/outputs/
+storage/temp/
+storage/thumbnails/
+
+# Logs
+storage/logs/
+*.log
+
+# Python & Testing Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Bundles & Internal Documentation
+*.zip
+*.docx
+"find channel id.txt"

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 col-xl-8 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">👥 System Users</h5>
+                <span class="badge bg-primary">{{ users|length }} Users Registered</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th class="text-end pe-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td class="fw-semibold">
+                                    {{ u.username }}
+                                    {% if u.id == current_user.id %}
+                                    <span class="badge bg-outline-info text-info border border-info ms-1" style="font-size:0.65rem;">You</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if (u.role.value if u.role.value is defined else u.role)|string|lower == 'admin' %}
+                                    <span class="badge bg-danger">ADMIN</span>
+                                    {% elif (u.role.value if u.role.value is defined else u.role)|string|lower == 'operator' %}
+                                    <span class="badge bg-primary">OPERATOR</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">VIEWER</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if u.is_active %}
+                                    <span class="badge bg-success" style="font-size:0.7rem;">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-danger" style="font-size:0.7rem;">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">
+                                    {{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '—' }}
+                                </td>
+                                <td class="text-end pe-3">
+                                    {% if u.id != current_user.id %}
+                                    <form method="post" action="/admin/users/{{ u.id }}/delete" class="d-inline" onsubmit="return confirm('Delete user {{ u.username }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.8rem;">Delete</button>
+                                    </form>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.8rem;" disabled>Current User</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">➕ Create New User</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/admin/users">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Username</label>
+                        <input type="text" name="username" class="form-control bg-dark text-light border-secondary" placeholder="e.g. jdoe" required minlength="3" maxlength="64">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Password</label>
+                        <input type="password" name="password" class="form-control bg-dark text-light border-secondary" placeholder="Minimum 8 characters" required minlength="8">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Role</label>
+                        <select name="role" class="form-select bg-dark text-light border-secondary">
+                            <option value="operator" selected>Operator (Process & Review)</option>
+                            <option value="viewer">Viewer (Read-only)</option>
+                            <option value="admin">Admin (Full Access & Settings)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Create User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
