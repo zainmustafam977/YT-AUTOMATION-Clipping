@@ -5,6 +5,7 @@ Two-Tier Analytics Ingestion & Rubric Refinement.
 """
 
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
@@ -56,7 +57,12 @@ class AnalyticsIngestionService:
         self.data_client = youtube_data_client
         self.analytics_client = youtube_analytics_client
 
-    def fetch_metrics(self, video_id: str) -> VideoPerformanceMetrics:
+    def fetch_metrics(
+        self,
+        video_id: str,
+        clip: Optional[Any] = None,
+        published_at: Optional[datetime] = None,
+    ) -> VideoPerformanceMetrics:
         """
         Fetches combined Tier 1 and Tier 2 metrics for a video ID.
         """
@@ -64,7 +70,7 @@ class AnalyticsIngestionService:
         tier1_data = self._fetch_tier1(video_id)
 
         # 2. Tier 2: YouTube Analytics API deep retention
-        tier2_data = self._fetch_tier2(video_id)
+        tier2_data = self._fetch_tier2(video_id, clip=clip, published_at=published_at)
 
         return VideoPerformanceMetrics(
             video_id=video_id,
@@ -98,7 +104,12 @@ class AnalyticsIngestionService:
             logger.warning(f"Tier 1 metrics fetch failed for video {video_id}: {e}")
             return {"view_count": 0, "like_count": 0, "comment_count": 0}
 
-    def _fetch_tier2(self, video_id: str) -> Dict[str, Any]:
+    def _fetch_tier2(
+        self,
+        video_id: str,
+        clip: Optional[Any] = None,
+        published_at: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
         """
         Fetches deep audience retention metrics from YouTube Analytics API.
         Gracefully handles 403 Forbidden, missing scope, or empty report data.
@@ -107,11 +118,32 @@ class AnalyticsIngestionService:
             logger.debug(f"Analytics client unconfigured; skipping Tier 2 for video {video_id}")
             return {"available": False, "average_view_percentage": None, "average_view_duration_sec": None}
 
+        # Resolve dynamic date window anchored at clip's publish date
+        pub_dt = published_at
+        if pub_dt is None and clip is not None:
+            pub_log = getattr(clip, "publish_log", None)
+            if pub_log:
+                pub_dt = getattr(pub_log, "published_at", None)
+            elif isinstance(clip, datetime):
+                pub_dt = clip
+
+        now_utc = datetime.now(timezone.utc)
+        if pub_dt:
+            if pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+            start_d = pub_dt.astimezone(timezone.utc).date()
+        else:
+            start_d = (now_utc - timedelta(days=30)).date()
+
+        end_d = now_utc.date()
+        if start_d > end_d:
+            start_d = end_d
+
         try:
             req = self.analytics_client.reports().query(
                 ids="channel==MINE",
-                startDate="2026-01-01",
-                endDate="2026-12-31",
+                startDate=start_d.strftime("%Y-%m-%d"),
+                endDate=end_d.strftime("%Y-%m-%d"),
                 metrics="averageViewPercentage,averageViewDuration",
                 dimensions="video",
                 filters=f"video=={video_id}",
