@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 from shorts_engine.config.settings import settings
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,10 @@ class TechnicalVerifier:
             "-show_streams",
             str(video_path),
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            result = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
+        except Exception as e:
+            return False, {"error": f"ffprobe execution failed or timed out: {e}"}
         if result.returncode != 0:
             return False, {"error": f"ffprobe execution failed: {result.stderr}"}
 

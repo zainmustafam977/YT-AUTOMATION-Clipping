@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from shorts_engine.config.settings import settings
 from shorts_engine.services.reframing.cropper import CropPlan
+from shorts_engine.services.audio.mastering import AudioMasteringEngine
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +148,8 @@ class VideoCompositor:
         start_ms: int,
         end_ms: int,
         crop_plan: CropPlan,
-        subtitle_ass_path: Optional[Path],
-        output_filename: str,
+        subtitle_ass_path: Optional[Path] = None,
+        output_filename: str = "output.mp4",
         normalize_audio: bool = True,
         crf: Optional[int] = None,
         preset: Optional[str] = None,
@@ -158,11 +160,13 @@ class VideoCompositor:
         broll_video_path: Optional[Path] = None,
         broll_start_sec: float = 1.0,
         broll_duration_sec: float = 2.5,
+        music_track_path: Optional[Path] = None,
     ) -> Path:
         """
         Renders a finished 9:16 portrait Short video using FFmpeg.
         Supports per-video overrides for CRF, preset, scale algorithm, audio bitrate, FPS,
-        optional visual hook overlay during the opening 3 seconds, and optional B-roll stock footage cutaways.
+        optional visual hook overlay during the opening 3 seconds, optional B-roll stock footage cutaways,
+        and studio-grade audio mastering with speech-activated sidechain ducking over background music.
         """
         output_path = self.output_dir / output_filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,20 +176,32 @@ class VideoCompositor:
                 logger.info("Valid rendered file already exists at %s, skipping FFmpeg re-render.", output_path)
                 return output_path
 
+        if not Path(source_video_path).exists():
+            raise FileNotFoundError(f"Master source video not found at: {source_video_path}")
+
         start_sec = max(0.0, start_ms / 1000.0)
         duration_sec = max(1.0, (end_ms - start_ms) / 1000.0)
 
-        # Build audio filter chain (EBU R128 Loudness Normalization)
-        a_filters = []
+        # Build audio mastering filter chain (Studio Mastering: HPF 80Hz + Noise Gate + EBU R128)
+        mastering_engine = AudioMasteringEngine()
         if normalize_audio:
-            a_filters.append(f"loudnorm=I={settings.TARGET_LUFS}:TP={settings.TRUE_PEAK_DBFS}:LRA=11")
-        audio_filter_arg = ",".join(a_filters) if a_filters else "anull"
+            hpf_hz = mastering_engine.hpf_cutoff_hz
+            target_lufs = mastering_engine.target_lufs
+            tp = mastering_engine.true_peak_dbfs
+            audio_filter_arg = (
+                f"highpass=f={hpf_hz}:poles=2,"
+                "agate=range=-24dB:threshold=-36dB:attack=10:release=120,"
+                f"loudnorm=I={target_lufs}:TP={tp}:LRA=7"
+            )
+        else:
+            audio_filter_arg = "anull"
 
         hook_temp_file = None
         has_broll = broll_video_path is not None and Path(broll_video_path).exists()
+        has_music = music_track_path is not None and Path(music_track_path).exists()
 
-        if has_broll:
-            # Multi-input filter_complex for B-roll overlay cutaways
+        if has_broll or has_music:
+            # Multi-input filter_complex for B-roll overlays and/or background music ducking
             fc_parts = []
             fc_parts.append(f"[0:v]{crop_plan.to_ffmpeg_filter(scale_algo=scale_algo)}[base]")
             current_v = "[base]"
@@ -211,10 +227,11 @@ class VideoCompositor:
                     logger.warning("Failed to configure hook overlay textfile: %s", e)
 
             # B-roll scaling and cropping to 1080:1920 canvas
-            fc_parts.append("[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[broll_scaled]")
-            broll_end = broll_start_sec + broll_duration_sec
-            fc_parts.append(f"{current_v}[broll_scaled]overlay=0:0:enable='between(t,{broll_start_sec},{broll_end})'[overlaid]")
-            current_v = "[overlaid]"
+            if has_broll:
+                fc_parts.append("[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[broll_scaled]")
+                broll_end = broll_start_sec + broll_duration_sec
+                fc_parts.append(f"{current_v}[broll_scaled]overlay=0:0:enable='between(t,{broll_start_sec},{broll_end})'[overlaid]")
+                current_v = "[overlaid]"
 
             if subtitle_ass_path and subtitle_ass_path.exists():
                 escaped_sub = escape_ffmpeg_filter_path(subtitle_ass_path)
@@ -222,7 +239,17 @@ class VideoCompositor:
             else:
                 fc_parts.append(f"{current_v}null[v_out]")
 
-            fc_parts.append(f"[0:a]{audio_filter_arg}[a_out]")
+            if has_music and normalize_audio:
+                music_input_idx = 2 if has_broll else 1
+                ducking_fc = mastering_engine.build_sidechain_ducking_filter_graph(
+                    speech_input_label="0:a",
+                    music_input_label=f"{music_input_idx}:a",
+                    output_label="a_out",
+                )
+                fc_parts.append(ducking_fc)
+            else:
+                fc_parts.append(f"[0:a]{audio_filter_arg}[a_out]")
+
             filter_complex_arg = ";".join(fc_parts)
         else:
             # Build standard single-input video filter chain
@@ -274,14 +301,20 @@ class VideoCompositor:
             elif "amf" in encoder_name:
                 active_flags = ["-quality", "quality", "-rc", "cqp", "-qp_p", eff_crf]
 
-        if has_broll:
+        if has_broll or has_music:
             cmd = [
                 "ffmpeg",
                 "-y",
                 "-ss", f"{start_sec:.3f}",
                 "-i", str(source_video_path),
+            ]
+            if has_broll:
+                cmd.extend(["-t", f"{duration_sec:.3f}", "-i", str(broll_video_path)])
+            if has_music:
+                cmd.extend(["-stream_loop", "-1", "-i", str(music_track_path)])
+
+            cmd.extend([
                 "-t", f"{duration_sec:.3f}",
-                "-i", str(broll_video_path),
                 "-filter_complex", filter_complex_arg,
                 "-map", "[v_out]",
                 "-map", "[a_out]",
@@ -294,7 +327,7 @@ class VideoCompositor:
                 "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart",
                 str(output_path),
-            ]
+            ])
         else:
             cmd = [
                 "ffmpeg",
@@ -315,22 +348,29 @@ class VideoCompositor:
                 str(output_path),
             ]
 
+        timeout_limit = max(180.0, duration_sec * 6.0)
         try:
-            logger.info("Executing FFmpeg render for %s (encoder: %s, crf: %s, preset: %s, bitrate: %s, fps: %s)...", output_filename, encoder_name, eff_crf, eff_preset, eff_audio_br, eff_fps)
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if result.returncode != 0:
+            logger.info("Executing FFmpeg render for %s (encoder: %s, crf: %s, preset: %s, bitrate: %s, fps: %s, timeout: %0.1fs)...", output_filename, encoder_name, eff_crf, eff_preset, eff_audio_br, eff_fps, timeout_limit)
+            result = SubprocessWatchdog.run(cmd, timeout_sec=timeout_limit, check=False, artifacts_to_cleanup=[output_path])
+            if result.exit_code != 0:
                 if encoder_name != "libx264":
                     global _CACHED_ENCODER
                     _CACHED_ENCODER = ("libx264", ["-preset", fallback_preset, "-crf", fallback_crf, "-profile:v", "high", "-level", "4.2"])
                     logger.warning("Hardware encoder %s failed. Cached libx264 for future renders. Retrying with CPU libx264...", encoder_name)
-                    if has_broll:
+                    if has_broll or has_music:
                         cmd_fallback = [
                             "ffmpeg",
                             "-y",
                             "-ss", f"{start_sec:.3f}",
                             "-i", str(source_video_path),
+                        ]
+                        if has_broll:
+                            cmd_fallback.extend(["-t", f"{duration_sec:.3f}", "-i", str(broll_video_path)])
+                        if has_music:
+                            cmd_fallback.extend(["-stream_loop", "-1", "-i", str(music_track_path)])
+
+                        cmd_fallback.extend([
                             "-t", f"{duration_sec:.3f}",
-                            "-i", str(broll_video_path),
                             "-filter_complex", filter_complex_arg,
                             "-map", "[v_out]",
                             "-map", "[a_out]",
@@ -346,7 +386,7 @@ class VideoCompositor:
                             "-pix_fmt", "yuv420p",
                             "-movflags", "+faststart",
                             str(output_path),
-                        ]
+                        ])
                     else:
                         cmd_fallback = [
                             "ffmpeg",
@@ -369,9 +409,9 @@ class VideoCompositor:
                             "-movflags", "+faststart",
                             str(output_path),
                         ]
-                    result = subprocess.run(cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    result = SubprocessWatchdog.run(cmd_fallback, timeout_sec=timeout_limit, check=False, artifacts_to_cleanup=[output_path])
 
-                if result.returncode != 0:
+                if result.exit_code != 0:
                     logger.error("FFmpeg render failed:\n%s", result.stderr)
                     raise RuntimeError(f"FFmpeg render failed: {result.stderr[-400:]}")
 
@@ -408,7 +448,18 @@ class VideoCompositor:
             "-show_streams",
             str(video_path),
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            result = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
+        except Exception as e:
+            return RenderValidationResult(
+                is_valid=False,
+                duration_sec=0.0,
+                width=0,
+                height=0,
+                has_audio=False,
+                file_size_bytes=video_path.stat().st_size if video_path.exists() else 0,
+                error=f"ffprobe execution failed or timed out: {e}",
+            )
         if result.returncode != 0:
             return RenderValidationResult(
                 is_valid=False,

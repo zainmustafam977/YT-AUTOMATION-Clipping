@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Optional, List
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,8 +49,8 @@ class ThumbnailGenerator:
             str(output_path),
         ]
         try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            return output_path.exists() and output_path.stat().st_size > 0
+            res = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
+            return res.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
         except Exception as e:
             logger.warning("FFmpeg frame extraction failed at %.2fs: %s", timestamp_sec, e)
             return False

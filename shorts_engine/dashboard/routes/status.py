@@ -40,6 +40,7 @@ from shorts_engine.orchestration.runner import (
     clear_cancellation,
 )
 from shorts_engine.services.worker.runner import reconcile_stale_claims
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -1239,13 +1240,12 @@ def get_thumbnail(
             # Extract frame via ffmpeg
             out_thumb = storage_thumb_dir / f"{clean_id}.jpg"
             try:
-                subprocess.run(
+                res = SubprocessWatchdog.run(
                     ["ffmpeg", "-y", "-ss", "00:00:00.500", "-i", str(clip_path), "-frames:v", "1", "-q:v", "2", str(out_thumb)],
-                    capture_output=True,
-                    timeout=5,
-                    check=True,
+                    timeout_sec=5.0,
+                    check=False,
                 )
-                if out_thumb.exists() and out_thumb.stat().st_size > 0:
+                if res.exit_code == 0 and out_thumb.exists() and out_thumb.stat().st_size > 0:
                     return FileResponse(out_thumb, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
             except Exception as e:
                 logger.warning("Could not extract frame for clip %s: %s", clean_id, e)
@@ -1261,13 +1261,12 @@ def get_thumbnail(
         if video.downloaded_path and os.path.exists(video.downloaded_path):
             out_thumb = storage_thumb_dir / f"{yt_id}.jpg"
             try:
-                subprocess.run(
+                res = SubprocessWatchdog.run(
                     ["ffmpeg", "-y", "-ss", "00:00:02.000", "-i", str(video.downloaded_path), "-frames:v", "1", "-q:v", "2", str(out_thumb)],
-                    capture_output=True,
-                    timeout=5,
-                    check=True,
+                    timeout_sec=5.0,
+                    check=False,
                 )
-                if out_thumb.exists() and out_thumb.stat().st_size > 0:
+                if res.exit_code == 0 and out_thumb.exists() and out_thumb.stat().st_size > 0:
                     return FileResponse(out_thumb, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
             except Exception as e:
                 logger.warning("Could not extract frame for video %s: %s", yt_id, e)
@@ -1564,14 +1563,21 @@ def sync_youtube_analytics(
     csrf_ok: bool = Depends(verify_csrf),
 ):
     from shorts_engine.services.monitoring.analytics_sync import YouTubeAnalyticsSync
+    from shorts_engine.services.analytics.predictor import viral_predictor
+
     syncer = YouTubeAnalyticsSync(db)
     res = syncer.sync_all_published_clips()
 
-    msg = f"Synced analytics for {res['synced_count']} clips ({res['total_views']:,} views total)!"
+    # Automatically retrain the ML virality predictor on the freshly ingested metrics
+    train_res = viral_predictor.train_from_db(db)
+    ml_msg = " & retrained ML Virality Predictor" if train_res.get("trained") else ""
+
+    msg = f"Synced analytics for {res['synced_count']} clips ({res['total_views']:,} views total){ml_msg}!"
     if request.headers.get("hx-request") == "true":
         return Response(
             content="",
             headers={"HX-Trigger": json.dumps({"showToast": {"message": msg, "type": "success"}})}
         )
+    res["ml_training"] = train_res
     return res
 
