@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from shorts_engine.config.settings import settings
+from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +99,7 @@ class APIUsageTracker:
 
     def _save_state(self, state: Dict[str, Any]) -> None:
         try:
-            self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            self.state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            atomic_write_json(self.state_file, state, indent=2)
         except Exception as e:
             logger.warning("Failed to persist api_key_usage.json: %s", e)
 
@@ -420,7 +420,11 @@ class APIUsageTracker:
                             "total_requests": 0,
                             "rate_limit_hits_today": 0,
                             "last_latency_ms": 0,
-                            "last_model_used": getattr(settings, f"{prov.upper()}_MODEL_NAME", "—") if hasattr(settings, f"{prov.upper()}_MODEL_NAME") else "—",
+                            "last_model_used": (
+                                getattr(settings, "LLM_MODEL_NAME", "gemini-3.8-flash")
+                                if prov == "gemini"
+                                else getattr(settings, f"{prov.upper()}_MODEL_NAME", "—")
+                            ),
                             "last_used_at": None,
                             "cooldown_until": 0.0,
                             "daily_limit_est": ESTIMATED_DAILY_LIMITS.get(prov, 1000),
@@ -489,7 +493,15 @@ class APIUsageTracker:
                     "rate_limit_hits_today": data.get("rate_limit_hits_today", 0),
                     "last_latency_ms": data.get("last_latency_ms", 0),
                     "avg_latency_ms": float(data.get("last_latency_ms", 0)),
-                    "last_model_used": data.get("last_model_used", "—"),
+                    "last_model_used": (
+                        data.get("last_model_used")
+                        if data.get("last_model_used") and data.get("last_model_used") != "—"
+                        else (
+                            getattr(settings, "LLM_MODEL_NAME", "gemini-3.8-flash")
+                            if prov == "gemini"
+                            else getattr(settings, f"{prov.upper()}_MODEL_NAME", "—")
+                        )
+                    ),
                     "last_used_at": data.get("last_used_at") or "Not used today",
                     "status": status_val,
                     "status_badge": status_badge,

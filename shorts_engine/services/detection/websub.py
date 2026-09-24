@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 
 from shorts_engine.config.settings import settings
+from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def _load_subscriptions() -> dict:
 
 
 def _save_subscriptions(subs: dict) -> None:
-    _SUBS_STATE_FILE.write_text(json.dumps(subs, indent=2))
+    atomic_write_json(_SUBS_STATE_FILE, subs, indent=2)
 
 
 class WebSubSubscriber:

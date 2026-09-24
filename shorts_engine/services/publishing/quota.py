@@ -9,6 +9,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 from shorts_engine.config.settings import settings
+from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,7 @@ class QuotaTracker:
         return {"date": today_str, "used_units": used_units}
 
     def _save_state(self, state: Dict[str, Any]) -> None:
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        self.state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        atomic_write_json(self.state_file, state, indent=2)
 
     def can_publish(self, db: Optional[Any] = None) -> Tuple[bool, int, str]:
         """

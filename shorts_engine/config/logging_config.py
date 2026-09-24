@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from shorts_engine.config.settings import settings
+from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +146,7 @@ def save_runtime_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
 
     current.update(updates)
 
-    with open(RUNTIME_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2)
+    atomic_write_json(RUNTIME_CONFIG_PATH, current, indent=2)
 
     applied = reload_runtime_settings()
     logger.info("Saved and applied %d runtime settings overrides to %s", len(applied), RUNTIME_CONFIG_PATH)
