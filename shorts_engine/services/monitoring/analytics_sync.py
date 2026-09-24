@@ -46,8 +46,11 @@ class YouTubeAnalyticsSync:
             yt_id = None
             if clip.publish_log and clip.publish_log.youtube_video_id:
                 yt_id = clip.publish_log.youtube_video_id
-            elif clip.candidate and clip.candidate.source_video:
-                yt_id = clip.candidate.source_video.youtube_video_id
+
+            if not yt_id:
+                if clip.status == ClipStatus.PUBLISHED:
+                    logger.warning("Published clip %s has no YouTube video ID in publish_log; skipping analytics sync", clip.id)
+                continue
 
             metrics = self._fetch_clip_metrics(clip.id, yt_id)
             clip.analytics = metrics
