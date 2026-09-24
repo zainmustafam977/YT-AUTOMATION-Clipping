@@ -4,10 +4,13 @@ Implements unified single source of truth for all pipeline constants.
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import Optional, List
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineSettings(BaseSettings):
@@ -44,6 +47,10 @@ class PipelineSettings(BaseSettings):
     ENCRYPTION_SALT: str = Field(
         default="yt_shorts_kdf_salt_2026_secure!",
         description="Salt for PBKDF2 key derivation",
+    )
+    ENFORCE_SECRET_ENTROPY: bool = Field(
+        default=False,
+        description="Strictly disallow placeholder keys and enforce high entropy across all secrets at startup",
     )
 
     # Multi-Provider LLM Settings (Groq, Gemini, OpenRouter, OpenAI, Heuristic fallback)
@@ -223,6 +230,33 @@ class PipelineSettings(BaseSettings):
     TRUE_PEAK_DBFS: float = -1.0
     MIN_SPEECH_SNR_DB: float = 8.0
     ENABLE_SFX: bool = True
+    ENABLE_AUDIO_DUCKING: bool = Field(
+        default=True,
+        description="Enable speech-activated background music sidechain ducking",
+    )
+    DUCKING_ATTENUATION_DB: float = Field(
+        default=-14.0,
+        description="Attenuation applied to background music during active speech (dB)",
+    )
+    DUCKING_ATTACK_MS: int = Field(
+        default=15,
+        ge=1,
+        le=500,
+        description="Sidechain compressor attack time in milliseconds",
+    )
+    DUCKING_RELEASE_MS: int = Field(
+        default=350,
+        ge=50,
+        le=2000,
+        description="Sidechain compressor release time in milliseconds",
+    )
+    SPEECH_HPF_CUTOFF_HZ: int = Field(
+        default=80,
+        ge=20,
+        le=300,
+        description="High-pass filter cutoff frequency to eliminate room rumble",
+    )
+    MUSIC_LIBRARY_DIR: Path = Path("assets/music")
 
     # Publishing & Quotas
     DRY_RUN_PUBLISHING: bool = Field(default=True, description="When true, simulates upload without calling YouTube API")
@@ -246,6 +280,43 @@ class PipelineSettings(BaseSettings):
     ENABLE_BROLL_OVERLAYS: bool = Field(
         default=False,
         description="Enable automated B-roll stock footage overlay injection",
+    )
+
+    # Multi-Platform Syndication (TikTok, Instagram Reels)
+    TIKTOK_CLIENT_KEY: Optional[str] = None
+    TIKTOK_CLIENT_SECRET: Optional[str] = None
+    TIKTOK_ACCESS_TOKEN: Optional[str] = None
+    TIKTOK_OPEN_ID: Optional[str] = None
+    INSTAGRAM_ACCESS_TOKEN: Optional[str] = None
+    INSTAGRAM_USER_ID: Optional[str] = None
+    ENABLED_SYNDICATION_PLATFORMS: list = Field(
+        default=["youtube"],
+        description="List of enabled syndication platforms: youtube, tiktok, instagram",
+    )
+
+    # Bayesian Multi-Armed Bandit A/B Winner Promotion
+    AB_WINNER_CHECK_INTERVAL_SECONDS: int = Field(
+        default=120,
+        ge=30,
+        le=3600,
+        description="Interval in seconds between Bayesian bandit A/B winner evaluations",
+    )
+    AB_MIN_IMPRESSIONS: int = Field(
+        default=100,
+        ge=10,
+        description="Minimum impressions required before considering an A/B variation for winner promotion",
+    )
+    AB_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.95,
+        ge=0.80,
+        le=0.999,
+        description="Posterior probability threshold P(theta_B > theta_A) required to declare a winning title",
+    )
+    AB_ROLLBACK_VELOCITY_DROP: float = Field(
+        default=0.50,
+        ge=0.10,
+        le=0.90,
+        description="Circuit breaker threshold: velocity drop ratio triggering emergency rollback",
     )
 
 
@@ -313,8 +384,46 @@ class PipelineSettings(BaseSettings):
                             f"Insecure password embedded in DATABASE_URL for '{self.ENV}' environment. "
                             f"Default password '{bad_pw}' is strictly prohibited in staging/production."
                         )
+
+        # Secret entropy & placeholder guard (PLAN-P1-08)
+        placeholder_keys = {
+            "yt_shorts_dev_master_secret_key_32_bytes_min!",
+            "yt_shorts_kdf_salt_2026_secure!",
+            "change-me-in-prod",
+            "change-me",
+            "ytpassword_secret_change_me",
+        }
+        has_placeholders = (
+            self.MASTER_ENCRYPTION_KEY in placeholder_keys
+            or self.ENCRYPTION_SALT in placeholder_keys
+            or self.DASHBOARD_SECRET_KEY in placeholder_keys
+            or len(self.MASTER_ENCRYPTION_KEY) < 32
+            or len(self.DASHBOARD_SECRET_KEY) < 32
+        )
+
+        if has_placeholders:
+            if self.ENFORCE_SECRET_ENTROPY:
+                raise ValueError(
+                    "INSECURE STARTUP: Default placeholder keys or insufficient entropy detected in settings! "
+                    "Rotate keys before production."
+                )
+            else:
+                logger.warning(
+                    "INSECURE STARTUP: Default placeholder keys detected in settings! Rotate keys before production."
+                )
         # Ensure directories exist
-        for directory in [self.STORAGE_DIR, self.TEMP_DIR, self.OUTPUT_DIR, self.SFX_DIR, self.MODELS_DIR]:
+        for directory in [
+            self.STORAGE_DIR,
+            self.TEMP_DIR,
+            self.OUTPUT_DIR,
+            self.DOWNLOADS_DIR,
+            self.RAW_DIR,
+            self.SFX_DIR,
+            self.MODELS_DIR,
+            self.STORAGE_DIR / "thumbnails",
+            self.STORAGE_DIR / "logs",
+            self.STORAGE_DIR / "config",
+        ]:
             directory.mkdir(parents=True, exist_ok=True)
         return self
 
