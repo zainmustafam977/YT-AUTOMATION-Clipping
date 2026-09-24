@@ -14,7 +14,7 @@ import platform
 import re
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Union, Protocol
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
@@ -23,13 +23,28 @@ from shorts_engine.services.quality_gate.technical_check import TechnicalVerifie
 from shorts_engine.services.quality_gate.render_inspector import RenderInspector
 from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+from shorts_engine.utils.fs import atomic_replace
 
 logger = logging.getLogger(__name__)
 
 
+class TrimmerProtocol(Protocol):
+    def trim_clip(
+        self,
+        clip_id: str,
+        start_sec: float,
+        end_sec: float,
+        snap_words: bool = True,
+        caption_style_preset: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        ...
+
+
 class ClipRecoveryService:
-    def __init__(self):
+    def __init__(self, trimmer_service: Optional[TrimmerProtocol] = None):
         self.quality_gate = QualityGateManager()
+        self.trimmer_service = trimmer_service
 
     def diagnose_clip(self, clip: Clip) -> Dict[str, Any]:
         """
@@ -253,20 +268,20 @@ class ClipRecoveryService:
                 "-movflags", "+faststart",
                 str(out_path),
             ]
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if res.returncode == 0 and out_path.exists() and out_path.stat().st_size > 50_000:
-                # Replace original with clamped
-                try:
-                    in_path.unlink()
-                except Exception:
-                    pass
-                out_path.rename(in_path)
+            try:
+                watchdog_res = SubprocessWatchdog.run(cmd, timeout_sec=60.0)
+            except Exception as e:
+                return {"status": "error", "message": f"FFmpeg clamp failed on exception: {e}"}
+
+            if watchdog_res.returncode == 0 and out_path.exists() and out_path.stat().st_size > 50_000:
+                atomic_replace(out_path, in_path)
                 logger.info("Clamped duration for clip %s to %ss", clip.id, target_max)
                 # Re-evaluate
                 self.re_evaluate_clip(clip, db)
                 return {"status": "success", "message": f"Clamped video duration to {target_max}s"}
             else:
-                return {"status": "error", "message": f"FFmpeg clamp failed: {res.stderr[:200]}"}
+                err_msg = watchdog_res.stderr[:200] if watchdog_res.stderr else "Output validation failed"
+                return {"status": "error", "message": f"FFmpeg clamp failed: {err_msg}"}
 
         elif fix_type == "reanchor_dialogue":
             if not video or not cand:
@@ -303,69 +318,28 @@ class ClipRecoveryService:
 
         elif fix_type == "caption_safe_rerender":
             # Re-renders with elevated caption margin to ensure clearance from YouTube UI
-            from shorts_engine.services.rendering.compositor import VideoCompositor
-            from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
-            from shorts_engine.services.captioning.contrast_sampler import ContrastSampler
-
             if not clip.rendered_path or not Path(clip.rendered_path).exists():
                 return {"status": "error", "message": "Rendered video file not found"}
 
-            in_path = Path(clip.rendered_path)
-            # Re-generate ASS subtitles with safe margin_v (elevated to avoid bottom overlays)
-            transcript_record = db.query(Transcript).filter_by(source_video_id=video.id).first() if video else None
-            words = []
-            if transcript_record and transcript_record.word_level_json:
-                try:
-                    t_data = json.loads(transcript_record.word_level_json)
-                    words = t_data.get("words", [])
-                except Exception:
-                    pass
+            if not self.trimmer_service:
+                return {"status": "error", "message": "Trimmer service not configured for caption safe re-render."}
 
-            from shorts_engine.services.transcription.formatter import WordSegment
-            clip_words = [
-                WordSegment(
-                    word=w.get("word", ""),
-                    start=max(0.0, (w.get("start", 0) * 1000 - cand.start_ms) / 1000.0),
-                    end=max(0.0, (w.get("end", 0) * 1000 - cand.start_ms) / 1000.0),
-                    probability=w.get("probability", 1.0),
+            start_sec = max(0.0, float(cand.start_ms or 0) / 1000.0) if cand else 0.0
+            end_sec = max(start_sec, float(cand.end_ms or 0) / 1000.0) if cand else 0.0
+
+            try:
+                res = self.trimmer_service.trim_clip(
+                    clip_id=clip.id,
+                    start_sec=start_sec,
+                    end_sec=end_sec,
+                    snap_words=False,
+                    caption_style_preset=clip.caption_style or "hormozi",
                 )
-                for w in words
-                if cand.start_ms <= w.get("start", 0) * 1000 <= cand.end_ms
-            ]
-
-            ass_gen = ASSSubtitleGenerator(style=clip.caption_style or "hormozi")
-            # Elevated vertical margin (160px from bottom instead of 90px)
-            ass_content = ass_gen.generate(
-                words=clip_words,
-                margin_v=160,
-                align=2,  # Bottom center
-            )
-            ass_path = in_path.with_suffix(".safe.ass")
-            ass_path.write_text(ass_content, encoding="utf-8")
-
-            # Re-composite
-            compositor = VideoCompositor()
-            temp_out = in_path.with_name(f"{in_path.stem}_safe.mp4")
-            compositor.render_short(
-                cropped_video_path=in_path,
-                ass_subtitle_path=ass_path,
-                output_path=temp_out,
-            )
-
-            if temp_out.exists() and temp_out.stat().st_size > 50_000:
-                try:
-                    in_path.unlink()
-                except Exception:
-                    pass
-                temp_out.rename(in_path)
-                try:
-                    ass_path.unlink()
-                except Exception:
-                    pass
                 self.re_evaluate_clip(clip, db)
-                return {"status": "success", "message": "Re-rendered clip with safe caption clearance."}
-            else:
-                return {"status": "error", "message": "Failed to re-render safe clip."}
+                return {"status": "success", "message": "Re-rendered clip with safe caption clearance.", "result": res}
+            except Exception as e:
+                logger.exception("Failed to re-render clip with safe captions: %s", e)
+                return {"status": "error", "message": f"Failed to re-render safe clip: {str(e)}"}
 
         return {"status": "error", "message": f"Unknown fix type: {fix_type}"}
 

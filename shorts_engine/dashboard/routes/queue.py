@@ -798,7 +798,8 @@ def auto_fix_single_clip_endpoint(
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
     from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
-    recovery = ClipRecoveryService()
+    from shorts_engine.services.rendering.trimmer import ClipTrimmerService
+    recovery = ClipRecoveryService(trimmer_service=ClipTrimmerService(db))
     res = recovery.apply_auto_fix(clip, fix_type, db)
     msg = res.get("message") or f"Applied fix '{fix_type}' to clip {clip_id[:8]}"
     logger.info("Operator '%s' applied fix '%s' to clip %s: %s", current_user.username, fix_type, clip_id, res)
@@ -992,6 +993,59 @@ def re_render_clip_style(
     if return_query or request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return _make_queue_redirect(request, default_msg=msg, msg_type="success", return_query=return_query)
     return {"status": "re_rendered", "clip_id": clip_id, "rendered_path": clip.rendered_path, "style": tmpl.name}
+
+
+@router.post("/queue/{clip_id}/trim", summary="Trim and re-time a clip with speech pause snapping")
+def trim_clip(
+    request: Request,
+    clip_id: str,
+    start_sec: float = Form(...),
+    end_sec: float = Form(...),
+    snap_words: Optional[str] = Form(default="true"),
+    caption_style: Optional[str] = Form(default=None),
+    return_query: Optional[str] = Form(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.rendering.trimmer import ClipTrimmerService
+
+    should_snap = snap_words is not None and snap_words.lower() in ("true", "1", "yes", "on")
+    trimmer = ClipTrimmerService(db)
+
+    try:
+        res = trimmer.trim_clip(
+            clip_id=clip_id,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            snap_words=should_snap,
+            caption_style_preset=caption_style,
+        )
+    except Exception as e:
+        logger.error("Failed to trim clip %s: %s", clip_id, e, exc_info=True)
+        err_msg = f"Failed to trim clip: {e}"
+        if request.headers.get("hx-request") == "true":
+            return Response(
+                content="",
+                status_code=400,
+                headers={"HX-Trigger": json.dumps({"showToast": {"message": err_msg, "type": "error"}})}
+            )
+        raise HTTPException(status_code=400, detail=str(e))
+
+    msg = f"Trimmed clip {clip_id[:8]} to {res['start_sec']}s – {res['end_sec']}s ({res['duration_sec']}s)!"
+    if request.headers.get("hx-request") == "true":
+        return Response(
+            content="",
+            headers={
+                "HX-Trigger": json.dumps({
+                    "showToast": {"message": msg, "type": "success"},
+                    "clipTrimmed": {"clip_id": clip_id, **res},
+                })
+            }
+        )
+    if return_query or request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
+        return _make_queue_redirect(request, default_msg=msg, msg_type="success", return_query=return_query)
+    return res
 
 
 @router.post("/queue/{clip_id}/delete", summary="Delete a clip with optional media file cleanup")
