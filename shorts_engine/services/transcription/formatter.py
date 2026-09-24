@@ -2,15 +2,16 @@
 Helpers for formatting, grouping, and analyzing word-level transcripts.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 
 class WordSegment:
-    def __init__(self, word: str, start: float, end: float, probability: float = 1.0):
-        self.word = word.strip()
+    def __init__(self, word: str, start: float, end: float, probability: float = 1.0, score: Optional[float] = None):
+        self.word = str(word).strip()
         self.start = float(start)
         self.end = float(end)
         self.probability = float(probability)
+        self.score = float(score if score is not None else self.probability)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -18,16 +19,52 @@ class WordSegment:
             "start": round(self.start, 3),
             "end": round(self.end, 3),
             "probability": round(self.probability, 3),
+            "score": round(self.score, 3),
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WordSegment":
+    def from_dict(cls, data: Any) -> "WordSegment":
+        if isinstance(data, cls):
+            return data
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict or WordSegment, got {type(data).__name__}")
+        if "word" not in data or "start" not in data or "end" not in data:
+            raise KeyError(f"WordSegment requires 'word', 'start', and 'end' keys, got: {list(data.keys())}")
+
+        try:
+            start_val = float(data["start"])
+            end_val = float(data["end"])
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"WordSegment start and end must be numeric: {e}")
+
+        prob = data.get("probability", data.get("score", 1.0))
+        score = data.get("score", prob)
         return cls(
             word=data["word"],
-            start=data["start"],
-            end=data["end"],
-            probability=data.get("probability", 1.0),
+            start=start_val,
+            end=end_val,
+            probability=float(prob),
+            score=float(score),
         )
+
+    def __getitem__(self, item: str) -> Any:
+        if item == "word":
+            return self.word
+        elif item == "start":
+            return self.start
+        elif item == "end":
+            return self.end
+        elif item == "probability":
+            return self.probability
+        elif item == "score":
+            return self.score
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
 
     def __repr__(self) -> str:
         return f"[{self.start:.2f}s - {self.end:.2f}s] {self.word}"
@@ -53,13 +90,20 @@ class FormattedTranscript:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FormattedTranscript":
-        words = [WordSegment.from_dict(w) for w in data.get("words", [])]
-        return cls(
-            words=words,
-            language=data.get("language", "en"),
-            full_text=data.get("full_text"),
-        )
+    def from_dict(cls, data: Any) -> "FormattedTranscript":
+        if isinstance(data, list):
+            words = [WordSegment.from_dict(w) for w in data]
+            return cls(words=words, language="en", full_text=None)
+        elif isinstance(data, dict):
+            raw_words = data.get("words", [])
+            words = [WordSegment.from_dict(w) for w in raw_words]
+            return cls(
+                words=words,
+                language=data.get("language", "en"),
+                full_text=data.get("full_text"),
+            )
+        else:
+            raise TypeError(f"FormattedTranscript.from_dict expects dict or list, got {type(data).__name__}")
 
     def find_silences(self, min_silence_sec: float = 0.3) -> List[Dict[str, float]]:
         """Identifies natural pauses / silence gaps between words."""
