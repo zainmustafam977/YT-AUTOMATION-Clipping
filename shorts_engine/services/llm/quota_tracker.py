@@ -14,6 +14,7 @@ import threading
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import portalocker
 
 from shorts_engine.config.settings import settings
 from shorts_engine.utils.fs import atomic_write_json
@@ -96,6 +97,10 @@ class APIUsageTracker:
 
         initial = {"date": today_str, "keys": {}}
         return initial
+
+    @property
+    def lock_file(self) -> Path:
+        return self.state_file.with_name(self.state_file.name + ".lock")
 
     def _save_state(self, state: Dict[str, Any]) -> None:
         try:
@@ -226,25 +231,27 @@ class APIUsageTracker:
     def set_cooldown(self, provider: str, key: str, duration_sec: float = 60.0) -> None:
         """Puts a specific key into temporary cooldown after receiving HTTP 429."""
         with self._mutex:
-            self._ensure_today()
-            k_id = self._get_key_identifier(provider, key)
-            keys_dict = self._state.setdefault("keys", {})
-            k_info = keys_dict.setdefault(k_id, {
-                "provider": provider.lower(),
-                "key_masked": mask_api_key(key),
-                "key_hash": hash_api_key(key),
-                "requests_today": 0,
-                "total_requests": 0,
-                "rate_limit_hits_today": 0,
-                "last_latency_ms": 0,
-                "last_model_used": "—",
-                "last_used_at": None,
-                "cooldown_until": 0.0,
-                "daily_limit_est": ESTIMATED_DAILY_LIMITS.get(provider.lower(), 1000),
-            })
-            k_info["cooldown_until"] = time.time() + float(duration_sec)
-            k_info["rate_limit_hits_today"] = k_info.get("rate_limit_hits_today", 0) + 1
-            self._save_state(self._state)
+            with portalocker.Lock(str(self.lock_file), timeout=10.0):
+                self._state = self._load_state()
+                self._ensure_today()
+                k_id = self._get_key_identifier(provider, key)
+                keys_dict = self._state.setdefault("keys", {})
+                k_info = keys_dict.setdefault(k_id, {
+                    "provider": provider.lower(),
+                    "key_masked": mask_api_key(key),
+                    "key_hash": hash_api_key(key),
+                    "requests_today": 0,
+                    "total_requests": 0,
+                    "rate_limit_hits_today": 0,
+                    "last_latency_ms": 0,
+                    "last_model_used": "—",
+                    "last_used_at": None,
+                    "cooldown_until": 0.0,
+                    "daily_limit_est": ESTIMATED_DAILY_LIMITS.get(provider.lower(), 1000),
+                })
+                k_info["cooldown_until"] = time.time() + float(duration_sec)
+                k_info["rate_limit_hits_today"] = k_info.get("rate_limit_hits_today", 0) + 1
+                self._save_state(self._state)
             logger.warning(
                 "API key %s (%s) cooling down for %ds due to rate-limit / 429.",
                 k_info["key_masked"], provider, int(duration_sec)
@@ -264,79 +271,81 @@ class APIUsageTracker:
     ) -> None:
         """Records an API request invocation against a specific key."""
         with self._mutex:
-            self._ensure_today()
-            prov = provider.lower()
-            k_id = self._get_key_identifier(prov, key)
-            keys_dict = self._state.setdefault("keys", {})
+            with portalocker.Lock(str(self.lock_file), timeout=10.0):
+                self._state = self._load_state()
+                self._ensure_today()
+                prov = provider.lower()
+                k_id = self._get_key_identifier(prov, key)
+                keys_dict = self._state.setdefault("keys", {})
 
-            k_info = keys_dict.setdefault(k_id, {
-                "provider": prov,
-                "key_masked": mask_api_key(key),
-                "key_hash": hash_api_key(key),
-                "requests_today": 0,
-                "total_requests": 0,
-                "rate_limit_hits_today": 0,
-                "last_latency_ms": latency_ms,
-                "last_model_used": model or "—",
-                "last_used_at": None,
-                "cooldown_until": 0.0,
-                "daily_limit_est": ESTIMATED_DAILY_LIMITS.get(prov, 1000),
-            })
+                k_info = keys_dict.setdefault(k_id, {
+                    "provider": prov,
+                    "key_masked": mask_api_key(key),
+                    "key_hash": hash_api_key(key),
+                    "requests_today": 0,
+                    "total_requests": 0,
+                    "rate_limit_hits_today": 0,
+                    "last_latency_ms": latency_ms,
+                    "last_model_used": model or "—",
+                    "last_used_at": None,
+                    "cooldown_until": 0.0,
+                    "daily_limit_est": ESTIMATED_DAILY_LIMITS.get(prov, 1000),
+                })
 
-            k_info["requests_today"] = k_info.get("requests_today", 0) + 1
-            k_info["total_requests"] = k_info.get("total_requests", 0) + 1
-            k_info["last_latency_ms"] = latency_ms
-            k_info["last_model_used"] = model or k_info.get("last_model_used", "—")
-            k_info["last_used_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            k_info["last_status"] = status
-            if error:
-                k_info["last_error"] = error[:200]
+                k_info["requests_today"] = k_info.get("requests_today", 0) + 1
+                k_info["total_requests"] = k_info.get("total_requests", 0) + 1
+                k_info["last_latency_ms"] = latency_ms
+                k_info["last_model_used"] = model or k_info.get("last_model_used", "—")
+                k_info["last_used_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                k_info["last_status"] = status
+                if error:
+                    k_info["last_error"] = error[:200]
 
-            # Parse Groq / provider rate-limit response headers
-            if headers:
-                norm_headers = {k.lower(): v for k, v in headers.items()}
-                if "x-ratelimit-remaining-tokens" in norm_headers:
-                    try:
-                        k_info["remaining_tokens_minute"] = int(norm_headers["x-ratelimit-remaining-tokens"])
-                        k_info["tokens_updated_at"] = time.time()
-                    except (ValueError, TypeError):
-                        pass
-                if "x-ratelimit-reset-tokens" in norm_headers:
-                    val = str(norm_headers["x-ratelimit-reset-tokens"]).strip()
-                    try:
-                        # Handles formats like "7.66s" or "7.66"
-                        val_clean = val.rstrip("s")
-                        k_info["reset_tokens_sec"] = float(val_clean)
-                    except (ValueError, TypeError):
-                        k_info["reset_tokens_sec"] = 60.0
-                if "x-ratelimit-remaining-requests" in norm_headers:
-                    try:
-                        k_info["remaining_requests_day"] = int(norm_headers["x-ratelimit-remaining-requests"])
-                    except (ValueError, TypeError):
-                        pass
+                # Parse Groq / provider rate-limit response headers
+                if headers:
+                    norm_headers = {k.lower(): v for k, v in headers.items()}
+                    if "x-ratelimit-remaining-tokens" in norm_headers:
+                        try:
+                            k_info["remaining_tokens_minute"] = int(norm_headers["x-ratelimit-remaining-tokens"])
+                            k_info["tokens_updated_at"] = time.time()
+                        except (ValueError, TypeError):
+                            pass
+                    if "x-ratelimit-reset-tokens" in norm_headers:
+                        val = str(norm_headers["x-ratelimit-reset-tokens"]).strip()
+                        try:
+                            # Handles formats like "7.66s" or "7.66"
+                            val_clean = val.rstrip("s")
+                            k_info["reset_tokens_sec"] = float(val_clean)
+                        except (ValueError, TypeError):
+                            k_info["reset_tokens_sec"] = 60.0
+                    if "x-ratelimit-remaining-requests" in norm_headers:
+                        try:
+                            k_info["remaining_requests_day"] = int(norm_headers["x-ratelimit-remaining-requests"])
+                        except (ValueError, TypeError):
+                            pass
 
-            # Parse inference metrics (from Groq-Beta: inference-metrics)
-            if inference_metrics:
-                k_info["last_inference_metrics"] = inference_metrics
-                tps = inference_metrics.get("tokens_per_sec")
-                if tps is not None:
-                    try:
-                        k_info["last_tokens_per_sec"] = float(tps)
-                    except (ValueError, TypeError):
-                        pass
-                comp_time = inference_metrics.get("completion_time")
-                if comp_time is not None:
-                    try:
-                        k_info["last_completion_time_sec"] = float(comp_time)
-                    except (ValueError, TypeError):
-                        pass
+                # Parse inference metrics (from Groq-Beta: inference-metrics)
+                if inference_metrics:
+                    k_info["last_inference_metrics"] = inference_metrics
+                    tps = inference_metrics.get("tokens_per_sec")
+                    if tps is not None:
+                        try:
+                            k_info["last_tokens_per_sec"] = float(tps)
+                        except (ValueError, TypeError):
+                            pass
+                    comp_time = inference_metrics.get("completion_time")
+                    if comp_time is not None:
+                        try:
+                            k_info["last_completion_time_sec"] = float(comp_time)
+                        except (ValueError, TypeError):
+                            pass
 
-            if status == "RATE_LIMITED":
-                cd = cooldown_seconds if (cooldown_seconds and cooldown_seconds > 0) else 60.0
-                k_info["rate_limit_hits_today"] = k_info.get("rate_limit_hits_today", 0) + 1
-                k_info["cooldown_until"] = time.time() + float(cd)
+                if status == "RATE_LIMITED":
+                    cd = cooldown_seconds if (cooldown_seconds and cooldown_seconds > 0) else 60.0
+                    k_info["rate_limit_hits_today"] = k_info.get("rate_limit_hits_today", 0) + 1
+                    k_info["cooldown_until"] = time.time() + float(cd)
 
-            self._save_state(self._state)
+                self._save_state(self._state)
             logger.debug(
                 "Recorded API call for %s (%s): status=%s, reqs_today=%d",
                 prov, k_info["key_masked"], status, k_info["requests_today"]
