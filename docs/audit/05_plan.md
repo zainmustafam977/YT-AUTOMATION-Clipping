@@ -1,4 +1,4 @@
-# Phase 5: Industrial-Grade Remediation Plan (v4)
+# Phase 5: Industrial-Grade Remediation Plan (v5)
 
 ---
 
@@ -14,29 +14,29 @@ Where user directives conflict with previous plan text, the user directives win.
 ## 2. Priority Taxonomy & Tier Execution Structure
 
 - **Tier 1 (Code Only - Stop for Review After the Tier):**
-  - `PLAN-P0-01`: Fix Analytics Video ID Misbinding (Warn only if status implies published but ID is missing; otherwise skip quietly; data repair stays report-only).
-  - `PLAN-P0-02`: Atomic File Writes & Atomic Replace Helper in `shorts_engine/utils/fs.py` (Leaf module with zero project imports; no `except Exception: pass`, catch `OSError` and log; Windows retry loop).
-  - `PLAN-P0-03`: Resumed Pipeline Transcript Normalization (Strict load-time normalization; no silent 0.0 defaults; `WordSegment` citation; supports legacy word lists and dicts).
-  - `PLAN-P0-06`: Clip Recovery Auto-Fixes & Decoupling from Rendering (Merged with P1-01; dependency injection only; uses single timeout helper from P1-02; includes P2-10 unlinking old MP4; 0 cycles).
-  - `PLAN-P1-02`: Enforce Subprocess Timeouts on All Media Probes (`psutil` declared; unified `run_subprocess_with_timeout` helper covering all 5 unprotected call sites plus `technical_check.py:84`).
-  - `PLAN-P1-04`: Align pyproject.toml Dependencies (`groq>=0.9.0`, `scipy>=1.11.0`).
-  - `PLAN-P1-06`: Atomic Lifecycle State Transitions (Conditional SQL atomic update).
-  - `PLAN-P1-08`: Enforce Production Secret Placeholder Guard in Settings (Code only; feature-flagged off behind `ENFORCE_SECRET_ENTROPY=false` until keys are rotated; launchers do not set `ENV=development` for real runs; real fix is key rotation then `ENV=production`).
-  - `PLAN-P1-11`: Dynamic Analytics Date Window Calculation (Window starts at clip's publish date using timezone-aware UTC; must ship before 2027-01-01).
-  - `PLAN-P1-12`: Cross-Process File Lock / SQLite-Backed Counter on Quota State (Guards both `publishing/quota.py` and `quota_tracker.py` across multi-process workers).
+  - `PLAN-P0-01`: Fix Analytics Video ID Misbinding (Compare `clip.status == ClipStatus.PUBLISHED`; warn only if status is published but ID is missing; skip quietly otherwise; data repair report-only; confirm `clip.analytics` maps to `analytics_json`).
+  - `PLAN-P0-02`: Atomic File Writes & Replace Helper in `shorts_engine/utils/fs.py` (Leaf module; zero project imports in `shorts_engine/utils/__init__.py`; cleanup via `try...finally`; retry only `PermissionError` on Windows; log and raise on other `OSError`).
+  - `PLAN-P0-03`: Resumed Pipeline Transcript Normalization (Strict load-time normalization; no silent 0.0 defaults; supports legacy word lists and dicts; cite `WordSegment` fields).
+  - `PLAN-P0-06`: Clip Recovery Auto-Fixes, Protocol Decoupling & Old Render Cleanup (Merged with P1-01 and F-39; `TrimmerProtocol` dependency injection; reuses single `SubprocessWatchdog` timeout from P1-02; unlinks old `clip.rendered_path` only if path changes; 0 cycles).
+  - `PLAN-P1-02`: Enforce Subprocess Timeouts on All Media Probes (Reuse `SubprocessWatchdog.run`; psutil tree termination; callers convert `timed_out` into failed check; covers all sites from Grep E plus `technical_check.py:84`).
+  - `PLAN-P1-04`: Align pyproject.toml Dependencies (`groq>=0.9.0`, `scipy>=1.11.0`, `portalocker>=2.8.0`).
+  - `PLAN-P1-06`: Atomic Lifecycle State Transitions (Conditional SQL atomic update: `UPDATE source_videos SET status=:new WHERE id=:id AND status=:expected`).
+  - `PLAN-P1-08`: Enforce Production Secret Placeholder Guard in Settings (Code only; feature-flagged behind `ENFORCE_SECRET_ENTROPY=false`; logs startup WARNING if placeholders detected when switch is off; raises `ValueError` when switch is on; launchers do not set `ENV=development` for real runs; test both switch states).
+  - `PLAN-P1-11`: Dynamic Analytics Date Window Calculation (Fixed-age window for every clip starting at `clip.publish_log.published_at`; timezone-aware UTC handling for naive datetimes; must ship before 2027-01-01).
+  - `PLAN-P1-12`: Cross-Process OS-Level File Lock on Quota State (Uses `portalocker` cross-process lock across `publishing/quota.py` and `llm/quota_tracker.py`; zero timestamp-based lock breaking; accounts for multi-process worker topology).
 
 - **Tier 2 (Database Backup First - Ask User Before Running):**
-  - `PLAN-P1-09`: Fail-Fast Schema Migrations & Unique Index Management (Pre-flight duplicate check: if duplicates exist, log ERROR listing them and continue booting without creating index; `P0-04` stays blocked until user decides; adds status and heartbeat columns for P0-05).
+  - `PLAN-P1-09`: Fail-Fast Schema Migrations & Unique Index Management (Pre-flight duplicate check: if duplicates exist, log ERROR listing them, continue booting without creating index, block `P0-04`; check if `status` Enum has a SQLite CHECK constraint; keep P0-05 columns in P0-05's migration).
   - `PLAN-P0-04`: Ingestion Deduplication Constraint (Runs strictly after P1-09; blocked if duplicates exist).
-  - `PLAN-P0-05`: Drip-Feed Publishing Row Lock, Upload Started Marker, PlaylistItems Upload Check & Stale Reclaim (Re-rated P1; queries `playlistItems` of uploads playlist; matches clips by `[clip:<id>]` token in description; tested with unlisted upload).
+  - `PLAN-P0-05`: Drip-Feed Publishing Row Lock, PlaylistItems Upload Check & Stale Reclaim (Re-rated P1; checks uploads playlist `playlistItems`; matches clips by `[clip:<id>]` token in description; uploads within last 15 min treated as ambiguous and sent to `FAILED_NEEDS_REVIEW`; dashboard badge added; test with unlisted upload and count quota).
   - `PLAN-P1-10`: Harden Secret Rotation with Automated Backup and Secure Input (`rotate-secrets` reads keys from hidden prompt or env vars; automatic backup before single transaction).
-  - `PLAN-P1-03`: Resumable Upload Chunk Retry with Exponential Backoff (3 retries; fast-fail on `quotaExceeded` / 401 / 403).
+  - `PLAN-P1-03`: Resumable Upload Chunk Retry with Exponential Backoff (3 retries; fast-fail on `quotaExceeded`, 401, or 403).
   - `PLAN-P1-05`: Harden GitHub Actions CI Workflow (`pip-audit` as a separate non-blocking commit).
   - `PLAN-P1-07`: Scoped Database Sessions in Multi-Platform Syndicator (Prove shared session with test first).
   - `PLAN-P2-11`: Enforce 50MB File Size Guard and Chunked Streaming in Instagram Publisher.
 
 - **Approved with Change:**
-  - `PLAN-P0-07`: Secure Distribution Bundle Packaging (Exclude `client_secret*.json`, `credentials*.json`, `token*.json`, `*cookie*.txt`, `.env*`; explicit allow rule for `.env.example`; zip test).
+  - `PLAN-P0-07`: Secure Distribution Bundle Packaging (Exclude `*.db-wal`, `*.db-shm`, `*.sqlite*`, `*.db`, `client_secret*.json`, `credentials*.json`, `token*.json`, `*cookie*.txt`, `.env*`; explicit allow-before-deny order preserving `.env.example`; zip test).
   - `PLAN-P2-12`: Mask Password Input via `getpass` in CLI User Creation (Remove/warn `--password` flag; support env var bootstrap).
 
 - **Deferred Items:**
@@ -64,12 +64,13 @@ Where user directives conflict with previous plan text, the user directives win.
   ```
 - **Impact:** **Severe Data Corruption & False A/B Promotion.** If a clip lacks a `publish_log`, the daemon queries YouTube metrics for the *source video* (long-form upload) and records those view counts into `clip.analytics_json`.
 - **Likelihood:** High (deterministic execution on every unpublished clip evaluated by the daemon).
-- **Exact Code Change (Incorporating Amendment):**
+- **Attribute Confirmation:** In `shorts_engine/db/models.py:231-236`, `analytics_json` is the SQL `Text` column, and `@property def analytics(self)` / `@analytics.setter` provides the JSON serialization getter/setter. Reading and writing `clip.analytics` correctly maps to `clip.analytics_json`.
+- **Exact Code Change:**
   In `shorts_engine/services/monitoring/analytics_sync.py:46-56`:
   ```python
   if not clip.publish_log or not clip.publish_log.youtube_video_id:
-      # Warn only if status implies published but the YouTube ID is missing
-      if str(getattr(clip, "status", "")).upper() in ("PUBLISHED", "CLIPSTATUS.PUBLISHED"):
+      # Compare status against enum member strictly
+      if clip.status == ClipStatus.PUBLISHED:
           logger.warning("Clip %s has PUBLISHED status but no published YouTube ID; skipping analytics sync.", clip.id)
       # Otherwise skip quietly (candidate, pending, rendered, etc.)
       continue
@@ -93,17 +94,18 @@ Where user directives conflict with previous plan text, the user directives win.
 
 ---
 
-#### PLAN-P0-02: Atomic File Writes & Atomic Replace Helper in fs.py
+#### PLAN-P0-02: Atomic File Writes & Replace Helper in fs.py
 - **Finding IDs:** `F-07`, `F-08`, `F-20`, `F-22`, `F-30`
-- **Audit Grade:** Regraded to **C** (Data loss risk under process abort).
+- **Audit Grade:** Regraded to **D** (0-byte file truncation and state loss under process abort).
 - **Evidence Call Sites (4 Persistent State Call Sites):**
   1. `shorts_engine/config/logging_config.py:148-149`: `open(RUNTIME_CONFIG_PATH, "w")` + `json.dump(current, f, indent=2)`
   2. `shorts_engine/services/detection/websub.py:47`: `_SUBS_STATE_FILE.write_text(json.dumps(subs, indent=2))`
   3. `shorts_engine/services/llm/quota_tracker.py:102`: `self.state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")`
   4. `shorts_engine/services/publishing/quota.py:53`: `self.state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")`
 - **Impact:** **Data Loss / State Corruption.** Sudden process termination during `write_text` truncates state files to 0 bytes.
-- **Exact Code Change (Incorporating Amendment):**
-  Create leaf utility module `shorts_engine/utils/fs.py` with **zero project imports**:
+- **Leaf Module Confirmation:** `shorts_engine/utils/__init__.py` contains zero imports. `shorts_engine/utils/fs.py` is a strict leaf module with no imports from `shorts_engine`.
+- **Exact Code Change:**
+  In `shorts_engine/utils/fs.py`:
   ```python
   import os
   import json
@@ -115,16 +117,19 @@ Where user directives conflict with previous plan text, the user directives win.
   logger = logging.getLogger(__name__)
 
   def atomic_replace(src: Path, dst: Path, max_retries: int = 5) -> None:
-      """Atomically replaces dst with src, retrying on transient Windows file locks."""
+      """Atomically replaces dst with src, retrying only PermissionError for Windows locks."""
       for attempt in range(max_retries):
           try:
               os.replace(src, dst)
               return
-          except OSError as e:
+          except PermissionError as e:
               if attempt == max_retries - 1:
-                  logger.error("atomic_replace failed from %s to %s: %s", src, dst, e)
+                  logger.error("atomic_replace failed after %d retries from %s to %s: %s", max_retries, src, dst, e)
                   raise
               time.sleep(0.05 * (2 ** attempt))
+          except OSError as e:
+              logger.error("atomic_replace encountered fatal OS error from %s to %s: %s", src, dst, e)
+              raise
 
   def atomic_write_json(target_path: Path, data: Any, indent: int = 2) -> None:
       """Writes data to a temporary file, flushes/fsyncs, and atomically renames."""
@@ -136,21 +141,19 @@ Where user directives conflict with previous plan text, the user directives win.
               f.flush()
               os.fsync(f.fileno())
           atomic_replace(temp_path, target_path)
-      except OSError as e:
-          logger.error("Failed to atomic_write_json to %s: %s", target_path, e)
+      finally:
           if temp_path.exists():
               try:
                   temp_path.unlink()
-              except OSError:
-                  pass
-          raise
+              except OSError as ex:
+                  logger.warning("Failed to clean up temp file %s: %s", temp_path, ex)
   ```
   Replace all 4 persistent-state call sites with `atomic_write_json`.
 - **Effort:** Small (S)
 - **Risk of Change:** Low. Leaf helper has zero dependencies.
 - **Pre-Mortem & Prevention:**
   - *Risk:* Windows `PermissionError` when replacing file held open by reader.
-  - *Prevention:* Exponential backoff retry loop (5 retries) catching `OSError`.
+  - *Prevention:* Exponential backoff retry loop (5 retries) catching `PermissionError`.
 - **Failing Test to Write First:** `tests/test_atomic_state_writes.py::test_atomic_write_preserves_original_on_simulated_abort`.
 - **Rollback Path:** Revert `shorts_engine/utils/fs.py` and call sites.
 
@@ -164,7 +167,7 @@ Where user directives conflict with previous plan text, the user directives win.
   - Load site: `shorts_engine/orchestration/runner.py:364-369` (`FormattedTranscript.from_dict(data)`)
   - Model fields: `shorts_engine/services/transcription/formatter.py:8-13` (`word: str`, `start: float`, `end: float`, `probability: float = 1.0`)
 - **Impact:** **Critical Crash on Pipeline Resumption.** `w.word` raises `AttributeError: 'dict' object has no attribute 'word'`, crashing the worker and rendering pipeline resumption impossible.
-- **Exact Code Change (Strict Normalization):**
+- **Exact Code Change:**
   In `shorts_engine/services/transcription/formatter.py`:
   - Enforce strict typing in `WordSegment.from_dict`: no silent 0.0 defaults. Log and skip malformed words or raise `ValueError`.
   - In `FormattedTranscript.from_dict`, support both dictionary payloads (`{"words": [...]}`) and legacy lists (`[{"word": ...}]`).
@@ -215,16 +218,45 @@ Where user directives conflict with previous plan text, the user directives win.
 
 ---
 
-#### PLAN-P0-06: Clip Recovery Auto-Fixes & Decoupling from Rendering (Merged with P1-01)
-- **Finding IDs:** `F-31`, `F-50`
+#### PLAN-P0-06: Clip Recovery Auto-Fixes, Protocol Decoupling & Old Render Cleanup (Merged with P1-01 and F-39)
+- **Finding IDs:** `F-31`, `F-39`, `F-50`
 - **Audit Grade:** Regraded to **D** (Uncallable auto-fix due to `TypeError` and `FileExistsError`; architectural cycle).
 - **Evidence Call Sites:** `shorts_engine/services/quality_gate/recovery.py:256, 260-263, 344, 347-353, 357-360`
-- **Exact Code Change (Incorporating Amendment):**
-  1. **Dependency Injection Only:** `quality_gate` must NEVER import `rendering`. Inject `trimmer_service: Optional[Any] = None` into `ClipRecoveryService.__init__`.
-  2. Use the single shared timeout helper from `P1-02` for FFmpeg execution. Delete the separate formula.
-  3. Replace raw renames with `atomic_replace` from `shorts_engine/utils/fs.py`.
-  4. **Include P2-10:** Safely unlink previous `clip.rendered_path` file on successful re-render to prevent disk orphan accumulation.
-  5. Confirm `trim_clip` semantics: atomically re-trims media, generates ASS subtitles, renders 9:16 portrait video, and updates clip record in database.
+- **Exact Code Change:**
+  1. **Dependency Injection via Protocol:**
+     In `shorts_engine/services/quality_gate/recovery.py`:
+     ```python
+     from typing import Protocol, Dict, Any, Optional
+
+     class TrimmerProtocol(Protocol):
+         def trim_clip(
+             self,
+             clip_id: str,
+             start_sec: float,
+             end_sec: float,
+             snap_words: bool = True,
+             caption_style_preset: Optional[str] = None,
+         ) -> Dict[str, Any]:
+             ...
+     ```
+     `ClipRecoveryService.__init__(self, trimmer_service: Optional[TrimmerProtocol] = None)`.
+     *Who Injects Trimmer Service:* Injected at instantiation by the dashboard route handler in `shorts_engine/dashboard/routes/queue.py` (`ClipRecoveryService(trimmer_service=ClipTrimmerService(db))`).
+  2. **Parameter Origin:**
+     `start_sec` and `end_sec` are extracted from candidate timestamps:
+     `start_sec = cand.start_ms / 1000.0`
+     `end_sec = min(cand.end_ms / 1000.0, start_sec + target_max)`
+  3. **Reuse SubprocessWatchdog Timeout Helper:** Use `SubprocessWatchdog.run` from P1-02 for FFmpeg execution. Delete the separate formula.
+  4. **Atomic Replace:** Use `atomic_replace` from `shorts_engine/utils/fs.py`.
+  5. **Unlink Old Render Artifact (F-39):**
+     Safely unlink the old rendered MP4 file **only if it differs from the new path**:
+     ```python
+     if old_path and old_path.exists() and old_path.resolve() != new_path.resolve():
+         try:
+             old_path.unlink()
+             logger.info("Unlinked previous render artifact: %s", old_path)
+         except OSError as e:
+             logger.warning("Could not unlink previous render artifact %s: %s", old_path, e)
+     ```
 - **Effort:** Medium (M)
 - **Risk of Change:** Medium. Requires updating callers of `ClipRecoveryService` to pass trimmer delegate.
 - **Pre-Mortem & Prevention:**
@@ -238,28 +270,16 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P1-02: Enforce Subprocess Timeouts on All Media Probes
 - **Finding IDs:** `F-15`, `F-33`, `F-36`, `F-37`
 - **Confirmed Dependencies:** `psutil>=5.9.0` declared in `pyproject.toml:37` and `requirements.txt:28`.
-- **Evidence Call Sites (5 Unprotected Sites + technical_check.py:84):**
-  1. `shorts_engine/services/quality_gate/technical_check.py:38`: `subprocess.run(cmd, ...)` (ffprobe validation)
-  2. `shorts_engine/services/quality_gate/technical_check.py:84`: Add timeout error handling to technical check evaluation
-  3. `shorts_engine/services/rendering/compositor.py:451`: `subprocess.run(cmd, ...)` (ffprobe render check)
-  4. `shorts_engine/services/rendering/thumbnail_generator.py:50`: `subprocess.run(cmd, ...)` (ffmpeg frame extraction)
-  5. `shorts_engine/services/audio/mastering.py:117`: `subprocess.run(cmd, ...)` (ffmpeg loudnorm analysis)
-  6. `shorts_engine/services/quality_gate/recovery.py:256`: `subprocess.run(cmd, ...)` (ffmpeg duration clamp)
-- **Exact Code Change (Unified Timeout Helper):**
-  Define a single timeout helper in `shorts_engine/utils/process.py`:
-  ```python
-  def run_supervised_cmd(cmd: List[str], timeout_sec: float = 30.0, **kwargs) -> subprocess.CompletedProcess:
-      """Executes subprocess command with strict timeout and psutil tree termination."""
-      try:
-          return subprocess.run(cmd, timeout=timeout_sec, **kwargs)
-      except subprocess.TimeoutExpired:
-          logger.error("Command timed out after %.1fs: %s", timeout_sec, " ".join(cmd[:4]))
-          raise
-  ```
-  Replace all unprotected calls with `run_supervised_cmd`:
-  - `ffprobe` probes: 30.0s.
-  - `ffmpeg` frame extraction: 30.0s.
-  - `ffmpeg` media processing: `max(60.0, float(media_duration) * 3.0)`.
+- **SubprocessWatchdog Reuse:** `SubprocessWatchdog` already exists in `shorts_engine/services/execution/watchdog.py` and implements process tree termination (`kill_process_tree`) via `psutil`. We will directly reuse `SubprocessWatchdog.run`.
+- **Evidence Call Sites (Covering all sites from Grep E):**
+  1. `shorts_engine/services/quality_gate/technical_check.py:38`: `ffprobe` probe -> `SubprocessWatchdog.run(cmd, timeout_sec=30.0)`
+  2. `shorts_engine/services/quality_gate/technical_check.py:84`: Convert timeout into structured failure result (`details["checks"]["probe_timeout"] = False`)
+  3. `shorts_engine/services/rendering/compositor.py:451`: `ffprobe` render validation -> `SubprocessWatchdog.run(cmd, timeout_sec=30.0)`
+  4. `shorts_engine/services/rendering/thumbnail_generator.py:50`: `ffmpeg` frame extraction -> `SubprocessWatchdog.run(cmd, timeout_sec=30.0)`
+  5. `shorts_engine/services/audio/mastering.py:117`: `ffmpeg` loudnorm analysis -> `SubprocessWatchdog.run(cmd, timeout_sec=max(60.0, float(duration) * 3.0))`
+  6. `shorts_engine/services/quality_gate/recovery.py:256`: `ffmpeg` duration clamp -> `SubprocessWatchdog.run(cmd, timeout_sec=max(30.0, float(target_max) * 2.0))`
+  7. `shorts_engine/dashboard/routes/status.py:1242, 1264`: (Already has `timeout=5`, convert to `SubprocessWatchdog.run`)
+- **Caller Timeout Handling:** Callers check `if result.timed_out: return False, {"error": "Process timed out"}`.
 - **Effort:** Small (S)
 - **Risk of Change:** Low. Standardizes subprocess error handling.
 - **Pre-Mortem & Prevention:**
@@ -273,12 +293,9 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P1-04: Align pyproject.toml Dependencies
 - **Finding ID:** `F-03`
 - **Evidence:** `pyproject.toml:15-38` vs `requirements.txt`
-- **Exact Code Change:** Add `"groq>=0.9.0"` and `"scipy>=1.11.0"` to `pyproject.toml`.
+- **Exact Code Change:** Add `"groq>=0.9.0"`, `"scipy>=1.11.0"`, and `"portalocker>=2.8.0"` to `pyproject.toml` and `requirements.txt`.
 - **Effort:** Small (S)
 - **Risk of Change:** Very Low.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* Dependency resolver conflicts.
-  - *Prevention:* Exact versions match tested `requirements.txt`.
 - **Failing Test to Write First:** `tests/test_packaging_dependencies.py::test_pyproject_toml_contains_all_core_requirements`.
 - **Rollback Path:** Revert `pyproject.toml`.
 
@@ -291,9 +308,6 @@ Where user directives conflict with previous plan text, the user directives win.
   `UPDATE source_videos SET status=:new WHERE id=:id AND status=:expected`.
 - **Effort:** Small (S)
 - **Risk of Change:** Low. Prevents worker double-processing.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* In-memory object status diverges from database.
-  - *Prevention:* Execute `self.db.refresh(video)` on success.
 - **Failing Test to Write First:** `tests/test_lifecycle_concurrency.py::test_concurrent_transition_only_one_succeeds`.
 - **Rollback Path:** Revert `lifecycle.py`.
 
@@ -302,21 +316,15 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P1-08: Enforce Production Secret Placeholder Guard in Settings
 - **Finding ID:** `F-09`
 - **Evidence:** `shorts_engine/config/settings.py:41-48, 354-379`
-- **Exact Code Change (Incorporating Amendment):**
+- **Exact Code Change:**
   1. Add explicit feature switch `ENFORCE_SECRET_ENTROPY: bool = Field(default=False)`.
   2. In `PipelineSettings.validate_bounds`:
-     ```python
-     if self.ENFORCE_SECRET_ENTROPY:
-         if self.ENV.lower() not in ("development", "test"):
-             # Reject default placeholders and verify minimum entropy
-             ...
-     ```
+     - If `self.ENFORCE_SECRET_ENTROPY is False` and placeholder keys are detected: log `logger.warning("INSECURE STARTUP: Default placeholder keys detected in settings! Rotate keys before production.")`.
+     - If `self.ENFORCE_SECRET_ENTROPY is True`: raise `ValueError` on placeholder keys or insufficient entropy.
   3. **Launchers must NOT set `ENV=development` for real runs.** The real production fix is: rotate keys with `rotate-secrets`, then set `ENV=production` and `ENFORCE_SECRET_ENTROPY=true`.
+  4. Test verifies warning logged when False, and exception raised when True.
 - **Effort:** Small (S)
 - **Risk of Change:** Low when gated behind feature switch.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* Accidental premature enforcement crashes production boot.
-  - *Prevention:* Switch defaults to `False` until operator rotates secrets.
 - **Failing Test to Write First:** `tests/test_settings_security_guard.py::test_production_rejects_placeholder_secrets`.
 - **Rollback Path:** Revert `settings.py`.
 
@@ -325,38 +333,36 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P1-11: Dynamic Analytics Date Window Calculation
 - **Finding ID:** `F-14`
 - **Evidence:** `shorts_engine/services/ab_testing/analytics_ingestion.py:113-114`
-- **Exact Code Change (Incorporating Amendment):**
-  1. Window starts at the clip's publish date:
+- **Exact Code Change:**
+  1. Fixed-age window starting at clip's publish date:
      ```python
-     if clip and clip.published_at:
-         start_d = clip.published_at.astimezone(timezone.utc).date()
+     pub_dt = getattr(clip.publish_log, "published_at", None)
+     if pub_dt:
+         if pub_dt.tzinfo is None:
+             pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+         start_d = pub_dt.astimezone(timezone.utc).date()
      else:
          start_d = (datetime.now(timezone.utc) - timedelta(days=30)).date()
      end_d = datetime.now(timezone.utc).date()
      ```
-  2. Use timezone-aware UTC (`datetime.now(timezone.utc)`).
+  2. Use timezone-aware UTC (`datetime.now(timezone.utc)`). Must ship before 2027-01-01.
 - **Effort:** Small (S)
-- **Risk of Change:** Low. Must ship before 2027-01-01.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* API rejects future `endDate`.
-  - *Prevention:* Timezone-aware UTC date ensures `endDate` is current UTC day.
+- **Risk of Change:** Low.
 - **Failing Test to Write First:** `tests/test_analytics_date_window.py::test_analytics_window_is_dynamic`.
 - **Rollback Path:** Revert `analytics_ingestion.py`.
 
 ---
 
-#### PLAN-P1-12: Cross-Process File Lock / Counter on Quota State
+#### PLAN-P1-12: Cross-Process OS-Level File Lock on Quota State
 - **Finding IDs:** `F-22`, `F-30` (Extended)
 - **Evidence Call Sites:** `shorts_engine/services/publishing/quota.py:92-98`, `shorts_engine/services/llm/quota_tracker.py:99-105`
-- **Worker Process Analysis:** In production, Uvicorn runs 1 web process, and `worker.runner` runs 1 worker process. Manual operator jobs or scheduled CLI scripts run additional concurrent processes. Therefore, in-memory `threading.Lock` is insufficient.
+- **Worker Process Topology:** In production, Uvicorn runs 1 web process, and `worker.runner` runs 1 worker process. Manual operator jobs or scheduled CLI scripts run additional concurrent processes. In-memory locks cannot prevent cross-process state clobbering.
 - **Exact Code Change:**
-  Implement cross-process file locking in `shorts_engine/utils/fs.py` (`FileLock` using `portalocker` or an atomic lock file with `os.replace`):
-  Wrap state read-modify-write cycles in both `shorts_engine/services/publishing/quota.py` and `shorts_engine/services/llm/quota_tracker.py` with the file lock.
+  Use an OS-level advisory file lock (`portalocker.Lock(target_lock_path, timeout=5.0)`) or atomic SQL increment:
+  Wrap state read-modify-write cycles in both `shorts_engine/services/publishing/quota.py` and `shorts_engine/services/llm/quota_tracker.py` with `portalocker`.
+  Zero timestamp-based lock breaking (standard OS locks release cleanly on process crash).
 - **Effort:** Small (S)
 - **Risk of Change:** Low. Prevents concurrent write races across processes.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* Stale lock file after process crash.
-  - *Prevention:* Lock file includes PID and timestamp; stale locks (>10s) are automatically broken.
 - **Failing Test to Write First:** `tests/test_quota_concurrency_lock.py::test_concurrent_record_publish_accumulates_correctly`.
 - **Rollback Path:** Revert `quota.py` and `quota_tracker.py`.
 
@@ -366,21 +372,19 @@ Where user directives conflict with previous plan text, the user directives win.
 
 #### PLAN-P1-09: Fail-Fast Schema Migrations & Explicit Index Management
 - **Finding ID:** `F-11`
+- **Audit Grade:** Regraded to **D** (Swallowed ALTER TABLE / schema corruption).
 - **Evidence Call Site:** `shorts_engine/db/session.py:67-104`
-- **Exact Code Change (Incorporating Amendment):**
+- **Exact Code Change:**
   1. In `ensure_schema_upgrades`, run the duplicate pre-flight check before creating index:
      ```sql
      SELECT youtube_video_id, COUNT(*) FROM source_videos GROUP BY youtube_video_id HAVING COUNT(*) > 1;
      ```
   2. **Duplicate Rule:** If duplicates exist, **do NOT create the unique index**, log an **ERROR listing all duplicate video IDs**, and **continue booting cleanly**. `PLAN-P0-04` stays blocked awaiting user decision.
   3. If 0 duplicates exist, create unique index `uq_source_videos_youtube_id` on `source_videos(youtube_video_id)`.
-  4. Add `publishing_heartbeat_at TIMESTAMP` and ensure `status` enum support for `PUBLISHING` and `FAILED_NEEDS_REVIEW` (for `PLAN-P0-05`).
-  5. Remove blanket `except Exception: pass`; raise `RuntimeError` on unexpected SQL failures.
+  4. Check whether the `status` Enum has a SQLite `CHECK` constraint before attempting to add new enum values.
+  5. Keep P0-05 columns (`publishing_heartbeat_at`, etc.) in P0-05's own migration.
+  6. Remove blanket `except Exception: pass`; raise `RuntimeError` on unexpected SQL failures.
 - **Effort:** Small (S)
-- **Risk of Change:** Medium.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* Startup crash if database is locked.
-  - *Prevention:* Set `PRAGMA busy_timeout = 5000`.
 - **Failing Test to Write First:** `tests/test_schema_migrations.py::test_ensure_schema_upgrades_raises_on_actual_sql_failure`.
 - **Rollback Path:** Revert `session.py`.
 
@@ -410,18 +414,14 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P0-05: Drip-Feed Publishing Row Lock, PlaylistItems Upload Check & Stale Reclaim (Re-rated P1)
 - **Finding ID:** `F-27`
 - **Evidence Call Site:** `shorts_engine/services/publishing/drip_feed.py:45-101`
-- **Exact Code Change (Incorporating Amendment):**
+- **Exact Code Change:**
   1. **Upload Started Record:** Write an "upload started" record in `PublishLog` before starting upload.
-  2. **PlaylistItems Upload Check:** Query the channel's uploads playlist (`playlistItems.list(playlistId=uploads_playlist_id)`) via YouTube Data API.
-  3. **Clip-ID Token Matching:** Match clips by embedding a unique token `[clip:<clip_id>]` in the YouTube video description.
-  4. **Heartbeat Reclaim:** Update `publishing_heartbeat_at` during upload; reclaim clips stuck in `PUBLISHING` >30 minutes.
-  5. **Manual Review Route:** Route ambiguous cases to manual review (`ClipStatus.FAILED_NEEDS_REVIEW`).
-  6. **Test Specification:** Test with an unlisted upload.
+  2. **PlaylistItems Upload Check:** Query the channel's uploads playlist (`playlistItems.list(playlistId=uploads_playlist_id)`).
+  3. **Clip-ID Token Matching:** Match clips by embedding a unique token `[clip:<clip_id>]` in the video description.
+  4. **Ambiguity Rule:** Treat an upload within the last 15 minutes as ambiguous and send it to manual review (`ClipStatus.FAILED_NEEDS_REVIEW`).
+  5. **Dashboard Support:** Add dashboard badge and queue filter for `FAILED_NEEDS_REVIEW`.
+  6. **Test Specification:** Run the unlisted-upload test once and verify that it decrements the quota counter by 1,600 units.
 - **Effort:** Medium (M)
-- **Risk of Change:** Medium.
-- **Pre-Mortem & Prevention:**
-  - *Risk:* API failure during upload check triggers redundant upload.
-  - *Prevention:* Fail-safe: if upload check fails, do not re-upload; requeue for retry.
 - **Failing Test to Write First:** `tests/test_drip_feed_stale_reclaim.py::test_publishing_claim_and_idempotency_guard`.
 - **Rollback Path:** Revert `drip_feed.py`.
 
@@ -463,6 +463,7 @@ Where user directives conflict with previous plan text, the user directives win.
 
 #### PLAN-P1-07: Scoped Database Sessions in Multi-Platform Syndicator
 - **Finding ID:** `F-29`
+- **Audit Grade:** Regraded to **D** (Multi-thread shared DB session corruption).
 - **Evidence:** `shorts_engine/services/publishing/manager.py:180-195`
 - **Exact Code Change:** Prove shared session with test first; instantiate scoped per-thread sessions.
 - **Effort:** Small (S)
@@ -486,9 +487,9 @@ Where user directives conflict with previous plan text, the user directives win.
 #### PLAN-P0-07: Secure Distribution Bundle Packaging
 - **Finding ID:** `F-48`
 - **Evidence:** `Shorts_Engine_Control_Center/04_Admin_and_Distribution/build_bundle.bat:30`
-- **Exact Code Change (Incorporating Amendment):**
-  Exclude: `client_secret*.json`, `credentials*.json`, `token*.json`, `*cookie*.txt`, `.env*`, `*.key`, `*.pem`, `storage/*.db`, `storage/backups/*`.
-  **Explicit Allow Rule:** Allow `.env.example`.
+- **Exact Code Change:**
+  Exclude: `*.db-wal`, `*.db-shm`, `*.sqlite*`, `*.db`, `client_secret*.json`, `credentials*.json`, `token*.json`, `*cookie*.txt`, `.env*`.
+  **Allow-Before-Deny Order:** Allow `.env.example` first; then apply deny rules.
   Add zip inspection test.
 - **Effort:** Small (S)
 - **Failing Test to Write First:** `tests/test_bundle_packaging.py::test_bundle_zip_strictly_excludes_env_and_keys`.
@@ -533,3 +534,83 @@ Where user directives conflict with previous plan text, the user directives win.
 | **F-05** | `.github/workflows/ci-cd.yml:1-117` | **B** | Deployment stage contains placeholder echo commands. | Staging/production deployment infrastructure is not yet provisioned; active CI validation is fully governed by `ci.yml` (hardened under `PLAN-P1-05`). |
 | **F-17** | `shorts_engine/services/detection/filter.py:13-41` | **B** | Duration-only check flags short 16:9 landscape videos as Shorts. | Intentional design for Shorts repurposing MVP; full aspect-ratio detection scheduled for post-MVP. |
 | **F-40** | `shorts_engine/services/transcription/aligner.py:14-53` | **B** | `ForcedAligner` uses heuristic interval smoothing rather than acoustic CTC forced alignment. | **Assumed:** The ±50ms precision was not empirically measured against audio phonemes. Deferred benchmark test will compare Whisper timestamps with ground-truth wav2vec2 CTC alignment. |
+
+---
+
+## Appendix A: Secret Scanning (Gitleaks) Audit Results
+
+Full repository git history scanned across all branches and commits via Gitleaks v8.21.2:
+```bash
+gitleaks git --log-opts="--all" --verbose
+```
+- **Findings Count:** 1 finding.
+- **Finding Location:** `tests/test_multi_key_quota.py:60` (`RuleID: generic-api-key`).
+- **Classification:** Mock test string used for multi-key quota rotation unit tests.
+- **Verdict:** Zero active production credentials, OAuth tokens, or API secrets exist in the git history or tracked repository tree.
+
+---
+
+## Appendix B: Manual Operator Secret Rotation Checklist
+
+1. [ ] Generate new 32-byte production master encryption key:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+2. [ ] Generate new 32-byte production dashboard secret key:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+3. [ ] If channel tokens were previously encrypted, execute rotation tool:
+   ```bash
+   python run.py rotate-secrets
+   ```
+   *(Prompts securely with hidden input for current and new keys; automatically triggers pre-rotation SQLite backup).*
+4. [ ] Set `ENV=production` and `ENFORCE_SECRET_ENTROPY=true` in production environment / secret manager.
+5. [ ] Verify application boot and review queue accessibility.
+
+---
+
+## Appendix C: Architectural Decisions & Target Architecture
+
+### Target Decoupled Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client & UI
+        UI[Operator Dashboard / CLI]
+    end
+
+    subgraph Quality Gate Subsystem
+        QGM[QualityGateManager]
+        REC[ClipRecoveryService]
+        VER[TechnicalVerifier]
+    end
+
+    subgraph Rendering Subsystem
+        TRIM[ClipTrimmerService]
+        COMP[VideoCompositor]
+    end
+
+    subgraph Process Supervision
+        WATCH[SubprocessWatchdog]
+        PSUTIL[psutil Process Tree Killer]
+    end
+
+    UI --> QGM
+    QGM --> REC
+    REC -->|Implements TrimmerProtocol / DI| TRIM
+    TRIM --> COMP
+    COMP --> WATCH
+    VER --> WATCH
+    WATCH --> PSUTIL
+```
+
+### Architectural Decision Table
+
+| Decision ID | Subsystem | Current Design | Target Architecture (Plan v5) | Trade-offs & Migration Effort | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **DEC-01** | Quality Gate / Rendering | Direct import of `VideoCompositor` in `recovery.py` | `TrimmerProtocol` dependency injection; `recovery.py` never imports `rendering` | Effort: S. Risk: None. Eliminates circular import cycle completely. | **Approved** |
+| **DEC-02** | Process Supervision | Unprotected `subprocess.run` calls in 5 media tools | Standardize on `SubprocessWatchdog.run` with tree-kill via `psutil` | Effort: S. Risk: Very Low. Eliminates hung processes. | **Approved** |
+| **DEC-03** | State Persistence | Direct unbuffered `write_text` / `json.dump` | Leaf `atomic_write_json` and `atomic_replace` in `shorts_engine/utils/fs.py` | Effort: S. Risk: None. Prevents 0-byte file truncation. | **Approved** |
+| **DEC-04** | Quota Concurrency | In-memory locks or no locks on quota JSON | OS-level advisory file locking via `portalocker` | Effort: S. Risk: Low. Guarantees cross-process safety for multi-process workers. | **Approved** |
+| **DEC-05** | Production Migrations | Blanket `try...except: pass` swallowing ALTER TABLE | Fail-fast schema inspection with pre-flight duplicate detection | Effort: S. Risk: Low. Blocks broken migrations before runtime crash loops. | **Approved** |
