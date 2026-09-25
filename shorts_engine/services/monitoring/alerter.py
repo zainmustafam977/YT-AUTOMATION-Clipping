@@ -13,7 +13,11 @@ from typing import Dict, Any, Optional
 
 from shorts_engine.config.settings import settings
 
+from concurrent.futures import ThreadPoolExecutor
+
 logger = logging.getLogger(__name__)
+
+_alerter_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="alerter")
 
 
 class PipelineAlerter:
@@ -24,6 +28,14 @@ class PipelineAlerter:
         self.telegram_chat = settings.TELEGRAM_CHAT_ID
         self.sentry_dsn = settings.SENTRY_DSN
 
+    def has_configured_channels(self) -> bool:
+        return bool(
+            self.slack_url
+            or self.discord_url
+            or (self.telegram_bot and self.telegram_chat)
+            or self.sentry_dsn
+        )
+
     def alert(
         self,
         title: str,
@@ -31,10 +43,12 @@ class PipelineAlerter:
         level: str = "ERROR",
         context: Optional[Dict[str, Any]] = None,
         exc: Optional[Exception] = None,
+        wait: bool = False,
     ) -> bool:
         """
         Sends an alert through all configured notification channels.
-        Always logs locally; dispatches to webhooks if configured.
+        Always logs locally immediately; dispatches to webhooks via background
+        threadpool so worker pipelines are never blocked by external network latency (PLAN-P2-07 / F-24).
 
         Args:
             title: Short alert title.
@@ -42,6 +56,7 @@ class PipelineAlerter:
             level: Severity — ERROR, WARNING, CRITICAL, INFO.
             context: Optional dict of extra key/value context included in alert body.
             exc: Optional exception to forward to Sentry's capture_exception().
+            wait: If True, waits for webhook delivery synchronously (default: False).
         """
         log_msg = f"[{level}] {title}: {message} | Context: {context or {}}"
         if level in ("ERROR", "CRITICAL"):
@@ -51,6 +66,61 @@ class PipelineAlerter:
         else:
             logger.info(log_msg)
 
+        if not self.has_configured_channels():
+            return False
+
+        # In-process Sentry capture runs synchronously without thread delay
+        sentry_sent = False
+        if self.sentry_dsn:
+            try:
+                import sentry_sdk  # type: ignore
+
+                if exc is not None:
+                    with sentry_sdk.push_scope() as scope:
+                        scope.set_tag("alert_level", level)
+                        scope.set_tag("alert_title", title)
+                        if context:
+                            for k, v in context.items():
+                                scope.set_extra(k, v)
+                        sentry_sdk.capture_exception(exc)
+                else:
+                    sentry_sdk.capture_message(
+                        f"{title}: {message}",
+                        level=level.lower(),
+                        extras=context or {},
+                    )
+                sentry_sent = True
+            except Exception as e:
+                logger.warning("Failed to send Sentry alert: %s", e)
+
+        has_webhooks = bool(
+            self.slack_url
+            or self.discord_url
+            or (self.telegram_bot and self.telegram_chat)
+        )
+        if not has_webhooks:
+            return sentry_sent
+
+        if wait:
+            webhook_sent = self._dispatch_webhooks(title, message, level, context, exc)
+            return sentry_sent or webhook_sent
+
+        try:
+            _alerter_pool.submit(self._dispatch_webhooks, title, message, level, context, exc)
+            return True
+        except Exception as e:
+            logger.warning("Could not submit alert to threadpool: %s", e)
+            webhook_sent = self._dispatch_webhooks(title, message, level, context, exc)
+            return sentry_sent or webhook_sent
+
+    def _dispatch_webhooks(
+        self,
+        title: str,
+        message: str,
+        level: str = "ERROR",
+        context: Optional[Dict[str, Any]] = None,
+        exc: Optional[Exception] = None,
+    ) -> bool:
         sent = False
         slack_text = f"*{level}: {title}*\n{message}\n```{json.dumps(context or {}, indent=2)}```"
 
