@@ -196,6 +196,17 @@ class YouTubePublisher:
         if not video_path or not video_path.exists() or video_path.stat().st_size == 0:
             raise FileNotFoundError(f"Rendered video file not found for clip {clip.id}")
 
+        # Check quota availability before attempting publish (Spec 15.2 / acceptance criteria)
+        can_pub, remaining_quota, quota_reason = self.quota_tracker.can_publish()
+        if not can_pub:
+            logger.warning("YouTube quota exhausted for clip %s: %s", clip.id, quota_reason)
+            return {
+                "success": False,
+                "quota_exhausted": True,
+                "remaining_quota": remaining_quota,
+                "reason": quota_reason,
+            }
+
         # 3. Write initial "upload started" record in PublishLog and mark PUBLISHING (PLAN-P0-05)
         publish_log = self.db.query(PublishLog).filter_by(clip_id=clip.id).first()
         if not publish_log:

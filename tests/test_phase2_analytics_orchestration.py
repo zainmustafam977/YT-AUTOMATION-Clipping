@@ -15,7 +15,17 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shorts_engine.db.session import Base
-from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus, ClipCandidate, Clip, ClipStatus, User, UserRole
+from shorts_engine.db.models import (
+    Channel,
+    SourceVideo,
+    SourceVideoStatus,
+    ClipCandidate,
+    Clip,
+    ClipStatus,
+    PublishLog,
+    User,
+    UserRole,
+)
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.routes import status as status_route
 from shorts_engine.dashboard.routes import queue as queue_route
@@ -140,6 +150,17 @@ def test_youtube_analytics_sync(test_setup):
 
     clip = Clip(clip_candidate_id=cand.id, status=ClipStatus.PUBLISHED)
     db.add(clip)
+    db.commit()
+
+    pl = PublishLog(
+        clip_id=clip.id,
+        youtube_video_id="short_yt_analy_123",
+        published_at=datetime.utcnow(),
+        title="Test Clip Title",
+        description="Test Clip Description",
+        status="SUCCESS",
+    )
+    db.add(pl)
     db.commit()
 
     # Run analytics sync service
