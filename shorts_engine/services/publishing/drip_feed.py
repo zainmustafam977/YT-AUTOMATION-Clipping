@@ -63,13 +63,12 @@ def check_and_publish_due_clips(db: Session) -> List[str]:
         elapsed_sec = (now - updated).total_seconds()
         # Treat any upload initiated or updated within the last 15 minutes as ambiguous
         if elapsed_sec <= 900:
-            logger.warning(
+            logger.info(
                 "Clip %s has been in PUBLISHING status for %.1fs (<= 15 min). "
-                "Marking FAILED_NEEDS_REVIEW per ambiguity rule.",
+                "Leaving in PUBLISHING per ambiguity window.",
                 stale_clip.id, elapsed_sec,
             )
-            stale_clip.status = ClipStatus.FAILED_NEEDS_REVIEW
-            db.commit()
+            continue
         else:
             logger.warning(
                 "Clip %s has been in PUBLISHING status for %.1fs (> 15 min). "

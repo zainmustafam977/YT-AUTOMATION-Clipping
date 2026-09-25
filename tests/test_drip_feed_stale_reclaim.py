@@ -80,7 +80,7 @@ def test_build_clip_metadata_embeds_clip_token(db_session):
 
 def test_publishing_claim_and_idempotency_guard(db_session, tmp_path):
     """
-    1. Ambiguity rule: Clips in PUBLISHING within 15 min are moved to FAILED_NEEDS_REVIEW.
+    1. Ambiguity rule: Clips in PUBLISHING within 15 min remain in PUBLISHING; clips past 15 min are moved to FAILED_NEEDS_REVIEW.
     2. Uploads playlist check: If [clip:<clip_id>] is found in recent uploads, reuse ID and mark PUBLISHED.
     3. Unlisted upload decrements quota by 1,600 units.
     """
@@ -93,7 +93,8 @@ def test_publishing_claim_and_idempotency_guard(db_session, tmp_path):
     dummy_video = tmp_path / "test_render.mp4"
     dummy_video.write_bytes(b"dummy mp4 video bytes")
 
-    # 3. Create a stale clip stuck in PUBLISHING for 5 minutes (< 15 mins)
+    # 3. Create a clip in PUBLISHING within ambiguity window (5 mins < 15 mins)
+    # and a clip past 15 minutes (20 mins > 15 mins)
     stale_clip = Clip(
         id="clip_stale_ambiguous",
         clip_candidate_id="cand_pub",
@@ -102,13 +103,37 @@ def test_publishing_claim_and_idempotency_guard(db_session, tmp_path):
         scheduled_publish_at=datetime.utcnow() - timedelta(minutes=10),
         updated_at=datetime.utcnow() - timedelta(minutes=5),
     )
+    cand_past = ClipCandidate(
+        id="cand_pub_past",
+        source_video_id="sv_pub",
+        start_ms=1000,
+        end_ms=15000,
+        score=0.85,
+        reason="Past window clip",
+        hook_text="Past window hook",
+        selected=True,
+    )
+    db_session.add(cand_past)
+
+    stale_clip_past = Clip(
+        id="clip_stale_past_window",
+        clip_candidate_id="cand_pub_past",
+        rendered_path=str(dummy_video),
+        status=ClipStatus.PUBLISHING,
+        scheduled_publish_at=datetime.utcnow() - timedelta(minutes=30),
+        updated_at=datetime.utcnow() - timedelta(minutes=20),
+    )
     db_session.add(stale_clip)
+    db_session.add(stale_clip_past)
     db_session.commit()
 
-    # Run check_and_publish_due_clips: stale publishing clip should be flagged as FAILED_NEEDS_REVIEW
+    # Run check_and_publish_due_clips:
+    # clip within window must remain PUBLISHING, clip past 15 mins must become FAILED_NEEDS_REVIEW
     check_and_publish_due_clips(db_session)
     db_session.refresh(stale_clip)
-    assert stale_clip.status == ClipStatus.FAILED_NEEDS_REVIEW
+    db_session.refresh(stale_clip_past)
+    assert stale_clip.status == ClipStatus.PUBLISHING
+    assert stale_clip_past.status == ClipStatus.FAILED_NEEDS_REVIEW
 
     # 4. Create an approved due clip
     candidate2 = ClipCandidate(
