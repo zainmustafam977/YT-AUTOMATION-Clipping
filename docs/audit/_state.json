@@ -1,0 +1,45 @@
+{
+  "git_head": "e57556e832d0fa45d5bee33613d2532e54329626",
+  "current_phase": "Phase 2: Line-by-line review with assessment cards",
+  "next_action": "Begin leaf-first line-by-line reading of Layer 0 modules via read_chunk.py",
+  "module_queue": [
+    "shorts_engine/config",
+    "shorts_engine/db",
+    "shorts_engine/services/storage",
+    "shorts_engine/services/execution",
+    "shorts_engine/services/audio",
+    "shorts_engine/services/telemetry",
+    "shorts_engine/services/detection",
+    "shorts_engine/services/ingestion",
+    "shorts_engine/services/transcription",
+    "shorts_engine/services/llm",
+    "shorts_engine/services/clip_selection",
+    "shorts_engine/services/reframing",
+    "shorts_engine/services/captioning",
+    "shorts_engine/services/rendering",
+    "shorts_engine/services/quality_gate",
+    "shorts_engine/services/publishing",
+    "shorts_engine/services/ab_testing",
+    "shorts_engine/services/worker",
+    "shorts_engine/orchestration",
+    "shorts_engine/dashboard",
+    "cli.py",
+    "setup_environment.py",
+    "tests"
+  ],
+  "stats": {
+    "total_files": 249,
+    "audited_files": 0,
+    "total_lines": 51089,
+    "audited_lines": 20,
+    "chunks_read": 1,
+    "cards_written": 0,
+    "grade_distribution": {
+      "A": 0,
+      "B": 0,
+      "C": 0,
+      "D": 0
+    }
+  },
+  "last_checkpoint": "2026-09-24T12:44:50Z"
+}

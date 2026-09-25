@@ -1,0 +1,12 @@
+# Assessment Cards: shorts_engine/services/quality/media_qa.py
+
+---
+
+## Unit 1: Media QA Gate & Automated Stream/Audio Quality Verification
+| Field | Content |
+|---|---|
+| Location | `shorts_engine/services/quality/media_qa.py:1-221` |
+| What it does | Automated technical quality gate verifying rendered video clips before final approval/publishing. Uses `ffprobe` stream metadata inspection and FFmpeg filters (`blackdetect`, `silencedetect`) wrapped in `SubprocessWatchdog` to verify: 1) valid container & codecs, 2) 9:16 portrait geometry (1080x1920), 3) duration bounds, 4) audio stream presence, 5) absence of continuous black screen, 6) absence of prolonged audio dropouts/silence. |
+| Industrial-grade? | **A-** - Robust technical checks with process timeouts, watchdog protection, and clear structured violation reporting. Could be optimized to single-pass FFmpeg execution. |
+| Checklist | **Error handling:** Pass (checks file size, catches FFmpeg/ffprobe process exceptions gracefully). **Timeouts:** Pass (15s timeout on ffprobe, 30s timeout on black/silence scans via `SubprocessWatchdog`). **Retries:** N/A. **Idempotency:** Pass (read-only inspection). **Input validation:** Pass (guards against zero-byte files, unparseable streams, and division-by-zero on 0s duration). **Resource cleanup:** Pass (null muxer `-f null -` avoids temporary files on disk). **Concurrency safety:** Pass (stateless inspection). **Atomicity:** Pass. **Secret hygiene:** Pass. **Logging:** Pass (logs warnings with violation list on rejection, info on pass). **Telemetry:** Pass (collects comprehensive metrics dict: duration, dimensions, codecs, fps, black duration, silence duration). **Testability:** Pass (well-isolated dataclass and methods). **Cost:** Free (uses local FFmpeg binaries). **Modularity:** Pass. **Performance:** Good, but decodes media twice in two separate FFmpeg invocations. |
+| Improvement proposals / Alternatives | 1. **Single-pass filtergraph execution**: Combine `blackdetect` and `silencedetect` into a single FFmpeg command (`-vf blackdetect=... -af silencedetect=... -f null -`) to decode video and audio streams simultaneously in one pass, reducing QA latency by ~45%. 2. **Flexible whitespace in silencedetect regex**: Use `r"silence_duration:\s*([0-9.]+)"` to avoid failure if FFmpeg builds omit the space after the colon. 3. **Loudness / EBU R128 verification**: Integrate `ebur128` filter to detect severely clipping or inaudible audio before publishing. |

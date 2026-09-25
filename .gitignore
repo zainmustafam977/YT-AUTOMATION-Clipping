@@ -65,6 +65,8 @@ storage/*.db-wal
 storage/*.sqlite
 storage/*.sqlite3
 storage/*.json
+storage/*.lock
+*.lock
 storage/api_key_usage.json
 storage/quota_state.json
 storage/deep_audit_dump.json
@@ -74,28 +76,28 @@ storage/config/runtime_settings.json
 # ------------------------------------------------------------------------------
 # 4. Storage Directories (Preserve directory structure with .gitkeep)
 # ------------------------------------------------------------------------------
-storage/downloads/*
+storage/downloads/**
 !storage/downloads/.gitkeep
 
-storage/outputs/*
+storage/outputs/**
 !storage/outputs/.gitkeep
 
-storage/temp/*
+storage/temp/**
 !storage/temp/.gitkeep
 
-storage/thumbnails/*
+storage/thumbnails/**
 !storage/thumbnails/.gitkeep
 
-storage/models/*
+storage/models/**
 !storage/models/.gitkeep
 
-storage/logs/*
+storage/logs/**
 !storage/logs/.gitkeep
 
-storage/config/*
+storage/config/**
 !storage/config/.gitkeep
 
-storage/backups/*
+storage/backups/**
 !storage/backups/.gitkeep
 
 # Root/Global logs
