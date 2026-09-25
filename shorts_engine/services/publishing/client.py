@@ -5,10 +5,12 @@ quota enforcement, dry-run simulation mode, and duplicate publish prevention.
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
+from googleapiclient.errors import HttpError
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog
@@ -77,8 +79,48 @@ def _upload_video(client, video_path: Path, metadata: "ShortsMetadata",
     )
 
     response = None
+    max_retries = 3
+    retry_count = 0
+    backoff_sec = 1.0
+
     while response is None:
-        _, response = request.next_chunk()
+        try:
+            _, response = request.next_chunk()
+            retry_count = 0
+        except HttpError as e:
+            # Fast-fail immediately on non-retryable errors (401, 403, quotaExceeded)
+            status_code = getattr(e.resp, "status", None) if hasattr(e, "resp") else None
+            err_content = str(e)
+            if status_code in (401, 403) or "quotaExceeded" in err_content:
+                logger.error("Fast-failing YouTube upload chunk on non-retryable error (status=%s): %s", status_code, e)
+                raise
+
+            # Retry transient 5xx server errors
+            if status_code and 500 <= int(status_code) < 600:
+                retry_count += 1
+                if retry_count > max_retries:
+                    logger.error("Exceeded max chunk upload retries (%d) on 5xx error: %s", max_retries, e)
+                    raise
+                logger.warning(
+                    "Transient 5xx error (%s) during chunk upload. Retrying in %.1fs (attempt %d/%d)...",
+                    status_code, backoff_sec, retry_count, max_retries,
+                )
+                time.sleep(backoff_sec)
+                backoff_sec *= 2.0
+            else:
+                raise
+        except (IOError, OSError) as e:
+            # Transient socket / connection error
+            retry_count += 1
+            if retry_count > max_retries:
+                logger.error("Exceeded max chunk upload retries (%d) on socket/IO error: %s", max_retries, e)
+                raise
+            logger.warning(
+                "Socket/IO error during chunk upload: %s. Retrying in %.1fs (attempt %d/%d)...",
+                e, backoff_sec, retry_count, max_retries,
+            )
+            time.sleep(backoff_sec)
+            backoff_sec *= 2.0
 
     youtube_video_id: str = response.get("id", "")
     if not youtube_video_id:
