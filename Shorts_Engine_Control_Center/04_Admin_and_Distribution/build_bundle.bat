@@ -26,8 +26,8 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
     set "PYTHON_EXE=python"
 )
 
-echo Packaging repository into shorts_automation_m3_bundle.zip...
-"%PYTHON_EXE%" -c "import zipfile; from pathlib import Path; root = Path('.'); out_zip = Path('shorts_automation_m3_bundle.zip'); excludes = {'.git', '.pytest_cache', '__pycache__', 'venv', '.venv', 'downloads', 'shorts_automation_m3_bundle.zip', 'shorts_automation_m2_bundle.zip'}; zf = zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED); [zf.write(p, p.relative_to(root)) for p in root.rglob('*') if not any(part in excludes for part in p.parts) and p.is_file()]; zf.close(); print(f'Archive created: {out_zip.stat().st_size:,} bytes')"
+echo Packaging repository into shorts_automation_m3_bundle.zip (with allow-before-deny security exclusions)...
+"%PYTHON_EXE%" tools\build_dist_bundle.py
 
 echo.
 echo Computing SHA-256 Hash...
