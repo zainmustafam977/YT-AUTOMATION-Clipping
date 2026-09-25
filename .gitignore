@@ -135,7 +135,10 @@ storage/backups/*
 *.docx
 *.pptx
 *.xlsx
-"find channel id.txt"
+find channel id.txt
+folder_structure.txt
+import_analysis.json
+scratch/
 
 # ------------------------------------------------------------------------------
 # 7. IDE, Editor & OS Metadata
