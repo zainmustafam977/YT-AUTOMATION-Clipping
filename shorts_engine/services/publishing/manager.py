@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from shorts_engine.db.session import SessionLocal
 
 from shorts_engine.config.settings import settings
@@ -164,10 +164,12 @@ class MultiPlatformSyndicator:
             valid_platforms = ["youtube"]
 
         results: Dict[str, PlatformPublishResult] = {}
+        bind = self.db.get_bind() if hasattr(self.db, "get_bind") else None
+        session_factory = sessionmaker(bind=bind) if bind is not None else SessionLocal
 
         def _publish_worker(plat_name: str) -> Tuple[str, PlatformPublishResult]:
             # PLAN-P1-07: Scoped per-thread DB session to prevent cross-thread session corruption
-            thread_db = SessionLocal()
+            thread_db = session_factory()
             try:
                 thread_clip = thread_db.query(Clip).filter_by(id=clip_id).first()
                 pub = self.publishers[plat_name]
