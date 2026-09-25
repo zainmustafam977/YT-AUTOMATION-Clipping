@@ -19,7 +19,7 @@ from shorts_engine.config.logging_config import reload_runtime_settings, save_ru
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.models import User
 from shorts_engine.db.security import mask_secret
-from shorts_engine.services.llm.quota_tracker import hash_api_key, usage_tracker
+from shorts_engine.services.llm.quota_tracker import hash_api_key, usage_tracker, mask_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def view_settings(
             items.append({
                 "index": idx,
                 "hash": h,
-                "masked": mask_secret(k),
+                "masked": mask_api_key(k),
                 "metric": metric,
                 "calls": metric.get("total_requests", 0) if metric else 0,
                 "status": metric.get("status", "READY") if metric else "READY",

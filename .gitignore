@@ -1,34 +1,172 @@
-# Secrets and Configs
+# ==============================================================================
+# YouTube Shorts Automation Engine - .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment & Secret Configuration
+# ------------------------------------------------------------------------------
 .env
-storage/api_key_usage.json
-storage/config/runtime_settings.json
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+client_secret*.json
+credentials.json
+token.json
+oauth_credentials.json
 
-# Local Databases & States
-storage/*.db
-storage/*.db-shm
-storage/*.db-wal
-storage/*.json
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments & Python Runtime
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+bin/
+include/
+lib/
+Lib/
+Scripts/
+pyvenv.cfg
 
-# Heavy AI Models
-storage/models/
-
-# Media, Outputs, and Temporary Data
-storage/downloads/
-storage/outputs/
-storage/temp/
-storage/thumbnails/
-
-# Logs
-storage/logs/
-*.log
-
-# Python & Testing Caches
+# Python bytecode & cache
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+*.so
+.Python
 
-# Bundles & Internal Documentation
+# Packaging & Distribution
+build/
+develop-eggs/
+dist/
+/downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ------------------------------------------------------------------------------
+# 3. Local Databases, State & Dynamic Runtime Configurations
+# ------------------------------------------------------------------------------
+storage/*.db
+storage/*.db-shm
+storage/*.db-wal
+storage/*.sqlite
+storage/*.sqlite3
+storage/*.json
+storage/api_key_usage.json
+storage/quota_state.json
+storage/deep_audit_dump.json
+storage/detailed_failure_audit.json
+storage/config/runtime_settings.json
+
+# ------------------------------------------------------------------------------
+# 4. Storage Directories (Preserve directory structure with .gitkeep)
+# ------------------------------------------------------------------------------
+storage/downloads/*
+!storage/downloads/.gitkeep
+
+storage/outputs/*
+!storage/outputs/.gitkeep
+
+storage/temp/*
+!storage/temp/.gitkeep
+
+storage/thumbnails/*
+!storage/thumbnails/.gitkeep
+
+storage/models/*
+!storage/models/.gitkeep
+
+storage/logs/*
+!storage/logs/.gitkeep
+
+storage/config/*
+!storage/config/.gitkeep
+
+storage/backups/*
+!storage/backups/.gitkeep
+
+# Root/Global logs
+*.log
+/logs/
+
+# ------------------------------------------------------------------------------
+# 5. Heavy Media, Video & Audio Files (Never commit raw video clips)
+# ------------------------------------------------------------------------------
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flv
+*.m4v
+*.wav
+*.mp3
+*.aac
+*.m4a
+*.ogg
+*.flac
+
+# Preserve bundled assets and sound effects library
+!assets/sfx_library/*
+!assets/sfx_library/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 6. Archive Bundles & Internal Office Documents
+# ------------------------------------------------------------------------------
 *.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
 *.docx
+*.pptx
+*.xlsx
 "find channel id.txt"
+
+# ------------------------------------------------------------------------------
+# 7. IDE, Editor & OS Metadata
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------------------------
+# 8. Testing, Linting & Coverage Artifacts
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.hypothesis/
+test_run_output.txt
+scratch_queue.html

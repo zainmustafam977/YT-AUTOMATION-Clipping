@@ -440,6 +440,37 @@ class PipelineRunner:
                     raise
 
             # Step D: Process Each Selected Candidate
+            source_video_path = Path(video.downloaded_path) if video.downloaded_path else None
+            if not dry_run:
+                from shorts_engine.services.storage.path_manager import PathManager
+                if not source_video_path or not source_video_path.exists():
+                    resolved = PathManager.resolve_download_path(video_id)
+                    if resolved and resolved.exists():
+                        source_video_path = resolved
+                        video.downloaded_path = str(resolved)
+                        self.db.commit()
+                        logger.info("Re-resolved master video path for %s to %s", video_id, resolved)
+                    else:
+                        logger.error("Master source video missing on disk for %s (%s). Halting rendering pipeline.", video_id, video.downloaded_path)
+                        video.status = SourceVideoStatus.FAILED
+                        video.error_message = f"Master source video not found on disk: {video.downloaded_path}"
+                        self.db.commit()
+                        self.alerter.alert("Master Source Video Missing", f"File missing at {video.downloaded_path}", level="ERROR", context={"video_id": video_id})
+                        job_progress_tracker.update_progress(
+                            video_id=video_id,
+                            stage="FAILED",
+                            percent=100.0,
+                            detail="Rendering aborted: master source video not found on disk.",
+                        )
+                        return {
+                            "source_video_id": video.id,
+                            "youtube_video_id": video_id,
+                            "status": "FAILED",
+                            "error": f"Master source video not found on disk: {video.downloaded_path}",
+                            "clips_count": 0,
+                            "clips": [],
+                        }
+
             processed_clips = []
             total_cands = len(candidates) or 1
             for cand_idx, cand in enumerate(candidates, 1):
@@ -489,7 +520,7 @@ class PipelineRunner:
 
                         # Reframing crop plan
                         crop_plan = self.reframer.compute_crop_plan(
-                            Path(video.downloaded_path),
+                            source_video_path,
                             start_ms=cand.start_ms,
                             end_ms=cand.end_ms,
                         )
@@ -550,8 +581,24 @@ class PipelineRunner:
                             if isinstance(first_var, dict) and first_var.get("hook_overlay"):
                                 initial_hook_overlay = first_var.get("hook_overlay")
 
+                        # Automated B-Roll stock footage cutaway fetching
+                        broll_file = None
+                        if getattr(settings, "ENABLE_BROLL_OVERLAYS", False) and getattr(settings, "PEXELS_API_KEY", None):
+                            try:
+                                from shorts_engine.services.broll.client import BrollClient
+                                broll_client = BrollClient()
+                                broll_query = cand.hook_text or video.title
+                                if cand.variations and isinstance(cand.variations, list):
+                                    for v_item in cand.variations:
+                                        if isinstance(v_item, dict) and v_item.get("broll_keywords"):
+                                            broll_query = v_item["broll_keywords"][0]
+                                            break
+                                broll_file = broll_client.fetch_broll_clip(query=broll_query)
+                            except Exception as broll_err:
+                                logger.warning("Could not fetch B-roll for clip %s: %s", clip.id, broll_err)
+
                         rendered_file = self.compositor.render_short(
-                            source_video_path=Path(video.downloaded_path),
+                            source_video_path=source_video_path,
                             start_ms=cand.start_ms,
                             end_ms=cand.end_ms,
                             crop_plan=crop_plan,
@@ -564,6 +611,7 @@ class PipelineRunner:
                             audio_bitrate=eff_audio_br,
                             target_fps=eff_fps,
                             hook_overlay_text=initial_hook_overlay,
+                            broll_video_path=broll_file,
                         )
                         clip.rendered_path = str(rendered_file)
 
@@ -605,6 +653,27 @@ class PipelineRunner:
 
                 # D2: Quality Gate
                 if clip.status == ClipStatus.QUALITY_CHECK:
+                    # Media QA Gate
+                    qa_res = None
+                    if clip.rendered_path and Path(clip.rendered_path).is_file():
+                        try:
+                            from shorts_engine.services.quality.media_qa import MediaQAGate
+                            qa_gate = MediaQAGate(min_duration_sec=eff_min_dur, max_duration_sec=eff_max_dur)
+                            qa_res = qa_gate.inspect_file(Path(clip.rendered_path))
+                            if not qa_res.passed:
+                                logger.warning("MediaQAGate flagged clip %s in pipeline: %s", clip.id, qa_res.summary)
+                                clip.status = ClipStatus.FAILED
+                                clip.quality_check_result = json.dumps({
+                                    "passed": False,
+                                    "media_qa": {"passed": False, "violations": qa_res.violations, "metrics": qa_res.metrics},
+                                    "error": qa_res.summary,
+                                })
+                                self.db.commit()
+                                continue
+                        except Exception as qa_ex:
+                            logger.warning("MediaQAGate skipped on exception: %s", qa_ex)
+                            qa_res = None
+
                     # Extract segment text for evaluation
                     seg_text = " ".join([
                         w.word for w in formatted_transcript.words
@@ -620,6 +689,8 @@ class PipelineRunner:
                         min_duration_sec=eff_min_dur,
                         max_duration_sec=eff_max_dur,
                     )
+                    if qa_res and qa_res.passed:
+                        q_report["media_qa"] = {"passed": True, "metrics": qa_res.metrics}
                     clip.status = new_status
                     clip.quality_check_result = json.dumps(q_report)
                     self.db.commit()

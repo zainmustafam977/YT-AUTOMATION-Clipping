@@ -16,9 +16,10 @@ import os
 import re
 import json
 import time
+import random
 import logging
 import threading
-from typing import Type, TypeVar, Optional, Tuple, Dict, Any, List
+from typing import Type, TypeVar, Optional, Tuple, Dict, Any, List, Set
 from pydantic import BaseModel
 import httpx
 
@@ -41,6 +42,7 @@ class LLMRouter:
     _rr_lock = threading.Lock()
     _gemini_last_call_time: Dict[str, float] = {}
     _gemini_pacing_lock = threading.Lock()
+    _decommissioned_models: Set[str] = set()
 
     def __init__(
         self,
@@ -374,14 +376,22 @@ class LLMRouter:
         # Pre-check: bypass Groq if prompt exceeds Groq TPM safe limit and other tiers are available
         est_tokens = int(len(prompt.split()) * 1.33)
         groq_limit = getattr(settings, "GROQ_TOKEN_THRESHOLD", 5500)
-        if est_tokens >= groq_limit and (self.is_gemini_available or self.is_openrouter_available or self.is_openai_available):
-            logger.info("Prompt size (~%d tokens) exceeds Groq safe limit (%d TPM). Fast-routing to large-context tier.", est_tokens, groq_limit)
-            return None, {
-                "error": f"Payload (~{est_tokens} tokens) exceeds Groq TPM threshold ({groq_limit})",
-                "provider": "groq",
-                "failover": failover_triggered,
-                "is_oversized": True,
-            }
+        if est_tokens >= groq_limit:
+            if self.is_gemini_available or self.is_openrouter_available or self.is_openai_available:
+                logger.info("Prompt size (~%d tokens) exceeds Groq safe limit (%d TPM). Fast-routing to large-context tier.", est_tokens, groq_limit)
+                return None, {
+                    "error": f"Payload (~{est_tokens} tokens) exceeds Groq TPM threshold ({groq_limit})",
+                    "provider": "groq",
+                    "failover": failover_triggered,
+                    "is_oversized": True,
+                }
+            else:
+                # Other tiers unavailable: auto-budget window prompt to protect against Groq 413 TPM overflow
+                logger.info("Prompt size (~%d tokens) exceeds Groq TPM ceiling (%d). Auto-windowing prompt for Groq compatibility.", est_tokens, groq_limit)
+                words = prompt.split()
+                safe_word_count = int(groq_limit / 1.4)
+                prompt = " ".join(words[:safe_word_count]) + "\n\n[Transcript truncated for token budget compliance]"
+                est_tokens = int(len(prompt.split()) * 1.33)
 
         models_to_try = [self.groq_model]
         for alt in [
@@ -393,6 +403,7 @@ class LLMRouter:
         ]:
             if alt not in models_to_try:
                 models_to_try.append(alt)
+        models_to_try = [m for m in models_to_try if m not in self._decommissioned_models]
 
         schema_json = json.dumps(schema.model_json_schema()) if hasattr(schema, "model_json_schema") else "{}"
         system_msg = (
@@ -429,6 +440,10 @@ class LLMRouter:
                     "response_format": {"type": "json_object"},
                     "temperature": temperature,
                 }
+                # Protect models with strict OTPM ceiling (e.g. qwen3.8-27b OTPM limit 1000)
+                if "qwen" in target_model.lower():
+                    payload["max_tokens"] = 800
+
                 t0 = time.perf_counter()
                 self.tracker.set_active_call(
                     provider="groq",
@@ -445,8 +460,9 @@ class LLMRouter:
                         resp_headers = dict(res.headers)
 
                         if res.status_code == 404:
+                            self._decommissioned_models.add(target_model)
                             self.tracker.record_request("groq", active_key, status="ERROR", latency_ms=latency_ms, model=target_model, error=f"404: {res.text}", headers=resp_headers)
-                            logger.warning("Groq model %s returned 404 (model deprecated). Fast-skipping to backup model...", target_model)
+                            logger.warning("Groq model %s returned 404 (model deprecated). Added to blacklist, fast-skipping...", target_model)
                             last_error = f"HTTP 404: Model {target_model} decommissioned"
                             continue
 
@@ -469,9 +485,13 @@ class LLMRouter:
 
                         if res.status_code == 413:
                             self.tracker.record_request("groq", active_key, status="ERROR", latency_ms=latency_ms, model=target_model, error=f"413: {res.text[:120]}", headers=resp_headers)
-                            logger.warning("Groq API returned HTTP 413 (Payload Too Large): %s. Fast-skipping Groq models for this payload.", res.text[:120])
-                            last_error = f"HTTP 413: {res.text[:120]}"
-                            break
+                            logger.warning("Groq API returned HTTP 413 (Payload Too Large): %s. Fast-skipping Groq tier for this prompt.", res.text[:120])
+                            return None, {
+                                "error": f"HTTP 413: {res.text[:120]}",
+                                "provider": "groq",
+                                "failover": failover_triggered,
+                                "is_oversized": True,
+                            }
 
                         if res.status_code != 200:
                             self.tracker.record_request("groq", active_key, status="ERROR", latency_ms=latency_ms, model=target_model, error=res.text, headers=resp_headers)
@@ -734,9 +754,10 @@ class LLMRouter:
                         break  # Try next key!
                     else:
                         err_str = str(e).lower()
-                        if "503" in err_str or "unavailable" in err_str:
-                            logger.info("Gemini returned 503 UNAVAILABLE (demand spike). Waiting 3.0s for spike relief...")
-                            time.sleep(3.0)
+                        if "503" in err_str or "unavailable" in err_str or "504" in err_str or "deadline" in err_str:
+                            wait_time = min(10.0, 2.5 + random.uniform(0.5, 2.0))
+                            logger.info("Gemini transient issue (%s). Waiting %.1fs with jitter before retry...", "504 deadline" if "504" in err_str or "deadline" in err_str else "503 demand spike", wait_time)
+                            time.sleep(wait_time)
                             try:
                                 raw_text = None
                                 used_api = "generate_content"
@@ -820,13 +841,15 @@ class LLMRouter:
 
         models_to_try = [self.openrouter_model]
         for alt in [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-            "mistralai/mistral-7b-instruct:free",
-            "qwen/qwen-2.5-72b-instruct:free",
+            "google/gemini-2.5-flash-thinking-preview:free",
+            "deepseek/deepseek-r1:free",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "liquid/lfm-7b:free",
+            "mistralai/mistral-small-3.2:free",
         ]:
             if alt not in models_to_try:
                 models_to_try.append(alt)
+        models_to_try = [m for m in models_to_try if m not in self._decommissioned_models]
 
         schema_json = json.dumps(schema.model_json_schema())
         system_msg = (
@@ -873,8 +896,9 @@ class LLMRouter:
                         latency_ms = int((time.perf_counter() - t0) * 1000)
 
                         if res.status_code == 404:
+                            self._decommissioned_models.add(target_model)
                             self.tracker.record_request("openrouter", active_key, status="ERROR", latency_ms=latency_ms, model=target_model, error=f"404: {res.text}")
-                            logger.warning("OpenRouter model %s returned 404 (free slug decommissioned). Fast-skipping to backup slug...", target_model)
+                            logger.warning("OpenRouter model %s returned 404 (free slug decommissioned). Added to blacklist, fast-skipping...", target_model)
                             last_error = f"HTTP 404: Model {target_model} decommissioned"
                             continue
 

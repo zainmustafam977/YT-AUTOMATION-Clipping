@@ -19,19 +19,25 @@ from shorts_engine.dashboard.routes import (
     auth,
     settings as settings_route,
     logs as logs_route,
+    health as health_route,
+    metrics as metrics_route,
 )
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
 from shorts_engine.services.publishing.drip_feed import DripFeedDaemon
+from shorts_engine.services.ab_testing.winner_daemon import ABWinnerPromotionDaemon
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    daemon = DripFeedDaemon()
-    await daemon.start()
+    drip_daemon = DripFeedDaemon()
+    ab_daemon = ABWinnerPromotionDaemon()
+    await drip_daemon.start()
+    await ab_daemon.start()
     try:
         yield
     finally:
-        await daemon.stop()
+        await ab_daemon.stop()
+        await drip_daemon.stop()
 
 
 def create_dashboard_app() -> FastAPI:
@@ -41,9 +47,10 @@ def create_dashboard_app() -> FastAPI:
 
     # Reconcile stale claim locks and purge old temp files from prior crashed runs
     try:
-        from shorts_engine.db.session import SessionLocal
+        from shorts_engine.db.session import SessionLocal, init_db
         from shorts_engine.services.worker.runner import reconcile_stale_claims
         from shorts_engine.services.ingestion.downloader import IngestionService
+        init_db()
         with SessionLocal() as db:
             reconcile_stale_claims(db)
         IngestionService.purge_stale_temp_files(max_age_hours=24.0)
@@ -74,7 +81,7 @@ def create_dashboard_app() -> FastAPI:
                 next_url = request.url.path
                 if request.url.query:
                     next_url += f"?{request.url.query}"
-                if request.url.path not in ("/login", "/logout"):
+                if request.url.path not in ("/login", "/logout", "/livez", "/readyz", "/healthz", "/metrics"):
                     return RedirectResponse(
                         url=f"/login?next={urllib.parse.quote_plus(next_url)}",
                         status_code=status.HTTP_303_SEE_OTHER,
@@ -105,6 +112,8 @@ def create_dashboard_app() -> FastAPI:
     app.include_router(settings_route.router, tags=["Settings"])
     app.include_router(logs_route.router, tags=["Logs"])
     app.include_router(websub.router, tags=["WebSub"])  # No Basic Auth — HMAC secured
+    app.include_router(health_route.router)
+    app.include_router(metrics_route.router)
 
     return app
 

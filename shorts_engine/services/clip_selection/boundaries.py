@@ -92,8 +92,8 @@ class BoundarySnapper:
 
         actual_start_sec = words[best_start_idx].start
 
-        # 3. Target end with soft duration elasticity (+4.0s up to 180s platform ceiling)
-        elastic_max_sec = min(180.0, self.max_duration_sec + 4.0)
+        # 3. Target end with soft duration elasticity (+1.5s strictly aligned with Technical Quality Gate)
+        elastic_max_sec = min(180.0, self.max_duration_sec + 1.5)
         target_end_sec = min(raw_end_sec, actual_start_sec + self.max_duration_sec)
 
         # 4. Multi-tier sentence-completion search

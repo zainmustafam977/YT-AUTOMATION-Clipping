@@ -402,6 +402,29 @@ class WorkerRunner:
             seg_words = [w.word for w in words if (w.start >= cand.start_ms / 1000.0 - 0.5 and w.end <= cand.end_ms / 1000.0 + 0.5)] if words else []
             seg_text = " ".join(seg_words) if seg_words else (cand.hook_text or "")
             human_req = channel.human_review_required if channel else True
+
+            # Stage 1: Computer Vision & Acoustic Media QA Gate
+            qa_res = None
+            if clip.rendered_path and Path(clip.rendered_path).is_file():
+                try:
+                    from shorts_engine.services.quality.media_qa import MediaQAGate
+                    qa_gate = MediaQAGate()
+                    qa_res = qa_gate.inspect_file(Path(clip.rendered_path))
+                    if not qa_res.passed:
+                        logger.warning("MediaQAGate flagged clip %s: %s", clip.id, qa_res.summary)
+                        clip.status = ClipStatus.FAILED
+                        clip.quality_check_result = json.dumps({
+                            "passed": False,
+                            "media_qa": {"passed": False, "violations": qa_res.violations, "metrics": qa_res.metrics},
+                            "error": qa_res.summary,
+                        })
+                        db.commit()
+                        return False
+                except Exception as qa_err:
+                    logger.warning("MediaQAGate inspection exception (continuing to semantic gate): %s", qa_err)
+                    qa_res = None
+
+            # Stage 2: Multimodal & Semantic Quality Gate
             next_status, q_report = self.quality_gate.evaluate_clip(
                 rendered_video_path=Path(clip.rendered_path),
                 segment_text=seg_text,
@@ -409,6 +432,9 @@ class WorkerRunner:
                 payoff_text=cand.payoff_text or "",
                 human_review_required=human_req,
             )
+            if qa_res and qa_res.passed:
+                q_report["media_qa"] = {"passed": True, "metrics": qa_res.metrics}
+
             clip.status = next_status
             clip.quality_check_result = json.dumps(q_report)
             db.commit()

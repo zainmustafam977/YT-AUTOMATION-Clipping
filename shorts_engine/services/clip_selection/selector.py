@@ -296,13 +296,18 @@ class ClipSelectionService:
 
         selected_clips: List[SelectedClip] = []
         for cand in candidates_raw:
+            # Pre-clamp raw candidate duration if it exceeds allowed maximum
+            raw_dur = cand.end_sec - cand.start_sec
+            if raw_dur > (eff_max_dur + 1.5):
+                cand.end_sec = cand.start_sec + eff_max_dur
+
             start_ms, end_ms, seg_text = snapper.snap_boundaries(
                 cand.start_sec, cand.end_sec, transcript
             )
             duration_sec = (end_ms - start_ms) / 1000.0
-            elastic_max = min(180.0, eff_max_dur + 4.0)
+            eff_max_allowed = min(180.0, eff_max_dur + 1.5)
 
-            if eff_min_dur <= duration_sec <= elastic_max:
+            if eff_min_dur <= duration_sec <= eff_max_allowed:
                 # Ensure hook_text and payoff_text anchor to genuine spoken dialogue in seg_text
                 sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', seg_text) if s.strip()]
                 effective_hook = cand.hook_text or (sentences[0] if sentences else "")
