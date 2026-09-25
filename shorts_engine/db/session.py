@@ -3,9 +3,12 @@ Database engine, session management, and base declarative class.
 Supports SQLite (with WAL mode & busy timeout) and PostgreSQL.
 """
 
+import logging
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 from shorts_engine.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 # Engine configuration
 connect_args = {}
@@ -65,24 +68,51 @@ def get_db():
 
 
 def ensure_schema_upgrades(target_engine=None):
-    """Safely applies non-breaking schema column migrations if missing."""
+    """Safely applies non-breaking schema column migrations and required unique indexes."""
     from sqlalchemy import inspect, text
     eng = target_engine or engine
     try:
         inspector = inspect(eng)
-        if "source_videos" in inspector.get_table_names():
+        table_names = inspector.get_table_names()
+
+        if "source_videos" in table_names:
             cols = [c["name"] for c in inspector.get_columns("source_videos")]
             if "runtime_overrides_json" not in cols:
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE source_videos ADD COLUMN runtime_overrides_json TEXT"))
                     conn.commit()
-        if "clip_candidates" in inspector.get_table_names():
+
+            # Pre-flight duplicate check before creating unique index (PLAN-P1-09)
+            if "youtube_video_id" in cols:
+                with eng.connect() as conn:
+                    dup_query = text(
+                        "SELECT youtube_video_id, COUNT(*) as cnt "
+                        "FROM source_videos "
+                        "GROUP BY youtube_video_id "
+                        "HAVING COUNT(*) > 1"
+                    )
+                    duplicates = conn.execute(dup_query).fetchall()
+                    if duplicates:
+                        dup_ids = [row[0] for row in duplicates]
+                        logger.error(
+                            "PRE-FLIGHT CHECK FAILED: Found duplicate youtube_video_ids in source_videos: %s. "
+                            "Unique index uq_source_videos_youtube_id will NOT be created.",
+                            dup_ids,
+                        )
+                    else:
+                        indexes = [idx["name"] for idx in inspector.get_indexes("source_videos")]
+                        if "uq_source_videos_youtube_id" not in indexes:
+                            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_source_videos_youtube_id ON source_videos (youtube_video_id)"))
+                            conn.commit()
+
+        if "clip_candidates" in table_names:
             cols = [c["name"] for c in inspector.get_columns("clip_candidates")]
             if "variations_json" not in cols:
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN variations_json TEXT"))
                     conn.commit()
-        if "clips" in inspector.get_table_names():
+
+        if "clips" in table_names:
             cols = [c["name"] for c in inspector.get_columns("clips")]
             if "scheduled_publish_at" not in cols:
                 with eng.connect() as conn:
@@ -96,8 +126,14 @@ def ensure_schema_upgrades(target_engine=None):
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clips ADD COLUMN variations_json TEXT"))
                     conn.commit()
-    except Exception:
-        pass
+
+        if "platform_publish_logs" not in table_names:
+            from shorts_engine.db.models import PlatformPublishLog
+            PlatformPublishLog.__table__.create(eng, checkfirst=True)
+    except Exception as e:
+        logger.error("Database schema upgrade failed: %s", e, exc_info=True)
+        raise RuntimeError(f"Schema upgrade failed: {e}") from e
+
 
 
 def init_db(target_engine=None):
