@@ -85,14 +85,30 @@ def rotate_secret(encrypted_b64: str, old_master_key: str, new_master_key: str) 
     return encrypt_secret(decrypted, master_key=new_master_key)
 
 
-def rotate_all_channel_tokens(db_session, old_master_key: str, new_master_key: str) -> int:
+def rotate_all_channel_tokens(
+    db_session,
+    old_master_key: str,
+    new_master_key: str,
+    auto_backup: bool = True,
+) -> int:
     """
     Bulk rotation orchestration: decrypts and re-encrypts all stored channel OAuth tokens
     in a single atomic transaction.
+    Automatically creates a hot database backup before executing any mutations.
     Rolls back completely if any single row fails decryption or re-encryption.
     Returns the number of successfully rotated tokens.
     """
     from shorts_engine.db.models import Channel
+
+    if auto_backup:
+        try:
+            from shorts_engine.services.storage.backup_manager import DatabaseBackupManager
+            backup_mgr = DatabaseBackupManager()
+            backup_meta = backup_mgr.create_backup(compress=True)
+            logger.info("Pre-rotation database backup created: %s", backup_meta.get("filename"))
+        except Exception as e:
+            logger.error("Pre-rotation database backup failed: %s. Aborting secret rotation.", e)
+            raise RuntimeError(f"Pre-rotation database backup failed: {e}") from e
 
     channels = db_session.query(Channel).filter(Channel.encrypted_oauth_token.isnot(None)).all()
     count = 0
@@ -112,6 +128,7 @@ def rotate_all_channel_tokens(db_session, old_master_key: str, new_master_key: s
         db_session.rollback()
         logger.error("Bulk secret rotation failed, transaction rolled back: %s", e)
         raise
+
 
 
 def mask_secret(secret: Optional[str], show_chars: int = 4) -> str:

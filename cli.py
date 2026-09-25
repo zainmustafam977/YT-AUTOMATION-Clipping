@@ -46,19 +46,46 @@ def cmd_init_db():
 
 @app.command("rotate-secrets")
 def cmd_rotate_secrets(
-    old_key: str = typer.Option(..., "--old-key", help="Current master encryption key"),
-    new_key: str = typer.Option(..., "--new-key", help="New master encryption key"),
+    old_key: Optional[str] = typer.Option(None, "--old-key", help="Current master encryption key (prefer interactive prompt or OLD_MASTER_KEY env var)"),
+    new_key: Optional[str] = typer.Option(None, "--new-key", help="New master encryption key (prefer interactive prompt or NEW_MASTER_KEY env var)"),
 ):
     """
     Bulk re-encrypts all stored channel OAuth tokens under a new master key
-    in a single atomic transaction. Rolls back cleanly if any token fails.
+    in a single atomic transaction. Automatically creates a database backup before rotating.
+    Rolls back cleanly if any token fails.
     """
+    import os
     from shorts_engine.db.security import rotate_all_channel_tokens
+
+    actual_old_key = (
+        old_key
+        or os.getenv("OLD_MASTER_KEY")
+        or os.getenv("ROTATION_OLD_KEY")
+    )
+    if not actual_old_key:
+        actual_old_key = typer.prompt("Enter current master encryption key", hide_input=True)
+    elif old_key:
+        console.print("[yellow]SECURITY WARNING: Passing --old-key via CLI exposes secrets to shell history and process tables. Use interactive prompt or environment variables instead.[/yellow]")
+
+    actual_new_key = (
+        new_key
+        or os.getenv("NEW_MASTER_KEY")
+        or os.getenv("ROTATION_NEW_KEY")
+    )
+    if not actual_new_key:
+        actual_new_key = typer.prompt("Enter new master encryption key", hide_input=True)
+    elif new_key:
+        console.print("[yellow]SECURITY WARNING: Passing --new-key via CLI exposes secrets to shell history and process tables. Use interactive prompt or environment variables instead.[/yellow]")
+
+    if not actual_old_key or not actual_new_key:
+        console.print("[bold red]Both old and new master keys are required for secret rotation.[/bold red]")
+        raise typer.Exit(1)
+
     init_db()
     db = SessionLocal()
     try:
-        console.print("[bold cyan]Initiating bulk secret rotation across all channels...[/bold cyan]")
-        count = rotate_all_channel_tokens(db, old_master_key=old_key, new_master_key=new_key)
+        console.print("[bold cyan]Initiating bulk secret rotation across all channels (with automated backup)...[/bold cyan]")
+        count = rotate_all_channel_tokens(db, old_master_key=actual_old_key, new_master_key=actual_new_key, auto_backup=True)
         console.print(f"[bold green]Successfully rotated {count} stored secret(s) in a single atomic transaction![/bold green]")
         console.print("[yellow]Update MASTER_ENCRYPTION_KEY in your .env / secret manager to the new key.[/yellow]")
     except Exception as e:
@@ -66,6 +93,7 @@ def cmd_rotate_secrets(
         raise typer.Exit(1)
     finally:
         db.close()
+
 
 
 @app.command("backup-db")
