@@ -79,9 +79,18 @@ def queue_list(
 ):
     active_count = db.query(Clip).filter_by(status=ClipStatus.WAITING_APPROVAL).count()
     rejected_count = db.query(Clip).filter_by(status=ClipStatus.REJECTED).count()
+    needs_review_count = db.query(Clip).filter_by(status=ClipStatus.FAILED_NEEDS_REVIEW).count()
 
-    current_tab = "rejected" if tab == "rejected" else "active"
-    target_status = ClipStatus.REJECTED if current_tab == "rejected" else ClipStatus.WAITING_APPROVAL
+    if tab == "rejected":
+        current_tab = "rejected"
+        target_status = ClipStatus.REJECTED
+    elif tab == "needs_review":
+        current_tab = "needs_review"
+        target_status = ClipStatus.FAILED_NEEDS_REVIEW
+    else:
+        current_tab = "active"
+        target_status = ClipStatus.WAITING_APPROVAL
+
 
     # Base query joining candidates and source videos
     base_q = (
@@ -296,6 +305,7 @@ def queue_list(
             "current_tab": current_tab,
             "active_count": active_count,
             "rejected_count": rejected_count,
+            "needs_review_count": needs_review_count,
             "page": page,
             "limit": limit,
             "sort_by": sort_by_clean,

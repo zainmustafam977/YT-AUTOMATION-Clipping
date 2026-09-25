@@ -47,6 +47,7 @@ class ClipStatus(str, Enum):
     PUBLISHING = "PUBLISHING"
     PUBLISHED = "PUBLISHED"
     FAILED = "FAILED"
+    FAILED_NEEDS_REVIEW = "FAILED_NEEDS_REVIEW"
 
 
 class UserRole(str, Enum):
@@ -196,6 +197,7 @@ class Clip(Base):
 
     candidate = relationship("ClipCandidate", back_populates="clip")
     publish_log = relationship("PublishLog", back_populates="clip", uselist=False, cascade="all, delete-orphan")
+    platform_publish_logs = relationship("PlatformPublishLog", back_populates="clip", cascade="all, delete-orphan")
 
     @property
     def variations(self) -> list:
@@ -253,6 +255,26 @@ class PublishLog(Base):
     __table_args__ = (
         UniqueConstraint("clip_id", "youtube_video_id", name="uq_clip_publish"),
     )
+
+
+class PlatformPublishLog(Base):
+    """
+    Audit log of multi-platform syndication attempts (YouTube, TikTok, Instagram Reels).
+    Tracks external post IDs, permalinks, execution latency, and error diagnostics.
+    """
+    __tablename__ = "platform_publish_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), nullable=False, index=True)
+    platform = Column(String(32), nullable=False, index=True)  # youtube, tiktok, instagram
+    status = Column(String(32), default="SUCCESS", nullable=False)  # SUCCESS, FAILED, DRY_RUN
+    platform_post_id = Column(String(128), nullable=True, index=True)
+    permalink = Column(String(512), nullable=True)
+    error_message = Column(Text, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    published_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    clip = relationship("Clip", back_populates="platform_publish_logs")
 
 
 class SFXLibrary(Base):

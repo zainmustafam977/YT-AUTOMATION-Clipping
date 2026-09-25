@@ -30,7 +30,9 @@ def build_clip_metadata(clip: Clip) -> ShortsMetadata:
         title = f"{title} #shorts"
 
     base_desc = cand.hook_text if cand else title
-    description = f"{base_desc}\n\n#shorts #viral #trending"
+    # Embed unique [clip:<clip_id>] token for out-of-band upload matching (PLAN-P0-05)
+    token = f"[clip:{clip.id}]"
+    description = f"{base_desc}\n\n#shorts #viral #trending\n\n{token}"
     tags = ["#shorts", "#viral", "#trending"]
     if cand and cand.source_video and cand.source_video.channel:
         tags.append(cand.source_video.channel.name.lower().replace(" ", ""))
@@ -45,9 +47,38 @@ def build_clip_metadata(clip: Clip) -> ShortsMetadata:
 def check_and_publish_due_clips(db: Session) -> List[str]:
     """
     Synchronously finds and publishes all clips due for publication.
+    Enforces the 15-minute ambiguity rule for stale PUBLISHING clips.
     Returns list of published clip IDs.
     """
     now = datetime.utcnow()
+
+    # Ambiguity Rule: Reclaim / flag stale PUBLISHING clips (PLAN-P0-05)
+    stale_publishing_clips = (
+        db.query(Clip)
+        .filter(Clip.status == ClipStatus.PUBLISHING)
+        .all()
+    )
+    for stale_clip in stale_publishing_clips:
+        updated = stale_clip.updated_at or stale_clip.created_at or now
+        elapsed_sec = (now - updated).total_seconds()
+        # Treat any upload initiated or updated within the last 15 minutes as ambiguous
+        if elapsed_sec <= 900:
+            logger.warning(
+                "Clip %s has been in PUBLISHING status for %.1fs (<= 15 min). "
+                "Marking FAILED_NEEDS_REVIEW per ambiguity rule.",
+                stale_clip.id, elapsed_sec,
+            )
+            stale_clip.status = ClipStatus.FAILED_NEEDS_REVIEW
+            db.commit()
+        else:
+            logger.warning(
+                "Clip %s has been in PUBLISHING status for %.1fs (> 15 min). "
+                "Marking FAILED_NEEDS_REVIEW for operator intervention.",
+                stale_clip.id, elapsed_sec,
+            )
+            stale_clip.status = ClipStatus.FAILED_NEEDS_REVIEW
+            db.commit()
+
     due_clips = (
         db.query(Clip)
         .filter(
@@ -61,6 +92,7 @@ def check_and_publish_due_clips(db: Session) -> List[str]:
 
     if not due_clips:
         return []
+
 
     logger.info("Found %d scheduled clips due for drip-feed publishing at %s UTC", len(due_clips), now.isoformat())
     published_ids: List[str] = []

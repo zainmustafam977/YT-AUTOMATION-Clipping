@@ -87,6 +87,40 @@ def _upload_video(client, video_path: Path, metadata: "ShortsMetadata",
     return youtube_video_id
 
 
+def _check_recent_uploads_for_clip(client: Any, channel_youtube_id: str, clip_id: str) -> Optional[str]:
+    """
+    Queries the channel's uploads playlist on YouTube Data API to check
+    if a video with token [clip:<clip_id>] in its description was already uploaded.
+    """
+    try:
+        uploads_playlist_id = None
+        if channel_youtube_id.startswith("UC"):
+            uploads_playlist_id = "UU" + channel_youtube_id[2:]
+        else:
+            res = client.channels().list(part="contentDetails", id=channel_youtube_id).execute()
+            items = res.get("items", [])
+            if items:
+                uploads_playlist_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+        if not uploads_playlist_id:
+            return None
+
+        playlist_res = client.playlistItems().list(
+            part="snippet",
+            playlistId=uploads_playlist_id,
+            maxResults=20,
+        ).execute()
+
+        token = f"[clip:{clip_id}]"
+        for item in playlist_res.get("items", []):
+            desc = item.get("snippet", {}).get("description", "")
+            if token in desc:
+                return item.get("snippet", {}).get("resourceId", {}).get("videoId")
+    except Exception as e:
+        logger.warning("Could not check uploads playlist for clip %s: %s", clip_id, e)
+    return None
+
+
 class YouTubePublisher:
     def __init__(self, db_session: Session, quota_tracker: Optional[QuotaTracker] = None):
         self.db = db_session
@@ -101,7 +135,7 @@ class YouTubePublisher:
     ) -> Dict[str, Any]:
         """
         Publishes an approved clip to YouTube Shorts.
-        Enforces idempotency: never republishes an already published clip.
+        Enforces idempotency: checks uploads playlist and never republishes an already published clip.
         """
         is_dry_run = dry_run if dry_run is not None else settings.DRY_RUN_PUBLISHING
 
@@ -115,20 +149,29 @@ class YouTubePublisher:
                 "youtube_video_id": existing_log.youtube_video_id if existing_log else None,
             }
 
-        # 2. Quota Check
-        can_pub, remaining, reason = self.quota_tracker.can_publish()
-        if not can_pub:
-            logger.warning("Cannot publish clip %s: %s", clip.id, reason)
-            return {
-                "success": False,
-                "quota_exhausted": True,
-                "reason": reason,
-            }
-
-        # 3. Verify rendered video file exists
+        # 2. Verify rendered video file exists
         video_path = Path(clip.rendered_path) if clip.rendered_path else None
         if not video_path or not video_path.exists() or video_path.stat().st_size == 0:
             raise FileNotFoundError(f"Rendered video file not found for clip {clip.id}")
+
+        # 3. Write initial "upload started" record in PublishLog and mark PUBLISHING (PLAN-P0-05)
+        publish_log = self.db.query(PublishLog).filter_by(clip_id=clip.id).first()
+        if not publish_log:
+            publish_log = PublishLog(
+                clip_id=clip.id,
+                youtube_video_id=None,
+                published_at=datetime.utcnow(),
+                title=metadata.title,
+                description=metadata.description,
+                tags_json=json.dumps(metadata.tags),
+                status="UPLOADING",
+            )
+            self.db.add(publish_log)
+        else:
+            publish_log.status = "UPLOADING"
+            publish_log.title = metadata.title
+            publish_log.description = metadata.description
+            publish_log.tags_json = json.dumps(metadata.tags)
 
         clip.status = ClipStatus.PUBLISHING
         self.db.commit()
@@ -136,57 +179,156 @@ class YouTubePublisher:
         youtube_video_id: Optional[str] = None
         status_label = "SUCCESS"
 
-        if is_dry_run:
-            logger.info("[DRY-RUN] Simulating YouTube Shorts upload for clip %s...", clip.id)
-            youtube_video_id = f"dry_run_{clip.id[:8]}"
-            status_label = "DRY_RUN"
-        else:
-            logger.info("Initiating live YouTube upload for clip %s...", clip.id)
-            # Decrypt OAuth token from channel or from explicit argument
-            raw_token = encrypted_oauth_token
-            if raw_token is None and clip.candidate and clip.candidate.source_video:
-                channel = clip.candidate.source_video.channel
-                raw_token = channel.encrypted_oauth_token if channel else None
+        try:
+            if is_dry_run:
+                logger.info("[DRY-RUN] Simulating YouTube Shorts upload for clip %s...", clip.id)
+                youtube_video_id = f"dry_run_{clip.id[:8]}"
+                status_label = "DRY_RUN"
+            else:
+                logger.info("Initiating live YouTube upload for clip %s...", clip.id)
+                raw_token = encrypted_oauth_token
+                channel_yt_id = None
+                if clip.candidate and clip.candidate.source_video and clip.candidate.source_video.channel:
+                    channel = clip.candidate.source_video.channel
+                    raw_token = raw_token or channel.encrypted_oauth_token
+                    channel_yt_id = channel.youtube_channel_id
 
-            if not raw_token:
-                raise ValueError(
-                    f"No OAuth token available for clip {clip.id}. "
-                    "Set DRY_RUN_PUBLISHING=true or configure channel OAuth credentials."
+                if not raw_token:
+                    raise ValueError(
+                        f"No OAuth token available for clip {clip.id}. "
+                        "Set DRY_RUN_PUBLISHING=true or configure channel OAuth credentials."
+                    )
+
+                decrypted_token = decrypt_secret(raw_token)
+                client = _build_youtube_client(decrypted_token)
+
+                # Check channel's uploads playlist for existing out-of-band upload (PLAN-P0-05)
+                existing_yt_id = None
+                if channel_yt_id:
+                    existing_yt_id = _check_recent_uploads_for_clip(client, channel_yt_id, clip.id)
+
+                if existing_yt_id:
+                    logger.info(
+                        "Found existing out-of-band YouTube upload for clip %s: %s. Reclaiming and marking PUBLISHED.",
+                        clip.id, existing_yt_id,
+                    )
+                    clip.status = ClipStatus.PUBLISHED
+                    publish_log.youtube_video_id = existing_yt_id
+                    publish_log.status = "RECLAIMED"
+                    publish_log.published_at = datetime.utcnow()
+                    self.db.commit()
+                    return {
+                        "success": True,
+                        "youtube_video_id": existing_yt_id,
+                        "published_at": publish_log.published_at.isoformat(),
+                        "dry_run": False,
+                        "reclaimed": True,
+                    }
+
+
+                # Quota Check before heavy insert
+                can_pub, remaining, reason = self.quota_tracker.can_publish(db=self.db)
+                if not can_pub:
+                    logger.warning("Cannot publish clip %s: %s", clip.id, reason)
+                    publish_log.status = "QUOTA_EXHAUSTED"
+                    self.db.commit()
+                    return {
+                        "success": False,
+                        "quota_exhausted": True,
+                        "reason": reason,
+                    }
+
+                youtube_video_id = _upload_video(
+                    client,
+                    video_path,
+                    metadata,
+                    privacy_status=settings.DEFAULT_PRIVACY_STATUS,
                 )
 
-            decrypted_token = decrypt_secret(raw_token)
-            client = _build_youtube_client(decrypted_token)
-            youtube_video_id = _upload_video(
-                client,
-                video_path,
-                metadata,
-                privacy_status=settings.DEFAULT_PRIVACY_STATUS,
+            # 4. Record quota consumption
+            self.quota_tracker.record_publish()
+
+            # 5. Update Clip status and create PublishLog atomically
+            clip.status = ClipStatus.PUBLISHED
+            publish_log.youtube_video_id = youtube_video_id
+            publish_log.published_at = datetime.utcnow()
+            publish_log.status = status_label
+            self.db.commit()
+
+            logger.info(
+                "Successfully published clip %s — YouTube ID: %s (dry_run=%s)",
+                clip.id, youtube_video_id, is_dry_run,
             )
+            return {
+                "success": True,
+                "youtube_video_id": youtube_video_id,
+                "published_at": publish_log.published_at.isoformat(),
+                "dry_run": is_dry_run,
+            }
+        except Exception as e:
+            publish_log.status = "FAILED"
+            publish_log.error_message = str(e)
+            self.db.commit()
+            raise
 
-        # 4. Record quota consumption
-        self.quota_tracker.record_publish()
+    def update_video_title(
+        self,
+        youtube_video_id: str,
+        new_title: str,
+        encrypted_oauth_token: Optional[str] = None,
+        dry_run: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Updates the video title on YouTube Data API v3 (videos().update).
+        Used by the Bayesian Multi-Armed Bandit promotion daemon to switch titles.
+        """
+        is_dry_run = dry_run if dry_run is not None else settings.DRY_RUN_PUBLISHING
+        clean_title = new_title.strip()
+        if "#Shorts" not in clean_title and "#shorts" not in clean_title:
+            clean_title = f"{clean_title} #Shorts"
+        clean_title = clean_title[:100]
 
-        # 5. Update Clip status and create PublishLog atomically
-        clip.status = ClipStatus.PUBLISHED
-        publish_log = PublishLog(
-            clip_id=clip.id,
-            youtube_video_id=youtube_video_id,
-            published_at=datetime.utcnow(),
-            title=metadata.title,
-            description=metadata.description,
-            tags_json=json.dumps(metadata.tags),
-            status=status_label,
+        if is_dry_run:
+            logger.info("[DRY-RUN] Simulating YouTube title update for %s -> '%s'", youtube_video_id, clean_title)
+            return {
+                "success": True,
+                "dry_run": True,
+                "video_id": youtube_video_id,
+                "title": clean_title,
+            }
+
+        if not encrypted_oauth_token:
+            raise ValueError(f"No OAuth token provided to update title for video {youtube_video_id}")
+
+        decrypted_token = decrypt_secret(encrypted_oauth_token)
+        client = _build_youtube_client(decrypted_token)
+
+        # Retrieve current snippet
+        get_req = client.videos().list(part="snippet", id=youtube_video_id)
+        get_resp = get_req.execute()
+        items = get_resp.get("items", [])
+        if not items:
+            raise RuntimeError(f"Video {youtube_video_id} not found on YouTube.")
+
+        snippet = items[0]["snippet"]
+        snippet["title"] = clean_title
+
+        # Execute snippet update
+        update_req = client.videos().update(
+            part="snippet",
+            body={
+                "id": youtube_video_id,
+                "snippet": snippet,
+            },
         )
-        self.db.add(publish_log)
-        self.db.commit()
+        update_resp = update_req.execute()
+        updated_title = update_resp.get("snippet", {}).get("title", clean_title)
 
-        logger.info(
-            "Successfully published clip %s — YouTube ID: %s (dry_run=%s)",
-            clip.id, youtube_video_id, is_dry_run,
-        )
+        logger.info("Updated YouTube video %s title -> '%s'", youtube_video_id, updated_title)
         return {
             "success": True,
-            "youtube_video_id": youtube_video_id,
-            "published_at": publish_log.published_at.isoformat(),
-            "dry_run": is_dry_run,
+            "dry_run": False,
+            "video_id": youtube_video_id,
+            "title": updated_title,
         }
+

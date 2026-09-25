@@ -96,6 +96,10 @@ class QuotaTracker:
                 "date": state.get("date"),
             }
 
+    def get_used_units(self, db: Optional[Any] = None) -> int:
+        """Returns total quota units used today."""
+        return self.get_usage_metrics(db=db).get("used_units", 0)
+
     def record_publish(self, cost: int = UPLOAD_COST_UNITS, db: Optional[Any] = None) -> int:
         """Records consumption of quota units under cross-process file lock."""
         with portalocker.Lock(str(self.lock_file), timeout=10.0):
