@@ -6,6 +6,7 @@ into pipeline jobs. Creates SourceVideo records idempotently and enforces retry 
 import logging
 from typing import Optional, Callable
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus
@@ -68,7 +69,18 @@ class DetectionService:
 
         # Update channel's last_seen pointer
         channel.last_seen_video_id = video_id
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            logger.info("Concurrent detection detected for video %s — returning existing record.", video_id)
+            existing = self.db.query(SourceVideo).filter_by(
+                channel_id=channel.id,
+                youtube_video_id=video_id,
+            ).first() or self.db.query(SourceVideo).filter_by(
+                youtube_video_id=video_id,
+            ).first()
+            return existing
 
         logger.info(
             "Detected new video %s on channel %s — queued for processing.",
