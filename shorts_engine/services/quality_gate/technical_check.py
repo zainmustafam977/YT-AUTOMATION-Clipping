@@ -39,9 +39,31 @@ class TechnicalVerifier:
         try:
             result = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
         except Exception as e:
-            return False, {"error": f"ffprobe execution failed or timed out: {e}"}
+            return False, {
+                "all_passed": False,
+                "duration_sec": 0.0,
+                "error": f"ffprobe execution failed or timed out: {e}",
+                "checks": {
+                    "probe_timeout": False,
+                    "correct_resolution": False,
+                    "duration_within_bounds": False,
+                    "audio_stream_present": False,
+                    "file_size_valid": False,
+                },
+            }
         if result.returncode != 0:
-            return False, {"error": f"ffprobe execution failed: {result.stderr}"}
+            return False, {
+                "all_passed": False,
+                "duration_sec": 0.0,
+                "error": f"ffprobe execution failed: {result.stderr}",
+                "checks": {
+                    "probe_timeout": False,
+                    "correct_resolution": False,
+                    "duration_within_bounds": False,
+                    "audio_stream_present": False,
+                    "file_size_valid": False,
+                },
+            }
 
         try:
             probe = json.loads(result.stdout)
@@ -74,6 +96,7 @@ class TechnicalVerifier:
 
             # Checks
             checks = {
+                "probe_timeout": True,
                 "correct_resolution": (width == settings.TARGET_WIDTH and height == settings.TARGET_HEIGHT),
                 "duration_within_bounds": (eff_min_dur <= duration <= eff_max_dur),
                 "audio_stream_present": has_audio,

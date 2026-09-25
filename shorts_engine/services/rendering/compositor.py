@@ -90,11 +90,10 @@ _CACHED_ENCODER = None
 def _test_hardware_encoder(encoder_name: str) -> bool:
     """Performs a 1-frame probe test to verify hardware encoder opens without DLL or device errors."""
     try:
-        proc = subprocess.run(
+        proc = SubprocessWatchdog.run(
             ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=0.04:size=64x64:rate=25", "-c:v", encoder_name, "-f", "null", "-"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=2.0,
+            timeout_sec=2.0,
+            check=False,
         )
         return proc.returncode == 0
     except Exception:
@@ -115,7 +114,7 @@ def get_best_video_encoder() -> Tuple[str, List[str]]:
     preset = str(getattr(settings, "VIDEO_ENCODING_PRESET", "medium"))
 
     try:
-        proc = subprocess.run(["ffmpeg", "-encoders"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5.0)
+        proc = SubprocessWatchdog.run(["ffmpeg", "-encoders"], timeout_sec=5.0, check=False)
         encoders_out = proc.stdout.lower()
         if "h264_nvenc" in encoders_out and _test_hardware_encoder("h264_nvenc"):
             logger.info("Hardware acceleration validated: using NVIDIA h264_nvenc at CQ %s.", crf)

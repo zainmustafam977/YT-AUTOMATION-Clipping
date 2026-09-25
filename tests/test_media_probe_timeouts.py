@@ -39,6 +39,9 @@ def test_technical_verifier_enforces_timeout(tmp_path):
     assert mock_run.call_args[1]["timeout_sec"] == 15.0
     assert passed is False
     assert "timed out" in details["error"].lower() or "failed" in details["error"].lower()
+    assert "checks" in details, "TechnicalVerifier must return structured checks dict on timeout"
+    assert details["checks"].get("probe_timeout") is False
+    assert details["all_passed"] is False
 
 
 def test_thumbnail_generator_enforces_timeout(tmp_path):
@@ -79,3 +82,15 @@ def test_execution_result_returncode_compatibility():
     res_fail = ExecutionResult(cmd=["false"], exit_code=1, stdout="", stderr="err", duration_ms=10.0)
     assert res_fail.returncode == 1
     assert res_fail.is_success is False
+
+
+def test_compositor_encoder_probes_use_watchdog():
+    """Verify that compositor hardware encoder probe and encoder list use SubprocessWatchdog."""
+    import shorts_engine.services.rendering.compositor as comp_mod
+    comp_mod._CACHED_ENCODER = None
+
+    with patch.object(SubprocessWatchdog, "run", return_value=ExecutionResult(cmd=["ffmpeg"], exit_code=0, stdout="h264_nvenc", stderr="", duration_ms=5.0)) as mock_run:
+        _ = comp_mod._test_hardware_encoder("h264_nvenc")
+        assert mock_run.called
+        assert mock_run.call_args[1]["timeout_sec"] == 2.0
+
