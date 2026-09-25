@@ -77,3 +77,31 @@ def test_analytics_sync_skips_unpublished_clip_without_warning(caplog):
     assert clip.analytics is None
     # Must NOT log any warnings
     assert not any("has no YouTube video ID" in msg for msg in caplog.messages)
+
+
+def test_analytics_sync_preserves_existing_analytics_when_fetch_returns_none():
+    """
+    Verify that if fetching metrics returns None (API error / transient failure),
+    existing analytics data is NOT wiped (clip.analytics = None is prevented).
+    """
+    db = MagicMock()
+    clip = MagicMock(spec=Clip)
+    clip.id = "clip-with-existing-data"
+    clip.status = ClipStatus.PUBLISHED
+    clip.publish_log = MagicMock(spec=PublishLog)
+    clip.publish_log.youtube_video_id = "real_clip_yt_id"
+    existing_metrics = {"views": 5000, "likes": 250}
+    clip.analytics = existing_metrics
+
+    db.query.return_value.filter.return_value.all.return_value = [clip]
+
+    syncer = YouTubeAnalyticsSync(db)
+    # Simulate fetch returning None
+    syncer._fetch_clip_metrics = MagicMock(return_value=None)
+
+    result = syncer.sync_all_published_clips()
+
+    assert result["synced_count"] == 0
+    # Existing metrics must remain intact!
+    assert clip.analytics == existing_metrics
+

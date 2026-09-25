@@ -53,6 +53,9 @@ class YouTubeAnalyticsSync:
                 continue
 
             metrics = self._fetch_clip_metrics(clip.id, yt_id)
+            if metrics is None:
+                continue
+
             clip.analytics = metrics
             synced_count += 1
             total_views += metrics.get("views", 0)
