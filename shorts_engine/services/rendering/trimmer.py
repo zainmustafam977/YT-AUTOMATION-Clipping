@@ -215,11 +215,12 @@ class ClipTrimmerService:
         if not validation.is_valid:
             logger.warning("Rendered trimmed clip failed validation checks: %s", validation.error)
 
-        # Clean up old rendered file if different from the newly generated file (F-39)
+        # Clean up old rendered file if different from the newly generated file (F-39, PLAN-P0-06)
         old_path = clip.rendered_path
-        if old_path and str(rendered_file) != old_path:
+        if old_path:
             p_old = Path(old_path)
-            if p_old.exists():
+            p_new = Path(rendered_file)
+            if p_old.exists() and p_old.resolve() != p_new.resolve():
                 try:
                     p_old.unlink()
                     logger.info("Unlinked orphaned previous render file: %s", old_path)
