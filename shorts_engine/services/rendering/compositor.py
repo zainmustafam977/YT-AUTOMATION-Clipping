@@ -32,12 +32,16 @@ def escape_ffmpeg_filter_path(path: Path) -> str:
 
 
 def get_default_fontfile() -> Optional[str]:
-    """Finds a reliable system font path for drawtext on Windows/Linux."""
+    """Finds a reliable system font path for drawtext on Windows/Linux (PLAN-P2-09 / F-35)."""
     candidates = [
         Path("C:/Windows/Fonts/arialbd.ttf"),
         Path("C:/Windows/Fonts/arial.ttf"),
+        settings.ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf",
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
         Path("/System/Library/Fonts/Helvetica.ttc"),
     ]
     for c in candidates:
