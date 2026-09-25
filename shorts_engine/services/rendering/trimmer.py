@@ -41,32 +41,68 @@ def snap_to_word_boundary(
     if not words:
         return target_start_sec, target_end_sec
 
+    sorted_words = sorted(words, key=lambda w: (w.start, w.end))
+
     snapped_start = target_start_sec
     snapped_end = target_end_sec
 
     # Snap start boundary
     candidates_start = [
-        w for w in words if abs(w.start - target_start_sec) <= tolerance_sec or abs(w.end - target_start_sec) <= tolerance_sec
+        (i, w) for i, w in enumerate(sorted_words)
+        if abs(w.start - target_start_sec) <= tolerance_sec or abs(w.end - target_start_sec) <= tolerance_sec
     ]
     if candidates_start:
-        cutting_word = next((w for w in candidates_start if w.start <= target_start_sec <= w.end), None)
-        if cutting_word:
-            snapped_start = cutting_word.start
+        cutting = next(((i, w) for i, w in candidates_start if w.start <= target_start_sec <= w.end), None)
+        if cutting:
+            i, cutting_word = cutting
+            gap = (sorted_words[i].start - sorted_words[i - 1].end) if i > 0 else float("inf")
+            if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                snapped_start = cutting_word.start
+            else:
+                snapped_start = target_start_sec
         else:
-            closest_w = min(candidates_start, key=lambda w: min(abs(w.start - target_start_sec), abs(w.end - target_start_sec)))
-            snapped_start = closest_w.start if abs(closest_w.start - target_start_sec) < abs(closest_w.end - target_start_sec) else closest_w.end
+            i, closest_w = min(candidates_start, key=lambda pair: min(abs(pair[1].start - target_start_sec), abs(pair[1].end - target_start_sec)))
+            if abs(closest_w.start - target_start_sec) < abs(closest_w.end - target_start_sec):
+                gap = (sorted_words[i].start - sorted_words[i - 1].end) if i > 0 else float("inf")
+                if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                    snapped_start = closest_w.start
+                else:
+                    snapped_start = target_start_sec
+            else:
+                gap = (sorted_words[i + 1].start - sorted_words[i].end) if i < len(sorted_words) - 1 else float("inf")
+                if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                    snapped_start = closest_w.end
+                else:
+                    snapped_start = target_start_sec
 
     # Snap end boundary
     candidates_end = [
-        w for w in words if abs(w.start - target_end_sec) <= tolerance_sec or abs(w.end - target_end_sec) <= tolerance_sec
+        (i, w) for i, w in enumerate(sorted_words)
+        if abs(w.start - target_end_sec) <= tolerance_sec or abs(w.end - target_end_sec) <= tolerance_sec
     ]
     if candidates_end:
-        cutting_word = next((w for w in candidates_end if w.start <= target_end_sec <= w.end), None)
-        if cutting_word:
-            snapped_end = cutting_word.end
+        cutting = next(((i, w) for i, w in candidates_end if w.start <= target_end_sec <= w.end), None)
+        if cutting:
+            i, cutting_word = cutting
+            gap = (sorted_words[i + 1].start - sorted_words[i].end) if i < len(sorted_words) - 1 else float("inf")
+            if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                snapped_end = cutting_word.end
+            else:
+                snapped_end = target_end_sec
         else:
-            closest_w = min(candidates_end, key=lambda w: min(abs(w.start - target_end_sec), abs(w.end - target_end_sec)))
-            snapped_end = closest_w.end if abs(closest_w.end - target_end_sec) < abs(closest_w.start - target_end_sec) else closest_w.start
+            i, closest_w = min(candidates_end, key=lambda pair: min(abs(pair[1].start - target_end_sec), abs(pair[1].end - target_end_sec)))
+            if abs(closest_w.end - target_end_sec) < abs(closest_w.start - target_end_sec):
+                gap = (sorted_words[i + 1].start - sorted_words[i].end) if i < len(sorted_words) - 1 else float("inf")
+                if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                    snapped_end = closest_w.end
+                else:
+                    snapped_end = target_end_sec
+            else:
+                gap = (sorted_words[i].start - sorted_words[i - 1].end) if i > 0 else float("inf")
+                if round(gap, 6) >= round(min_silence_gap_sec, 6):
+                    snapped_end = closest_w.start
+                else:
+                    snapped_end = target_end_sec
 
     # Safety guard: ensure start < end and minimum duration
     if snapped_end - snapped_start < 5.0:

@@ -75,6 +75,67 @@ def test_snap_to_word_boundary_fallback_on_empty():
     assert snapped_end == 25.0
 
 
+def test_snap_to_word_boundary_min_silence_gap():
+    """
+    Verifies that snap_to_word_boundary enforces min_silence_gap_sec:
+    - A sub-threshold gap (< min_silence_gap_sec) must NOT be snapped into and falls back to target time.
+    - An above-threshold gap (>= min_silence_gap_sec) must be snapped into.
+    """
+    words = [
+        WordSegment(word="rapid", start=1.0, end=1.5),
+        # Gap between 'rapid' and 'speech' is 1.55 - 1.50 = 0.05s (< 0.20s default min_silence_gap_sec)
+        WordSegment(word="speech", start=1.55, end=2.0),
+        # Gap between 'speech' and 'pause' is 3.0 - 2.0 = 1.0s (>= 0.20s)
+        WordSegment(word="pause", start=3.0, end=3.5),
+        # Gap between 'pause' and 'ending' is 10.0 - 3.5 = 6.5s (>= 0.20s)
+        WordSegment(word="ending", start=10.0, end=10.5),
+    ]
+
+    # Case 1: Sub-threshold gap at start (0.05s < 0.20s).
+    # Target 1.8 cuts into 'speech' (1.55-2.0). The gap before 'speech' is 0.05s.
+    # It must NOT snap to 1.55, but fall back to target_start_sec = 1.8.
+    # Target 10.2 cuts into 'ending' (10.0-10.5). Terminal silence after 'ending' is >= threshold.
+    # It snaps end to 10.5.
+    snapped_start, snapped_end = snap_to_word_boundary(
+        words,
+        target_start_sec=1.8,
+        target_end_sec=10.2,
+        min_silence_gap_sec=0.20,
+    )
+    assert snapped_start == 1.8  # Must NOT snap into the 0.05s gap; fall back to original target
+    assert snapped_end == 10.5   # Snapped to word boundary with sufficient silence
+
+    # Case 2: Above-threshold gap at start (1.0s >= 0.20s).
+    # Target 3.2 cuts into 'pause' (3.0-3.5). The gap before 'pause' is 1.0s (>= 0.20s).
+    # It snaps start to 3.0.
+    snapped_start2, snapped_end2 = snap_to_word_boundary(
+        words,
+        target_start_sec=3.2,
+        target_end_sec=10.2,
+        min_silence_gap_sec=0.20,
+    )
+    assert snapped_start2 == 3.0  # Snapped to 3.0 because gap before 'pause' (1.0s) >= 0.20s
+    assert snapped_end2 == 10.5
+
+    # Case 3: Sub-threshold gap at end boundary.
+    # Gap between 'ending' and 'crammed' is 12.05 - 12.0 = 0.05s (< 0.20s)
+    words_end = [
+        WordSegment(word="beginning", start=1.0, end=1.5),
+        WordSegment(word="ending", start=11.5, end=12.0),
+        WordSegment(word="crammed", start=12.05, end=12.5),
+    ]
+    # Target 11.8 cuts into 'ending' (11.5-12.0). Gap after 'ending' is 0.05s (< 0.20s).
+    # Must fall back to 11.8 instead of snapping to 12.0.
+    s_start, s_end = snap_to_word_boundary(
+        words_end,
+        target_start_sec=1.2,
+        target_end_sec=11.8,
+        min_silence_gap_sec=0.20,
+    )
+    assert s_start == 1.0   # Snapped to 1.0 (terminal silence before speech >= threshold)
+    assert s_end == 11.8    # Must NOT snap into the 0.05s gap; fall back to original target
+
+
 def test_clip_trimmer_service_duration_validation(db_session, tmp_path):
     """Verifies that intervals under 10 seconds are rejected with a clear ValueError."""
     dummy_source = tmp_path / "dummy.mp4"
