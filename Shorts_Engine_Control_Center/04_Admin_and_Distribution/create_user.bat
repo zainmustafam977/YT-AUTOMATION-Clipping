@@ -34,13 +34,6 @@ if "%UNAME%"=="" (
     exit /b 1
 )
 
-set /p UPASS="Enter Password: "
-if "%UPASS%"=="" (
-    echo Error: Password cannot be empty.
-    pause
-    exit /b 1
-)
-
 echo.
 echo Select User Role:
 echo   1. admin    (full control including user management)
@@ -54,8 +47,9 @@ if "%RCHOICE%"=="3" set "UROLE=viewer"
 
 echo.
 echo Creating user '%UNAME%' with role '%UROLE%'...
+echo (You will be prompted to enter a password securely with masked input)
 echo.
 
-"%PYTHON_EXE%" run.py create-user --username "%UNAME%" --password "%UPASS%" --role "%UROLE%"
+"%PYTHON_EXE%" run.py create-user --username "%UNAME%" --role "%UROLE%"
 echo.
 pause

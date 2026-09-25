@@ -5,10 +5,13 @@ video processing, status checks, RSS watch loop, dashboard server,
 and WebSub subscription management.
 """
 
+import os
 import sys
 import json
+import getpass
 import logging
 from pathlib import Path
+from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -63,6 +66,73 @@ def cmd_rotate_secrets(
         raise typer.Exit(1)
     finally:
         db.close()
+
+
+@app.command("backup-db")
+def cmd_backup_db(
+    no_compress: bool = typer.Option(False, "--no-compress", help="Do not gzip compress the backup archive"),
+):
+    """Creates an atomic online hot backup of the database without locking."""
+    from shorts_engine.services.storage.backup_manager import DatabaseBackupManager
+    console.print("[bold cyan]Initiating atomic hot database backup...[/bold cyan]")
+    manager = DatabaseBackupManager()
+    try:
+        meta = manager.create_backup(compress=(not no_compress))
+        console.print("[bold green]Database backup created successfully![/bold green]")
+        console.print(f"  File:     {meta['filename']}")
+        console.print(f"  Size:     {meta['size_mb']} MB")
+        console.print(f"  SHA-256:  {meta['sha256']}")
+        console.print(f"  Duration: {meta['duration_sec']}s")
+        if meta.get("purged_old_backups", 0) > 0:
+            console.print(f"  Retention: Purged {meta['purged_old_backups']} expired backup(s).")
+    except Exception as e:
+        console.print(f"[bold red]Backup failed: {e}[/bold red]")
+        raise typer.Exit(1)
+
+
+@app.command("list-backups")
+def cmd_list_backups():
+    """Lists all available database backup archives."""
+    from shorts_engine.services.storage.backup_manager import DatabaseBackupManager
+    manager = DatabaseBackupManager()
+    backups = manager.list_backups()
+    if not backups:
+        console.print("[yellow]No database backups found in storage/backups/.[/yellow]")
+        return
+    table = Table(title="Database Backups")
+    table.add_column("Filename", style="cyan")
+    table.add_column("Size", style="green")
+    table.add_column("Created At", style="yellow")
+    for b in backups:
+        table.add_row(b["filename"], f"{b['size_mb']} MB", b["created_at"])
+    console.print(table)
+
+
+@app.command("restore-db")
+def cmd_restore_db(
+    file: str = typer.Option(..., "--file", "-f", help="Path to backup file (.db or .db.gz)"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm overwrite without interactive prompt"),
+):
+    """Restores an SQLite database from a hot backup archive."""
+    from shorts_engine.services.storage.backup_manager import DatabaseBackupManager
+    p = Path(file)
+    if not p.exists():
+        console.print(f"[bold red]Backup file '{file}' not found![/bold red]")
+        raise typer.Exit(1)
+
+    if not yes:
+        confirm = typer.confirm(f"Are you sure you want to restore from '{p.name}'? Current database will be snapshotted.")
+        if not confirm:
+            console.print("[yellow]Restoration cancelled.[/yellow]")
+            return
+
+    manager = DatabaseBackupManager()
+    try:
+        manager.restore_backup(p)
+        console.print(f"[bold green]Database restored successfully from {p.name}![/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]Restore failed: {e}[/bold red]")
+        raise typer.Exit(1)
 
 
 @channel_app.command("add")
@@ -330,17 +400,25 @@ def cmd_subscribe(
 @app.command("create-user")
 def cmd_create_user(
     username: str = typer.Option(..., "--username", "-u", help="Username for dashboard operator"),
-    password: str = typer.Option(..., "--password", "-p", help="Password (minimum 12 characters)"),
+    password: Optional[str] = typer.Option(None, "--password", "-p", help="DEPRECATED: Plaintext password (prefer interactive prompt or DASHBOARD_BOOTSTRAP_PASSWORD)"),
     role: str = typer.Option("operator", "--role", "-r", help="Role: admin, operator, or viewer"),
 ):
     """
     Creates a new user with PBKDF2 hashed password and multi-user RBAC role.
     Enforces minimum 12-character password length.
+    Masks password input via getpass when omitted from CLI, and supports DASHBOARD_BOOTSTRAP_PASSWORD.
     """
     from shorts_engine.dashboard.auth import hash_password
     from shorts_engine.db.models import User, UserRole
 
-    if len(password) < 12:
+    if password is not None:
+        console.print("[yellow]WARNING: Passing --password on the command line is insecure and exposes credentials in process tables and shell history. Use interactive prompt or DASHBOARD_BOOTSTRAP_PASSWORD.[/yellow]")
+    else:
+        password = os.getenv("DASHBOARD_BOOTSTRAP_PASSWORD") or os.getenv("SHORTS_ADMIN_PASSWORD")
+        if not password:
+            password = getpass.getpass("Enter password (minimum 12 characters): ")
+
+    if not password or len(password) < 12:
         console.print("[bold red]Error: Password must be at least 12 characters long.[/bold red]")
         raise typer.Exit(1)
 
