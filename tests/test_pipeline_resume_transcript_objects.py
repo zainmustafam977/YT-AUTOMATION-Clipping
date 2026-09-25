@@ -106,3 +106,38 @@ def test_p0_03_rejects_missing_or_invalid_fields():
     # Non-numeric 'start'
     with pytest.raises(ValueError):
         WordSegment.from_dict({"word": "hello", "start": "invalid_number", "end": 1.0})
+
+
+def test_p0_03_skips_malformed_words_in_transcript():
+    """
+    Verifies that FormattedTranscript.from_dict logs and skips individual malformed words
+    while preserving valid word entries.
+    """
+    mixed_data = {
+        "language": "en",
+        "words": [
+            {"word": "Valid", "start": 0.0, "end": 0.5},
+            {"word": "Malformed_no_start", "end": 1.0},
+            {"word": "Malformed_bad_number", "start": "bad", "end": 1.5},
+            {"word": "ValidAgain", "start": 1.5, "end": 2.0},
+        ],
+    }
+    ft = FormattedTranscript.from_dict(mixed_data)
+    assert len(ft.words) == 2
+    assert ft.words[0].word == "Valid"
+    assert ft.words[1].word == "ValidAgain"
+
+
+def test_p0_03_raises_on_all_malformed_words():
+    """
+    Verifies fail-fast ValueError when transcript contains words but all of them are malformed.
+    """
+    all_bad = {
+        "words": [
+            {"word": "Bad1"},
+            {"start": 1.0},
+        ],
+    }
+    with pytest.raises(ValueError, match="zero valid words recovered"):
+        FormattedTranscript.from_dict(all_bad)
+

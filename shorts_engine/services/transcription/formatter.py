@@ -2,7 +2,10 @@
 Helpers for formatting, grouping, and analyzing word-level transcripts.
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 
 class WordSegment:
@@ -92,18 +95,45 @@ class FormattedTranscript:
     @classmethod
     def from_dict(cls, data: Any) -> "FormattedTranscript":
         if isinstance(data, list):
-            words = [WordSegment.from_dict(w) for w in data]
-            return cls(words=words, language="en", full_text=None)
+            raw_words = data
+            language = "en"
+            full_text = None
         elif isinstance(data, dict):
             raw_words = data.get("words", [])
-            words = [WordSegment.from_dict(w) for w in raw_words]
-            return cls(
-                words=words,
-                language=data.get("language", "en"),
-                full_text=data.get("full_text"),
-            )
+            language = data.get("language", "en")
+            full_text = data.get("full_text")
         else:
             raise TypeError(f"FormattedTranscript.from_dict expects dict or list, got {type(data).__name__}")
+
+        words = []
+        for w in raw_words:
+            if isinstance(w, WordSegment):
+                words.append(w)
+            elif isinstance(w, dict):
+                word = w.get("word")
+                start = w.get("start")
+                end = w.get("end")
+                if word is None or start is None or end is None:
+                    logger.warning("Skipping malformed word missing required fields: %s", w)
+                    continue
+                try:
+                    words.append(WordSegment(
+                        word=str(word),
+                        start=float(start),
+                        end=float(end),
+                        probability=float(w.get("probability", w.get("score", 1.0))),
+                        score=float(w.get("score", w.get("probability", 1.0))),
+                    ))
+                except (ValueError, TypeError) as ex:
+                    logger.warning("Skipping unparseable word entry %s: %s", w, ex)
+                    continue
+            else:
+                logger.warning("Skipping invalid non-dict/WordSegment word item: %s", type(w).__name__)
+
+        if len(words) == 0 and len(raw_words) > 0:
+            raise ValueError("Transcript contains only malformed words; zero valid words recovered.")
+
+        return cls(words=words, language=language, full_text=full_text)
 
     def find_silences(self, min_silence_sec: float = 0.3) -> List[Dict[str, float]]:
         """Identifies natural pauses / silence gaps between words."""
