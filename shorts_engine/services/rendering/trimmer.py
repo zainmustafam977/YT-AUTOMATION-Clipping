@@ -49,13 +49,10 @@ def snap_to_word_boundary(
         w for w in words if abs(w.start - target_start_sec) <= tolerance_sec or abs(w.end - target_start_sec) <= tolerance_sec
     ]
     if candidates_start:
-        # Check if target_start falls inside a word
         cutting_word = next((w for w in candidates_start if w.start <= target_start_sec <= w.end), None)
         if cutting_word:
-            # If closer to word start or silence before it
             snapped_start = cutting_word.start
         else:
-            # Find closest word boundary
             closest_w = min(candidates_start, key=lambda w: min(abs(w.start - target_start_sec), abs(w.end - target_start_sec)))
             snapped_start = closest_w.start if abs(closest_w.start - target_start_sec) < abs(closest_w.end - target_start_sec) else closest_w.end
 
