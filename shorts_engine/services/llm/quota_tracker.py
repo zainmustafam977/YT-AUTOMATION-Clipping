@@ -375,20 +375,6 @@ class APIUsageTracker:
             self._state["date"] = today_str
             self._save_state(self._state)
 
-    def remove_key(self, provider: str, key_hash: str) -> bool:
-        """Removes a key from persistent tracker state by its hash."""
-        with self._mutex:
-            target_id = None
-            for k_id, k_info in self._state.get("keys", {}).items():
-                if k_info.get("provider") == provider.lower() and k_info.get("key_hash") == key_hash:
-                    target_id = k_id
-                    break
-            if target_id and target_id in self._state.get("keys", {}):
-                del self._state["keys"][target_id]
-                self._save_state(self._state)
-                return True
-            return False
-
     def get_per_key_metrics(self) -> List[Dict[str, Any]]:
         """
         Returns structured metrics for all configured keys across all providers.
