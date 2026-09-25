@@ -101,7 +101,7 @@ class AudioMasteringEngine:
         norm = f"loudnorm=I={self.target_lufs}:TP={self.true_peak_dbfs}:LRA=7"
         return f"[{input_label}]{hpf},{gate},{norm}[{output_label}]"
 
-    def measure_loudness(self, media_path: Path) -> Dict[str, Any]:
+    def measure_loudness(self, media_path: Path, duration_sec: Optional[float] = None) -> Dict[str, Any]:
         """
         Measures integrated loudness (LUFS), True Peak (dBFS), and Loudness Range (LU)
         using FFmpeg loudnorm measurement pass.
@@ -114,8 +114,9 @@ class AudioMasteringEngine:
             "-f", "null",
             "-",
         ]
+        timeout = max(60.0, float(duration_sec) * 3.0) if duration_sec is not None else 60.0
         try:
-            proc = SubprocessWatchdog.run(cmd, timeout_sec=30.0)
+            proc = SubprocessWatchdog.run(cmd, timeout_sec=timeout)
             output = proc.stderr
         except Exception as e:
             logger.warning("FFmpeg loudnorm probe failed or timed out: %s", e)

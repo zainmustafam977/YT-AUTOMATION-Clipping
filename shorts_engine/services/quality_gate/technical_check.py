@@ -37,7 +37,7 @@ class TechnicalVerifier:
             str(video_path),
         ]
         try:
-            result = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
+            result = SubprocessWatchdog.run(cmd, timeout_sec=30.0)
         except Exception as e:
             return False, {
                 "all_passed": False,

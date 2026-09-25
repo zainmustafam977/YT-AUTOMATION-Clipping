@@ -49,7 +49,7 @@ class ThumbnailGenerator:
             str(output_path),
         ]
         try:
-            res = SubprocessWatchdog.run(cmd, timeout_sec=15.0)
+            res = SubprocessWatchdog.run(cmd, timeout_sec=30.0)
             return res.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
         except Exception as e:
             logger.warning("FFmpeg frame extraction failed at %.2fs: %s", timestamp_sec, e)

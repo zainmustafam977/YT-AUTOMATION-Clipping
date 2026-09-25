@@ -268,8 +268,9 @@ class ClipRecoveryService:
                 "-movflags", "+faststart",
                 str(out_path),
             ]
+            clamp_timeout = max(30.0, float(target_max) * 2.0)
             try:
-                watchdog_res = SubprocessWatchdog.run(cmd, timeout_sec=60.0)
+                watchdog_res = SubprocessWatchdog.run(cmd, timeout_sec=clamp_timeout)
             except Exception as e:
                 return {"status": "error", "message": f"FFmpeg clamp failed on exception: {e}"}
 

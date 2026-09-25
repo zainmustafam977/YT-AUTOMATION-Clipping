@@ -10,33 +10,33 @@ from shorts_engine.services.execution.watchdog import SubprocessWatchdog, Subpro
 
 
 def test_compositor_validate_render_enforces_timeout(tmp_path):
-    """Verify that validate_render uses SubprocessWatchdog.run with timeout=15.0."""
+    """Verify that validate_render uses SubprocessWatchdog.run with timeout=30.0 (PLAN-P1-02)."""
     video_file = tmp_path / "test.mp4"
     video_file.write_bytes(b"dummy content 12345")
 
     compositor = VideoCompositor()
 
-    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffprobe"], timeout_sec=15.0)) as mock_run:
+    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffprobe"], timeout_sec=30.0)) as mock_run:
         res = compositor.validate_render(video_file)
 
     assert mock_run.called
-    assert mock_run.call_args[1]["timeout_sec"] == 15.0
+    assert mock_run.call_args[1]["timeout_sec"] == 30.0
     assert res.is_valid is False
     assert "timed out" in res.error.lower()
 
 
 def test_technical_verifier_enforces_timeout(tmp_path):
-    """Verify that TechnicalVerifier.verify uses SubprocessWatchdog.run with timeout=15.0."""
+    """Verify that TechnicalVerifier.verify uses SubprocessWatchdog.run with timeout=30.0 (PLAN-P1-02)."""
     video_file = tmp_path / "test.mp4"
     video_file.write_bytes(b"dummy content 12345")
 
     verifier = TechnicalVerifier()
 
-    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffprobe"], timeout_sec=15.0)) as mock_run:
+    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffprobe"], timeout_sec=30.0)) as mock_run:
         passed, details = verifier.verify(video_file)
 
     assert mock_run.called
-    assert mock_run.call_args[1]["timeout_sec"] == 15.0
+    assert mock_run.call_args[1]["timeout_sec"] == 30.0
     assert passed is False
     assert "timed out" in details["error"].lower() or "failed" in details["error"].lower()
     assert "checks" in details, "TechnicalVerifier must return structured checks dict on timeout"
@@ -45,32 +45,37 @@ def test_technical_verifier_enforces_timeout(tmp_path):
 
 
 def test_thumbnail_generator_enforces_timeout(tmp_path):
-    """Verify that ThumbnailGenerator.extract_frame_ffmpeg uses SubprocessWatchdog.run with timeout=15.0."""
+    """Verify that ThumbnailGenerator.extract_frame_ffmpeg uses SubprocessWatchdog.run with timeout=30.0 (PLAN-P1-02)."""
     video_file = tmp_path / "test.mp4"
     video_file.write_bytes(b"dummy")
     out_file = tmp_path / "thumb.jpg"
 
-    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffmpeg"], timeout_sec=15.0)) as mock_run:
+    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffmpeg"], timeout_sec=30.0)) as mock_run:
         success = ThumbnailGenerator.extract_frame_ffmpeg(video_file, out_file)
 
     assert mock_run.called
-    assert mock_run.call_args[1]["timeout_sec"] == 15.0
+    assert mock_run.call_args[1]["timeout_sec"] == 30.0
     assert success is False
 
 
 def test_audio_mastering_measure_loudness_enforces_timeout(tmp_path):
-    """Verify that AudioMasteringEngine.measure_loudness uses SubprocessWatchdog.run with timeout=30.0."""
+    """Verify that AudioMasteringEngine.measure_loudness uses dynamic timeout=max(60.0, duration * 3.0) (PLAN-P1-02)."""
     media_file = tmp_path / "test.wav"
     media_file.write_bytes(b"dummy")
 
     engine = AudioMasteringEngine()
 
-    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffmpeg"], timeout_sec=30.0)) as mock_run:
+    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffmpeg"], timeout_sec=60.0)) as mock_run:
         res = engine.measure_loudness(media_file)
 
     assert mock_run.called
-    assert mock_run.call_args[1]["timeout_sec"] == 30.0
+    assert mock_run.call_args[1]["timeout_sec"] == 60.0
     assert "error" in res
+
+    with patch.object(SubprocessWatchdog, "run", side_effect=SubprocessTimeoutError(cmd=["ffmpeg"], timeout_sec=90.0)) as mock_run_scaled:
+        _ = engine.measure_loudness(media_file, duration_sec=30.0)
+    assert mock_run_scaled.call_args[1]["timeout_sec"] == 90.0
+
 
 
 def test_execution_result_returncode_compatibility():
