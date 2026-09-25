@@ -62,6 +62,8 @@ class VideoReframer:
         """
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
+            if not Path(video_path).exists():
+                raise FileNotFoundError(f"Source video file does not exist: {video_path}")
             logger.warning("Could not open video %s. Defaulting to center crop.", video_path.name)
             return self._fallback_center_crop(1920, 1080)
 
@@ -87,20 +89,21 @@ class VideoReframer:
         tracked_centers_x: List[float] = []
         all_detected_faces_x: List[float] = []
 
-        for t in sample_timestamps:
-            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                continue
+        try:
+            for t in sample_timestamps:
+                cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    continue
 
-            faces = self.detector.detect_faces(frame)
-            for f in faces:
-                all_detected_faces_x.append(f.center_x)
-            active_face = self.speaker_selector.select_speaker(faces, src_w)
-            if active_face:
-                tracked_centers_x.append(active_face.center_x)
-
-        cap.release()
+                faces = self.detector.detect_faces(frame)
+                for f in faces:
+                    all_detected_faces_x.append(f.center_x)
+                active_face = self.speaker_selector.select_speaker(faces, src_w)
+                if active_face:
+                    tracked_centers_x.append(active_face.center_x)
+        finally:
+            cap.release()
 
         # Identify distinct speaker clusters (if faces separated by > 18% of frame width)
         speaker_clusters: List[float] = []
