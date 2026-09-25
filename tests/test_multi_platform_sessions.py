@@ -54,15 +54,22 @@ def test_syndicator_threads_do_not_share_session(db_setup, tmp_path):
 
     manager = MultiPlatformSyndicator(db_session=session)
 
-    thread_sessions = {}
+    thread_sessions = []
+    thread_ids = set()
     thread_lock = threading.Lock()
+    barrier = threading.Barrier(2)
 
     def mock_publish(video_path, title, description, tags, dry_run, **kwargs):
         tid = threading.get_ident()
-        # Retrieve the session used in this worker thread (passed via kwargs or thread-local)
+        # Retrieve the session used in this worker thread (passed via kwargs)
         used_session = kwargs.get("db_session")
         with thread_lock:
-            thread_sessions[tid] = used_session
+            thread_sessions.append(used_session)
+            thread_ids.add(tid)
+        try:
+            barrier.wait(timeout=5.0)
+        except threading.BrokenBarrierError:
+            pass
         return PlatformPublishResult(platform="mock", success=True, post_id="pid", dry_run=True)
 
     # Mock two platforms to trigger multi-threaded dispatch
@@ -83,15 +90,15 @@ def test_syndicator_threads_do_not_share_session(db_setup, tmp_path):
             dry_run=True,
         )
 
-    # 1. Must have dispatched across distinct worker threads
-    assert len(thread_sessions) == 2, f"Expected 2 distinct threads, got: {len(thread_sessions)}"
+    # 1. Must have dispatched across distinct worker threads concurrently
+    assert len(thread_ids) == 2, f"Expected 2 distinct threads, got: {len(thread_ids)}"
+    assert len(thread_sessions) == 2, f"Expected 2 session dispatches, got: {len(thread_sessions)}"
 
     # 2. In unhardened code, kwargs does NOT provide an isolated thread session (or passes shared session.db)
     # The sessions must not be None and must NOT be the parent session
-    session_instances = list(thread_sessions.values())
-    for s in session_instances:
+    for s in thread_sessions:
         assert s is not None, "Worker thread was not provided an isolated database session"
         assert s is not session, "Worker thread shared the parent database session! Must be distinct scoped session."
 
     # 3. The sessions used by thread 1 and thread 2 must be different session instances
-    assert session_instances[0] is not session_instances[1], "Both worker threads shared the exact same database session instance!"
+    assert thread_sessions[0] is not thread_sessions[1], "Both worker threads shared the exact same database session instance!"
