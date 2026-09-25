@@ -7,6 +7,7 @@ Uses only stdlib (urllib.request + xml.etree.ElementTree) — no feedparser depe
 """
 
 import logging
+import threading
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -56,6 +57,12 @@ class RSSPoller:
             )
             with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
                 xml_body = resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                logger.warning("YouTube Atom feed returned 404 for channel %s (channel not found or feed disabled)", channel_id)
+            else:
+                logger.warning("RSS fetch HTTP error for channel %s (HTTP %s): %s", channel_id, e.code, e)
+            return []
         except Exception as e:
             logger.error("RSS fetch failed for channel %s: %s", channel_id, e)
             return []
@@ -99,6 +106,7 @@ class RSSPoller:
 
         new_video_ids: List[str] = []
         last_seen = channel.last_seen_video_id
+        newest_seen_in_feed = entries[0][0] if entries else None
 
         for item in entries:
             video_id = item[0]
@@ -120,16 +128,23 @@ class RSSPoller:
 
             new_video_ids.append(video_id)
 
-        if new_video_ids:
-            # Update last_seen to the most recent video
-            channel.last_seen_video_id = new_video_ids[0]
+        # Advance last_seen cursor to newest video in feed to prevent stuck cursor (PLAN-P2-04 / F-18)
+        if newest_seen_in_feed and newest_seen_in_feed != last_seen:
+            channel.last_seen_video_id = newest_seen_in_feed
             db.commit()
-            logger.info(
-                "Channel %s: detected %d new video(s). last_seen_video_id updated to %s.",
-                channel.youtube_channel_id,
-                len(new_video_ids),
-                new_video_ids[0],
-            )
+            if new_video_ids:
+                logger.info(
+                    "Channel %s: detected %d new video(s). last_seen_video_id updated to %s.",
+                    channel.youtube_channel_id,
+                    len(new_video_ids),
+                    newest_seen_in_feed,
+                )
+            else:
+                logger.info(
+                    "Channel %s: all new videos were Shorts. last_seen_video_id advanced to %s.",
+                    channel.youtube_channel_id,
+                    newest_seen_in_feed,
+                )
         else:
             logger.debug("Channel %s: no new videos since %s.", channel.youtube_channel_id, last_seen)
 
@@ -138,24 +153,32 @@ class RSSPoller:
 
 class RSSPollLoop:
     """
-    Blocking RSS poll loop used by the CLI `watch` command.
+    Interruptible RSS poll loop used by the CLI `watch` command.
     Calls `on_new_video_callback(channel_id, video_id)` for each new detection.
+    Supports clean termination via threading.Event (PLAN-P2-05 / F-19).
     """
 
-    def __init__(self, db_session_factory, on_new_video_callback):
+    def __init__(self, db_session_factory, on_new_video_callback, stop_event: Optional[threading.Event] = None):
         self.session_factory = db_session_factory
         self.on_new_video = on_new_video_callback
         self.poller = RSSPoller()
+        self.stop_event = stop_event or threading.Event()
+
+    def stop(self) -> None:
+        """Signals the poll loop to terminate immediately without waiting for interval sleep."""
+        self.stop_event.set()
 
     def run(self, interval_minutes: Optional[int] = None) -> None:
         interval = (interval_minutes or settings.RSS_POLL_INTERVAL_MINUTES) * 60
         logger.info("RSS poll loop started. Interval: %ds.", interval)
 
-        while True:
+        while not self.stop_event.is_set():
             db = self.session_factory()
             try:
                 channels = db.query(Channel).filter_by(watch_enabled=True).all()
                 for channel in channels:
+                    if self.stop_event.is_set():
+                        break
                     try:
                         new_ids = self.poller.poll_channel(channel, db)
                         for video_id in new_ids:
@@ -167,4 +190,6 @@ class RSSPollLoop:
             finally:
                 db.close()
 
-            time.sleep(interval)
+            if self.stop_event.wait(timeout=interval):
+                logger.info("RSS poll loop received stop signal. Exiting gracefully.")
+                break
