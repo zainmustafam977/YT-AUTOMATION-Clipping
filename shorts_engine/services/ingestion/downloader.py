@@ -4,13 +4,16 @@ Implements exponential backoff retry and robust file management.
 """
 
 import os
+import gc
 import time
+import random
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import yt_dlp
 from shorts_engine.config.settings import settings
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -119,14 +122,19 @@ class IngestionService:
             "-ac", "1",
             str(audio_path),
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if result.returncode != 0:
+        result = SubprocessWatchdog.run(
+            cmd,
+            timeout_sec=120.0,
+            check=False,
+            artifacts_to_cleanup=[audio_path],
+        )
+        if result.exit_code != 0:
             logger.error("FFmpeg audio extraction failed: %s", result.stderr)
             raise RuntimeError(f"FFmpeg audio extraction failed: {result.stderr}")
         return audio_path
 
     def probe_duration_sec(self, file_path: Path) -> int:
-        """Probes video or audio file duration using ffprobe."""
+        """Probes video or audio file duration using ffprobe with timeout protection."""
         try:
             cmd = [
                 "ffprobe",
@@ -135,7 +143,7 @@ class IngestionService:
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 str(file_path),
             ]
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            res = SubprocessWatchdog.run(cmd, timeout_sec=15.0, check=True)
             return int(float(res.stdout.strip()))
         except Exception:
             return 0
@@ -208,24 +216,47 @@ class IngestionService:
                     detail="Download complete, extracting audio...",
                 )
 
-        ydl_opts = {
-            "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "outtmpl": str(target_video_raw),
-            "merge_output_format": "mp4",
-            "quiet": True,
-            "no_warnings": True,
-            "js_runtimes": {"node": {}},
-            "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
-            "progress_hooks": [_progress_hook],
-        }
-        cookie_path = getattr(settings, "YOUTUBE_COOKIE_PATH", None) or os.getenv("YOUTUBE_COOKIE_PATH")
-        if cookie_path and Path(cookie_path).exists():
-            ydl_opts["cookiefile"] = str(cookie_path)
+        # Dynamic client rotation strategies to bypass bot challenges
+        client_strategies = [
+            ["android", "web"],
+            ["ios", "mweb"],
+            ["android_creator", "web_creator"],
+        ]
+
+        cookie_path = self.get_cookie_path()
 
         last_err = None
+        force_fresh_start = False
+
         for attempt in range(1, self.max_retries + 1):
+            strategy_idx = (attempt - 1) % len(client_strategies)
+            chosen_clients = client_strategies[strategy_idx]
+
+            ydl_opts = {
+                "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "outtmpl": str(target_video_raw),
+                "merge_output_format": "mp4",
+                "quiet": True,
+                "no_warnings": True,
+                "js_runtimes": {"node": {}},
+                "extractor_args": {"youtube": {"player_client": chosen_clients}},
+                "progress_hooks": [_progress_hook],
+                "windowsfilenames": True,
+            }
+            if cookie_path:
+                ydl_opts["cookiefile"] = cookie_path
+            if force_fresh_start:
+                ydl_opts["continuedl"] = False
+                ydl_opts["nopart"] = True
+
             try:
-                logger.info("Downloading %s (attempt %d/%d)...", url, attempt, self.max_retries)
+                logger.info(
+                    "Downloading %s (attempt %d/%d, client_strategy=%s)...",
+                    url,
+                    attempt,
+                    self.max_retries,
+                    chosen_clients,
+                )
                 job_progress_tracker.update_progress(
                     video_id=video_id,
                     stage="DOWNLOADING",
@@ -253,7 +284,14 @@ class IngestionService:
                     dest_video_path.parent.mkdir(parents=True, exist_ok=True)
                     if actual_downloaded.exists() and actual_downloaded != dest_video_path:
                         import shutil
-                        shutil.move(str(actual_downloaded), str(dest_video_path))
+                        # Robust Windows move with retry
+                        for move_attempt in range(3):
+                            try:
+                                shutil.move(str(actual_downloaded), str(dest_video_path))
+                                break
+                            except PermissionError:
+                                gc.collect()
+                                time.sleep(0.5 * (move_attempt + 1))
                     elif not dest_video_path.exists():
                         dest_video_path = actual_downloaded
 
@@ -300,24 +338,64 @@ class IngestionService:
                     )
             except Exception as e:
                 last_err = e
-                logger.warning("Attempt %d failed to download %s: %s", attempt, url, str(e))
-                # If HTTP 416 (Requested range not satisfiable) occurs due to expired YouTube CDN fragments, purge stale .part files so next attempt resumes fresh from byte 0
-                if "416" in str(e) or "Requested range not satisfiable" in str(e):
-                    logger.info("Purging stale partial download files for video %s to reset byte range...", video_id)
-                    for partial_file in self.output_dir.glob(f"*{video_id}*.part*"):
-                        try:
-                            partial_file.unlink(missing_ok=True)
-                        except Exception:
-                            pass
-                if "WinError 32" in str(e) or "used by another process" in str(e):
-                    logger.info("Windows file handle active on fragment for %s. Waiting 2.0s for handle release...", video_id)
-                    time.sleep(2.0)
-                time.sleep(2 ** attempt)
+                err_msg = str(e)
+                logger.warning("Attempt %d failed to download %s: %s", attempt, url, err_msg)
+
+                # 1. HTTP 416 (Requested range not satisfiable) recovery:
+                # Expired CDN byte offset -> purge all partials across temp & download dirs and reset byte range
+                if "416" in err_msg or "Requested range not satisfiable" in err_msg:
+                    logger.info("Purging all stale partial download files for video %s to reset byte range...", video_id)
+                    force_fresh_start = True
+                    for scan_dir in (temp_fragments_dir, self.output_dir):
+                        if scan_dir.exists():
+                            for pattern in (f"*{video_id}*.part*", f"*{video_id}*.temp*", f"*{video_id}*.ytdl*"):
+                                for partial_file in scan_dir.glob(pattern):
+                                    try:
+                                        partial_file.unlink(missing_ok=True)
+                                    except Exception:
+                                        pass
+
+                # 2. Windows WinError 32 file-locking recovery
+                if "WinError 32" in err_msg or "used by another process" in err_msg:
+                    gc.collect()
+                    lock_wait = 2.0 + random.uniform(0.5, 2.0)
+                    logger.info("Windows file handle lock on fragment for %s. GC run, waiting %.1fs for handle release...", video_id, lock_wait)
+                    time.sleep(lock_wait)
+
+                # 3. YouTube bot detection alert & mitigation
+                if "confirm you’re not a bot" in err_msg or "Sign in to confirm" in err_msg:
+                    logger.warning("YouTube anti-bot challenge detected for %s. Cycling player client and jittering wait...", video_id)
+                    force_fresh_start = True
+
+                # Jittered exponential backoff
+                backoff_wait = min(12.0, (2.0 ** attempt) + random.uniform(0.2, 1.2))
+                time.sleep(backoff_wait)
 
         raise RuntimeError(f"Failed to download video {video_id} after {self.max_retries} attempts: {last_err}")
 
+    def get_cookie_path(self) -> Optional[str]:
+        """Automatically discovers YouTube bot-bypass cookies across settings and standard paths."""
+        candidate_cookies = [
+            getattr(settings, "YOUTUBE_COOKIE_PATH", None),
+            os.getenv("YOUTUBE_COOKIE_PATH"),
+            settings.STORAGE_DIR / "cookies.txt",
+            settings.ROOT_DIR / "cookies.txt",
+        ]
+        for cand in candidate_cookies:
+            if cand and Path(cand).exists() and Path(cand).stat().st_size > 0:
+                return str(Path(cand).resolve())
+        return None
+
     def get_metadata(self, video_id_or_url: str) -> Dict[str, Any]:
-        """Extracts metadata without downloading media."""
+        """Extracts metadata without downloading media, attaching anti-bot cookies and extractor options."""
         url = self.get_video_url(video_id_or_url)
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        opts: Dict[str, Any] = {
+            "quiet": True,
+            "no_warnings": True,
+            "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+        }
+        cookie_path = self.get_cookie_path()
+        if cookie_path:
+            opts["cookiefile"] = cookie_path
+        with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=False)
