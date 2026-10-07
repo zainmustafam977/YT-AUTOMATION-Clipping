@@ -7,10 +7,9 @@ Generates 4 distinct archetypes within the strict 100-character YouTube Shorts l
 4. Numbered Listicle
 """
 
-import json
 import logging
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic import BaseModel, Field
 
 from shorts_engine.config.settings import settings
@@ -38,7 +37,7 @@ class TitleVariantSet(BaseModel):
         return all(len(getattr(self, a.value)) <= 100 for a in TitleArchetype)
 
 
-from shorts_engine.services.llm.router import LLMRouter
+from shorts_engine.services.llm.router import LLMRouter  # noqa: E402
 
 
 class TitleGenerator:

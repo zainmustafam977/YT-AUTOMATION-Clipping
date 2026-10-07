@@ -263,7 +263,12 @@
                     </div>
 
                     <!-- Multi-Provider LLM & Transparent Failover -->
-                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">Multi-Provider LLM & Rate-Limit Failover (Intelligent Tiered Routing)</h6>
+                    <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
+                        <h6 class="text-info mb-0">Multi-Provider LLM & Rate-Limit Failover (Intelligent Tiered Routing)</h6>
+                        <button type="button" class="btn btn-outline-danger btn-sm py-1 px-2" style="font-size: 0.78rem;" onclick="purgeInvalidKeys()" id="purgeInvalidKeysBtn" title="Automatically test all configured API keys and prune invalid or expired ones">
+                            <i class="bi bi-trash3 me-1"></i>Purge Invalid Keys
+                        </button>
+                    </div>
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
                             <label for="llm_provider" class="form-label text-light small fw-semibold">
@@ -646,6 +651,118 @@
                         </div>
                     </div>
 
+                    <!-- Ingestion Armor, Authentication Vault & Proxy Mesh -->
+                    <h6 class="text-info border-bottom border-secondary pb-2 mb-3">🛡️ Video Ingestion Armor, Proxy Mesh &amp; Auth Vault</h6>
+                    <div class="row g-3 mb-4">
+                        <!-- Policy Mode -->
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="ingestion_policy_mode" class="form-label text-light small fw-semibold mb-0">
+                                    Policy Gate Ingestion Mode
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Safety Triage</span>
+                            </div>
+                            <select class="form-select bg-dark text-light border-secondary" id="ingestion_policy_mode" name="ingestion_policy_mode">
+                                {% for p_val, p_label in allowed_policy_modes %}
+                                <option value="{{ p_val }}" {% if ingestion_policy_mode == p_val %}selected{% endif %}>{{ p_label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted small">
+                                <strong>Two-Tier:</strong> Public bypass, escalates to auth on age-restricted.<br>
+                                <strong>Strict Gate:</strong> Pre-probes metadata; requires auth/review upfront.<br>
+                                <strong>Auto-Skip:</strong> Fast discard of sensitive content without retrying.
+                            </div>
+                        </div>
+
+                        <!-- OAuth & Auth Vault Controls -->
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-light small fw-semibold mb-0">
+                                    Triple-Tier Authentication Vault
+                                </label>
+                                <span class="badge bg-success-subtle text-success border border-success" style="font-size:0.7rem;">RFC-8628 &amp; Cookies</span>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="ingestion_enable_oauth" name="ingestion_enable_oauth"
+                                       {% if ingestion_enable_oauth %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="ingestion_enable_oauth">
+                                    Enable OAuth2 Device Flow Ingestion
+                                </label>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="startOAuthFlow()">
+                                    🔑 Connect YouTube OAuth
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="triggerSessionHarvest()">
+                                    🍪 Harvest Session Cookies
+                                </button>
+                            </div>
+                            <div id="auth-vault-status" class="small mt-1 text-muted"></div>
+                        </div>
+
+                        <!-- Proxy Mesh Pool -->
+                        <div class="col-md-8">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label for="ingestion_proxy_pool" class="form-label text-light small fw-semibold mb-0">
+                                    Dynamic Proxy Mesh (Round-Robin Pool)
+                                </label>
+                                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.7rem;">Egress Rotation</span>
+                            </div>
+                            <textarea class="form-control bg-dark text-light border-secondary font-monospace form-control-sm"
+                                      id="ingestion_proxy_pool" name="ingestion_proxy_pool" rows="3"
+                                      placeholder="http://user:pass@proxy1:8080&#10;socks5://127.0.0.1:9050">{{ ingestion_proxy_pool_text }}</textarea>
+                            <div class="form-text text-muted small">One proxy per line or comma-separated. Automatic round-robin rotation with 429 exponential backoff.</div>
+                        </div>
+
+                        <!-- Strict Proxy Mode & Diagnostics -->
+                        <div class="col-md-4">
+                            <label class="form-label text-light small fw-semibold">Proxy Armor Controls</label>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="ingestion_proxy_strict_mode" name="ingestion_proxy_strict_mode"
+                                       {% if ingestion_proxy_strict_mode %}checked{% endif %}>
+                                <label class="form-check-label text-light fw-semibold small" for="ingestion_proxy_strict_mode">
+                                    Strict Proxy Only (Block Direct Fallback)
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success w-100" onclick="testProxyMesh()">
+                                🌐 Ping Egress Latency &amp; IP
+                            </button>
+                            <div id="proxy-test-status" class="small mt-2 text-muted"></div>
+                        </div>
+
+                        <!-- Hotfolder Watcher -->
+                        <div class="col-md-12">
+                            <div class="card bg-dark-subtle border-secondary p-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-folder-symlink-fill text-warning fs-5"></i>
+                                        <span class="fw-bold text-light">Automated Hotfolder Ingestion Daemon</span>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="hotfolder_enabled" name="hotfolder_enabled"
+                                               {% if hotfolder_enabled %}checked{% endif %}>
+                                        <label class="form-check-label text-light fw-semibold small" for="hotfolder_enabled">
+                                            Watcher Active
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-8">
+                                        <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                               value="{{ hotfolder_dir }}" readonly>
+                                        <div class="form-text text-muted small">Drop MP4, MOV, MKV files into this folder for automatic background ingestion.</div>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <button type="button" class="btn btn-sm btn-warning" onclick="scanHotfolderNow()">
+                                            ⚡ Scan Hotfolder Now
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="hotfolder-scan-status" class="small mt-1 text-muted"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-end gap-2 border-top border-secondary pt-3">
                         <a href="/" class="btn btn-outline-secondary">Cancel</a>
                         <button type="submit" class="btn btn-primary fw-bold" style="background: #7c4dff; border-color: #7c4dff;">
@@ -654,6 +771,478 @@
                     </div>
                 </form>
             </div>
+        </div>
+
+        <!-- 📂 Configuration Files & System Paths Inspector -->
+        <div class="card shadow-sm mb-4 border-secondary-subtle">
+            <div class="card-header bg-dark-subtle d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-light"><i class="bi bi-folder2-open text-info me-2"></i>Configuration Files & Storage Directory Paths</span>
+                <span class="badge bg-info-subtle text-info border border-info">Filesystem Inspector</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Canonical absolute paths for all engine configuration files, persistent SQLite databases, encryption keys, and runtime storage directories.
+                    Click the copy button on any item to instantly copy its path for command-line access or file explorer inspection.
+                </p>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-sm align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead>
+                            <tr class="text-secondary border-secondary">
+                                <th style="width: 25%;">Component / Purpose</th>
+                                <th style="width: 45%;">Absolute Path</th>
+                                <th style="width: 15%;">Status / Size</th>
+                                <th style="width: 15%;" class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for key, item in config_paths.items() %}
+                            <tr>
+                                <td>
+                                    <span class="fw-semibold text-light">{{ item.name }}</span>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ item.description }}</div>
+                                </td>
+                                <td>
+                                    <code class="text-info font-monospace small user-select-all" style="word-break: break-all;">{{ item.path }}</code>
+                                </td>
+                                <td>
+                                    {% if item.exists %}
+                                        <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.72rem;">
+                                            <i class="bi bi-check-circle me-1"></i>Ready
+                                        </span>
+                                        {% if item.type == 'directory' %}
+                                            <span class="badge bg-secondary-subtle text-light" style="font-size: 0.7rem;">{{ item.file_count }} files ({{ item.size_mb }} MB)</span>
+                                        {% elif item.size_bytes is not none %}
+                                            <span class="badge bg-secondary-subtle text-light" style="font-size: 0.7rem;">{{ item.size_mb }} MB</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary" style="font-size: 0.72rem;">
+                                            <i class="bi bi-dash-circle me-1"></i>Not Created Yet
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="copyToClipboard('{{ item.path|replace('\\', '\\\\') }}', this)">
+                                        <i class="bi bi-clipboard me-1"></i>Copy
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-dark border-secondary-subtle mt-3 mb-0 py-2 d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-check text-success fs-5"></i>
+                    <span class="small text-muted">
+                        <strong>Self-Healing Architecture:</strong> If any storage directory is deleted or purged, the engine automatically recreates the directory tree and re-initializes safe default state on startup without exceptions.
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📦 Centralized System Backup & Restore Hub -->
+        <div class="card shadow-sm mb-4 border-info-subtle">
+            <div class="card-header bg-dark d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-info"><i class="bi bi-shield-lock-fill me-2"></i>System Backup &amp; Restore Hub</span>
+                <span class="badge bg-info-subtle text-info border border-info">Enterprise Safety</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Export and restore your platform credentials, monitored channels, and runtime configurations.
+                    Supports both <strong>Plaintext JSON</strong> for transparent inspection and <strong>Password-Protected AES-256-GCM Encrypted JSON</strong> (PBKDF2-HMAC-SHA256) for secure offsite archival.
+                </p>
+
+                <div class="row g-3">
+                    <!-- Column 1: Full System Snapshot -->
+                    <div class="col-md-4">
+                        <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-collection-fill text-warning fs-5"></i>
+                                <span class="fw-bold text-light">Full System Snapshot</span>
+                            </div>
+                            <p class="text-muted small mb-3 flex-grow-1">
+                                Complete archive combining Settings, All Channels &amp; Upload Defaults, and the API Key Vault in a single unified file.
+                            </p>
+                            <div class="d-flex flex-column gap-2 mt-auto">
+                                <div class="btn-group btn-group-sm w-100">
+                                    <a href="/api/settings/snapshot/export?mode=plaintext" class="btn btn-outline-warning" download="system_snapshot.json" title="Download unencrypted full snapshot">
+                                        <i class="bi bi-download me-1"></i>Plaintext
+                                    </a>
+                                    <button type="button" class="btn btn-outline-warning" onclick="triggerEncryptedSnapshotExport()" title="Download password-protected encrypted snapshot">
+                                        <i class="bi bi-lock me-1"></i>Encrypted
+                                    </button>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-warning fw-semibold w-100" data-bs-toggle="modal" data-bs-target="#restoreSnapshotModal">
+                                    <i class="bi bi-upload me-1"></i>Restore Snapshot…
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: API Keys Vault Backup -->
+                    <div class="col-md-4">
+                        <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-key-fill text-success fs-5"></i>
+                                <span class="fw-bold text-light">API Keys Vault Backup</span>
+                            </div>
+                            <p class="text-muted small mb-3 flex-grow-1">
+                                Backup configured Groq, Gemini, OpenRouter, and OpenAI credentials with multi-provider rate limits and cooldown tracking.
+                            </p>
+                            <div class="d-flex flex-column gap-2 mt-auto">
+                                <div class="btn-group btn-group-sm w-100">
+                                    <a href="/api/settings/keys/export?mode=plaintext" class="btn btn-outline-success" download="api_keys_backup.json" title="Download unencrypted API keys">
+                                        <i class="bi bi-download me-1"></i>Plaintext
+                                    </a>
+                                    <button type="button" class="btn btn-outline-success" onclick="triggerEncryptedKeysExport()" title="Download password-protected encrypted API keys">
+                                        <i class="bi bi-lock me-1"></i>Encrypted
+                                    </button>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success fw-semibold w-100" data-bs-toggle="modal" data-bs-target="#restoreKeysModal">
+                                    <i class="bi bi-upload me-1"></i>Restore API Keys…
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Runtime Settings Only -->
+                    <div class="col-md-4">
+                        <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-sliders text-info fs-5"></i>
+                                <span class="fw-bold text-light">Runtime Settings Baseline</span>
+                            </div>
+                            <p class="text-muted small mb-3 flex-grow-1">
+                                Export video encoding, AI routing thresholds, whisper tuning, and scheduling preferences.
+                            </p>
+                            <div class="d-flex flex-column gap-2 mt-auto">
+                                <button type="button" class="btn btn-sm btn-outline-info w-100" onclick="exportConfigurationBackup()">
+                                    <i class="bi bi-download me-1"></i>Download Config (.json)
+                                </button>
+                                <button type="button" class="btn btn-sm btn-info fw-semibold w-100" onclick="document.getElementById('importConfigFile').click()">
+                                    <i class="bi bi-upload me-1"></i>Restore Config…
+                                </button>
+                                <input type="file" id="importConfigFile" accept=".json,application/json" class="d-none" onchange="importConfigurationBackup(event)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="backupRestoreStatus" class="small text-muted mt-3"></div>
+            </div>
+        </div>
+
+        <!-- ⚠️ Granular Data, Storage & System Reset Center -->
+        <div class="card shadow-sm mb-4 border-danger-subtle">
+            <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-danger"><i class="bi bi-trash3-fill me-2"></i>Granular Data, Storage & Settings Reset Center</span>
+                <span class="badge bg-danger">Danger Zone</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Prune temporary render artifacts, wipe raw media downloads, purge processing history, or reset settings to defaults.
+                    Select exactly what you want to keep and what you want to remove. <strong>Zero-Crash Guarantee:</strong> Resetting data or settings never shuts down, revokes, or terminates the application server.
+                </p>
+
+                <!-- Storage & Record Telemetry Summary -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <div class="p-2 rounded bg-dark border border-secondary text-center">
+                            <div class="text-muted small">Total Purgeable Storage</div>
+                            <div class="h5 text-info mb-0 fw-bold" id="telemetry-total-mb">{{ storage_inventory.total_storage_mb }} MB</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">across downloads, outputs & temp</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-2 rounded bg-dark border border-secondary text-center">
+                            <div class="text-muted small">Total Database Records</div>
+                            <div class="h5 text-warning mb-0 fw-bold" id="telemetry-total-records">{{ storage_inventory.database.total_records }}</div>
+                            <div class="text-muted" style="font-size: 0.7rem;">videos, clips, logs & channels</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-2 rounded bg-dark border border-secondary text-center">
+                            <div class="text-muted small">Selected Reclaim Estimate</div>
+                            <div class="h5 text-success mb-0 fw-bold" id="estimate-reclaim-mb">0.0 MB</div>
+                            <div class="text-muted" style="font-size: 0.7rem;" id="estimate-reclaim-records">0 DB records</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Preset Buttons -->
+                <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+                    <span class="text-light small fw-semibold me-1">Quick Presets:</span>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="applyResetPreset('temp_only')">
+                        🧹 Clean Temp & VAD Cache
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="applyResetPreset('media_purge')">
+                        🎬 Purge Raw Media & Outputs
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyResetPreset('history_only')">
+                        📊 Reset Pipeline & Publish History
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyResetPreset('factory_reset')">
+                        ⚠️ Factory Wipe (Total Reset)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="applyResetPreset('deselect_all')">
+                        ✕ Deselect All
+                    </button>
+                </div>
+
+                <form id="granularResetForm" method="POST" action="/settings/reset">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="confirm_code" id="reset-confirm-code-field" value="">
+
+                    <div class="row g-3">
+                        <!-- Column 1: Filesystem Storage Purge -->
+                        <div class="col-md-4">
+                            <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                                <h6 class="text-info fw-semibold mb-2"><i class="bi bi-hdd-network me-1"></i>Storage & Media Files</h6>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_temp_files" name="delete_temp_files"
+                                           data-size-mb="{{ storage_inventory.storage.temp.size_mb }}" data-count="{{ storage_inventory.storage.temp.file_count }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_temp_files">
+                                        Temp Scratch & VAD Audio
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.storage.temp.file_count }} files ({{ storage_inventory.storage.temp.size_mb }} MB)</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_raw_downloads" name="delete_raw_downloads"
+                                           data-size-mb="{{ storage_inventory.storage.downloads.size_mb }}" data-count="{{ storage_inventory.storage.downloads.file_count }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_raw_downloads">
+                                        Raw Video Downloads
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.storage.downloads.file_count }} files ({{ storage_inventory.storage.downloads.size_mb }} MB)</div>
+                                </div>
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_rendered_outputs" name="delete_rendered_outputs"
+                                           data-size-mb="{{ storage_inventory.storage.outputs.size_mb }}" data-count="{{ storage_inventory.storage.outputs.file_count }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_rendered_outputs">
+                                        Master Rendered Shorts
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.storage.outputs.file_count }} files ({{ storage_inventory.storage.outputs.size_mb }} MB)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Column 2: Database Pipeline Records -->
+                        <div class="col-md-4">
+                            <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                                <h6 class="text-warning fw-semibold mb-2"><i class="bi bi-database me-1"></i>Database & History</h6>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_publishing_logs" name="delete_publishing_logs"
+                                           data-records="{{ storage_inventory.database.publishing_logs }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_publishing_logs">
+                                        Publishing & Audit Logs
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.database.publishing_logs }} log entries</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_clips" name="delete_clips_and_candidates"
+                                           data-records="{{ storage_inventory.database.clips + storage_inventory.database.clip_candidates }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_clips">
+                                        Clips & Candidates
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.database.clips }} rendered clips, {{ storage_inventory.database.clip_candidates }} candidates</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_pipelines" name="delete_pipeline_history"
+                                           data-records="{{ storage_inventory.database.source_videos + storage_inventory.database.transcripts }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_pipelines">
+                                        Source Ingestions & Transcripts
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.database.source_videos }} source videos</div>
+                                </div>
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_channels" name="delete_channels"
+                                           data-records="{{ storage_inventory.database.channels }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_channels">
+                                        Channel Profiles
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.database.channels }} channels configured</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Column 3: Configuration, API Keys & Auth -->
+                        <div class="col-md-4">
+                            <div class="card bg-dark-subtle border-secondary h-100 p-3">
+                                <h6 class="text-danger fw-semibold mb-2"><i class="bi bi-shield-lock me-1"></i>Settings & Credentials</h6>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_reset_settings" name="reset_settings"
+                                           data-records="0" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_reset_settings">
+                                        Reset Settings to Factory Defaults
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">Reverts JSON config to blueprint baselines</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_api_keys" name="delete_api_keys"
+                                           data-records="0" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_api_keys">
+                                        Clear API Keys & Key Vault
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">Removes stored Gemini, Groq & OpenAI keys</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input reset-option-cb" type="checkbox" id="cb_users" name="delete_users"
+                                           data-records="{{ storage_inventory.database.users }}" onchange="recalculateResetEstimate()">
+                                    <label class="form-check-label text-light small" for="cb_users">
+                                        Reset User Accounts
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.72rem;">{{ storage_inventory.database.users }} users registered</div>
+                                </div>
+                                <div class="form-check form-switch mt-2 pt-2 border-top border-secondary">
+                                    <input class="form-check-input" type="checkbox" id="cb_preserve_admin" name="preserve_admin" checked>
+                                    <label class="form-check-label text-success small fw-semibold" for="cb_preserve_admin">
+                                        Preserve Active Admin Session
+                                    </label>
+                                    <div class="text-muted" style="font-size: 0.7rem;">If turned off, default admin credentials (<code>admin</code> / <code>AdminPass12345!</code>) are automatically re-seeded.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary">
+                        <div class="small text-muted">
+                            <i class="bi bi-info-circle me-1"></i>Application remains 100% operational during and after reset execution.
+                        </div>
+                        <button type="button" class="btn btn-outline-danger fw-semibold px-4" id="btn-trigger-reset" onclick="openResetSafetyModal()" disabled>
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Execute Reset Action...
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🛑 Two-Tier Intelligent Reset Safety Confirmation Modal -->
+<div class="modal fade" id="resetSafetyModal" tabindex="-1" aria-labelledby="resetSafetyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-danger">
+            <div class="modal-header border-danger-subtle bg-danger-subtle text-danger py-2">
+                <h6 class="modal-title fw-bold" id="resetSafetyModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm Reset Action
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3" id="reset-modal-summary-text">
+                    You have selected the following components to be permanently removed or reset:
+                </p>
+                <div class="p-2 rounded bg-black border border-secondary mb-3">
+                    <ul class="list-unstyled mb-0 small" id="reset-modal-items-list">
+                        <!-- Dynamically filled -->
+                    </ul>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-dark-subtle border border-secondary-subtle">
+                    <span class="small text-muted">Estimated Reclaim:</span>
+                    <span class="fw-bold text-success" id="reset-modal-reclaim-text">0.0 MB / 0 Records</span>
+                </div>
+
+                <div id="reset-keyword-guard-container" class="d-none">
+                    <div class="alert alert-danger py-2 small mb-2">
+                        <i class="bi bi-shield-slash-fill me-1"></i>
+                        <strong>Destructive Total Reset Detected:</strong> Type <code>RESET</code> or <code>DELETE</code> below to confirm execution.
+                    </div>
+                    <input type="text" class="form-control bg-black text-danger border-danger text-center fw-bold"
+                           id="reset-safety-keyword-input" placeholder="Type RESET to confirm" autocomplete="off" onkeyup="checkResetKeywordMatch(this.value)">
+                </div>
+            </div>
+            <div class="modal-footer border-secondary py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-danger fw-bold px-3" id="btn-final-reset-confirm" onclick="submitGranularReset()">
+                    <i class="bi bi-trash3-fill me-1"></i>Confirm & Purge
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Restore API Keys Backup -->
+<div class="modal fade" id="restoreKeysModal" tabindex="-1" aria-labelledby="restoreKeysModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-success-subtle shadow-lg">
+            <div class="modal-header border-bottom border-secondary py-2 px-3">
+                <h6 class="modal-title fw-bold text-success" id="restoreKeysModalLabel">
+                    <i class="bi bi-key-fill me-2"></i>Restore API Keys from Vault Backup
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="/settings/keys/import" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="modal-body p-3">
+                    <p class="text-muted small mb-3">
+                        Upload an <code>api_keys_backup.json</code> (or encrypted backup) file.
+                        If the file is encrypted, enter the passphrase below to decrypt and load keys into memory and the database vault.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Choose Backup File (.json)</label>
+                        <input type="file" name="backup_file" class="form-control form-control-sm bg-black text-light border-secondary" accept=".json,application/json">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Or Paste JSON Data</label>
+                        <textarea name="backup_json" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" rows="3" placeholder='{"version": 1, ...}'></textarea>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label text-light small fw-semibold">Decryption Passphrase (If Password-Protected)</label>
+                        <input type="password" name="passphrase" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="Enter passphrase (leave blank if plaintext)">
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary d-flex justify-content-between py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i>Restore Keys
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Restore Full System Snapshot -->
+<div class="modal fade" id="restoreSnapshotModal" tabindex="-1" aria-labelledby="restoreSnapshotModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-warning-subtle shadow-lg">
+            <div class="modal-header border-bottom border-secondary py-2 px-3">
+                <h6 class="modal-title fw-bold text-warning" id="restoreSnapshotModalLabel">
+                    <i class="bi bi-collection-fill me-2"></i>Restore Full System Snapshot
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="/settings/snapshot/import" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="modal-body p-3">
+                    <p class="text-muted small mb-3">
+                        Restores runtime parameters, channel monitors, and the API key vault in a single atomic operation without server restart.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Choose Snapshot File (.json)</label>
+                        <input type="file" name="backup_file" class="form-control form-control-sm bg-black text-light border-secondary" accept=".json,application/json">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Or Paste Snapshot JSON</label>
+                        <textarea name="backup_json" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" rows="3" placeholder='{"version": 1, "type": "full_system_snapshot", ...}'></textarea>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label text-light small fw-semibold">Decryption Passphrase (If Protected)</label>
+                        <input type="password" name="passphrase" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="Enter passphrase if key archive is encrypted">
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary d-flex justify-content-between py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-warning fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i>Restore Snapshot
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -751,6 +1340,450 @@ function addApiKey(provider) {
 
     document.body.appendChild(form);
     form.submit();
+}
+
+async function purgeInvalidKeys() {
+    if (!confirm('Ping all configured API keys and automatically purge any keys returning HTTP 400, 401, or 403 (Invalid/Unauthorized)?')) {
+        return;
+    }
+    const btn = document.getElementById('purgeInvalidKeysBtn');
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Testing & Purging...';
+    }
+    try {
+        const formData = new FormData();
+        formData.append('csrf_token', '{{ csrf_token }}');
+        const resp = await fetch('/settings/keys/purge-invalid', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}',
+                'Accept': 'application/json'
+            }
+        });
+        const data = await resp.json();
+        if (data.status === 'success') {
+            alert(`✅ ${data.message}`);
+            window.location.reload();
+        } else {
+            alert('⚠️ ' + (data.detail || data.message || 'Failed to purge keys.'));
+        }
+    } catch (err) {
+        alert('Network or server error: ' + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
+}
+
+// Clipboard & System Paths Inspector
+function copyToClipboard(text, btnElement) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopySuccess(btnElement);
+        }).catch(() => fallbackCopy(text, btnElement));
+    } else {
+        fallbackCopy(text, btnElement);
+    }
+}
+
+function fallbackCopy(text, btnElement) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showCopySuccess(btnElement);
+    } catch (err) {
+        console.error('Failed to copy', err);
+    }
+    document.body.removeChild(textArea);
+}
+
+function showCopySuccess(btnElement) {
+    if (!btnElement) return;
+    const originalHtml = btnElement.innerHTML;
+    btnElement.innerHTML = '<i class="bi bi-check-lg text-success"></i> Copied!';
+    btnElement.classList.remove('btn-outline-secondary');
+    btnElement.classList.add('btn-outline-success');
+    setTimeout(() => {
+        btnElement.innerHTML = originalHtml;
+        btnElement.classList.remove('btn-outline-success');
+        btnElement.classList.add('btn-outline-secondary');
+    }, 2000);
+}
+
+// Granular Reset Center & Presets
+function applyResetPreset(preset) {
+    const checkboxes = {
+        temp: document.getElementById('cb_temp_files'),
+        raw: document.getElementById('cb_raw_downloads'),
+        outputs: document.getElementById('cb_rendered_outputs'),
+        logs: document.getElementById('cb_publishing_logs'),
+        clips: document.getElementById('cb_clips'),
+        pipelines: document.getElementById('cb_pipelines'),
+        channels: document.getElementById('cb_channels'),
+        settings: document.getElementById('cb_reset_settings'),
+        api_keys: document.getElementById('cb_api_keys'),
+        users: document.getElementById('cb_users')
+    };
+
+    Object.values(checkboxes).forEach(cb => { if (cb) cb.checked = false; });
+
+    if (preset === 'temp_only') {
+        if (checkboxes.temp) checkboxes.temp.checked = true;
+    } else if (preset === 'media_purge') {
+        if (checkboxes.temp) checkboxes.temp.checked = true;
+        if (checkboxes.raw) checkboxes.raw.checked = true;
+        if (checkboxes.outputs) checkboxes.outputs.checked = true;
+    } else if (preset === 'history_only') {
+        if (checkboxes.logs) checkboxes.logs.checked = true;
+        if (checkboxes.clips) checkboxes.clips.checked = true;
+        if (checkboxes.pipelines) checkboxes.pipelines.checked = true;
+    } else if (preset === 'factory_reset') {
+        Object.values(checkboxes).forEach(cb => { if (cb) cb.checked = true; });
+    }
+
+    recalculateResetEstimate();
+}
+
+function recalculateResetEstimate() {
+    const cbs = document.querySelectorAll('.reset-option-cb');
+    let totalMb = 0.0;
+    let totalRecords = 0;
+    let anyChecked = false;
+
+    cbs.forEach(cb => {
+        if (cb.checked) {
+            anyChecked = true;
+            const mb = parseFloat(cb.getAttribute('data-size-mb') || '0');
+            const rec = parseInt(cb.getAttribute('data-records') || '0', 10);
+            totalMb += isNaN(mb) ? 0 : mb;
+            totalRecords += isNaN(rec) ? 0 : rec;
+        }
+    });
+
+    const triggerBtn = document.getElementById('btn-trigger-reset');
+    if (triggerBtn) {
+        triggerBtn.disabled = !anyChecked;
+    }
+
+    const estMbEl = document.getElementById('estimate-reclaim-mb');
+    const estRecEl = document.getElementById('estimate-reclaim-records');
+    if (estMbEl) estMbEl.innerText = `${totalMb.toFixed(1)} MB`;
+    if (estRecEl) estRecEl.innerText = `${totalRecords} DB records`;
+}
+
+function openResetSafetyModal() {
+    const listEl = document.getElementById('reset-modal-items-list');
+    listEl.innerHTML = '';
+
+    const cbs = document.querySelectorAll('.reset-option-cb');
+    let countChecked = 0;
+    let totalMb = 0.0;
+    let totalRecords = 0;
+    let isTotalWipe = true;
+
+    const labels = {
+        'cb_temp_files': 'Temp Scratch & VAD Audio',
+        'cb_raw_downloads': 'Raw Video Downloads',
+        'cb_rendered_outputs': 'Master Rendered Shorts',
+        'cb_publishing_logs': 'Publishing & Audit Logs',
+        'cb_clips': 'Clips & Candidates',
+        'cb_pipelines': 'Source Ingestions & Transcripts',
+        'cb_channels': 'Channel Profiles',
+        'cb_reset_settings': 'Reset Settings to Factory Defaults',
+        'cb_api_keys': 'Clear API Keys & Key Vault',
+        'cb_users': 'Reset User Accounts'
+    };
+
+    cbs.forEach(cb => {
+        if (cb.checked) {
+            countChecked++;
+            const name = labels[cb.id] || cb.id;
+            const li = document.createElement('li');
+            li.className = 'd-flex align-items-center justify-content-between py-1 border-bottom border-dark-subtle';
+            li.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${name}</span>`;
+            listEl.appendChild(li);
+
+            const mb = parseFloat(cb.getAttribute('data-size-mb') || '0');
+            const rec = parseInt(cb.getAttribute('data-records') || '0', 10);
+            totalMb += isNaN(mb) ? 0 : mb;
+            totalRecords += isNaN(rec) ? 0 : rec;
+        } else {
+            isTotalWipe = false;
+        }
+    });
+
+    if (countChecked === 0) return;
+
+    const reclaimEl = document.getElementById('reset-modal-reclaim-text');
+    if (reclaimEl) {
+        reclaimEl.innerText = `${totalMb.toFixed(1)} MB storage / ${totalRecords} DB records`;
+    }
+
+    const guardContainer = document.getElementById('reset-keyword-guard-container');
+    const confirmBtn = document.getElementById('btn-final-reset-confirm');
+    const keywordInput = document.getElementById('reset-safety-keyword-input');
+
+    if (isTotalWipe) {
+        guardContainer.classList.remove('d-none');
+        keywordInput.value = '';
+        confirmBtn.disabled = true;
+    } else {
+        guardContainer.classList.add('d-none');
+        confirmBtn.disabled = false;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('resetSafetyModal'));
+    modal.show();
+}
+
+function checkResetKeywordMatch(val) {
+    const confirmBtn = document.getElementById('btn-final-reset-confirm');
+    const clean = (val || '').trim().toUpperCase();
+    if (clean === 'RESET' || clean === 'DELETE') {
+        confirmBtn.disabled = false;
+    } else {
+        confirmBtn.disabled = true;
+    }
+}
+
+function submitGranularReset() {
+    const keywordInput = document.getElementById('reset-safety-keyword-input');
+    const hiddenCode = document.getElementById('reset-confirm-code-field');
+    if (hiddenCode && keywordInput) {
+        hiddenCode.value = keywordInput.value.trim().toUpperCase();
+    }
+    const form = document.getElementById('granularResetForm');
+    if (form) {
+        form.submit();
+    }
+}
+
+// 📦 One-Click Configuration Backup & Restore
+async function exportConfigurationBackup() {
+    const statusEl = document.getElementById('backupRestoreStatus');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exporting config...';
+    try {
+        const resp = await fetch('/api/settings/export');
+        if (!resp.ok) throw new Error('Failed to export settings');
+        const data = await resp.json();
+        const exportBlob = {
+            app: "YouTube Shorts Automation Studio",
+            version: "1.0",
+            exported_at: new Date().toISOString(),
+            settings: data
+        };
+        const blob = new Blob([JSON.stringify(exportBlob, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `shorts_studio_config_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        if (statusEl) statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Backup downloaded!</span>';
+        setTimeout(() => { if (statusEl) statusEl.innerText = ''; }, 3000);
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    }
+}
+
+async function importConfigurationBackup(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('backupRestoreStatus');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Restoring configuration...';
+    try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const resp = await fetch('/api/settings/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsed)
+        });
+        const res = await resp.json();
+        if (resp.ok) {
+            if (statusEl) statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Config restored! Reloading...</span>';
+            setTimeout(() => window.location.reload(), 1200);
+        } else {
+            throw new Error(res.detail || 'Import failed');
+        }
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    } finally {
+        event.target.value = '';
+    }
+}
+
+function triggerEncryptedKeysExport() {
+    const pw = prompt("Enter a passphrase to encrypt your API Keys Vault backup (min 4 characters):");
+    if (pw === null) return;
+    if (pw.trim().length < 4) {
+        alert("Passphrase must be at least 4 characters.");
+        return;
+    }
+    window.location.href = `/api/settings/keys/export?mode=encrypted&passphrase=${encodeURIComponent(pw.trim())}`;
+}
+
+function triggerEncryptedSnapshotExport() {
+    const pw = prompt("Enter a passphrase to encrypt your Full System Snapshot (min 4 characters):");
+    if (pw === null) return;
+    if (pw.trim().length < 4) {
+        alert("Passphrase must be at least 4 characters.");
+        return;
+    }
+    window.location.href = `/api/settings/snapshot/export?mode=encrypted&passphrase=${encodeURIComponent(pw.trim())}`;
+}
+
+// 🛡️ Ingestion Armor & Network Mesh Actions
+function getCsrfToken() {
+    const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+    return tokenMeta ? tokenMeta.content : '';
+}
+
+async function startOAuthFlow() {
+    const statusEl = document.getElementById('auth-vault-status');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-info"></span>Initiating RFC-8628 Google Device Code...';
+    const csrfToken = getCsrfToken();
+    try {
+        const resp = await fetch('/api/ingest/oauth/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (resp.ok && data.user_code) {
+            if (statusEl) {
+                statusEl.innerHTML = `
+                    <div class="alert alert-info py-2 px-3 my-2">
+                        <strong>Device Code:</strong> <code class="fs-5 text-warning fw-bold">${data.user_code}</code><br>
+                        <span>Open <a href="${data.verification_url}" target="_blank" class="fw-bold text-light">${data.verification_url}</a> and enter the code above. Waiting for authorization...</span>
+                    </div>
+                `;
+            }
+            // Poll for completion
+            const interval = setInterval(async () => {
+                try {
+                    const pollResp = await fetch('/api/ingest/oauth/poll', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        body: JSON.stringify({ device_code: data.device_code }),
+                        credentials: 'same-origin'
+                    });
+                    const pollData = await pollResp.json();
+                    if (pollData.status === 'success' || pollData.status === 'authenticated') {
+                        clearInterval(interval);
+                        if (statusEl) statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Successfully connected YouTube OAuth!</span>';
+                    } else if (pollData.status === 'expired' || pollData.status === 'denied') {
+                        clearInterval(interval);
+                        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${pollData.message || 'Authorization stopped.'}</span>`;
+                    }
+                } catch {
+                    clearInterval(interval);
+                }
+            }, (data.interval || 5) * 1000);
+        } else {
+            throw new Error(data.detail || 'Could not start OAuth device code flow');
+        }
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    }
+}
+
+async function triggerSessionHarvest() {
+    const statusEl = document.getElementById('auth-vault-status');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-warning"></span>Running headless session harvester...';
+    try {
+        const resp = await fetch('/api/ingest/harvester/run', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': getCsrfToken()
+            },
+            credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            if (statusEl) statusEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${data.message || 'Harvest completed! ' + (data.cookies_count || 0) + ' cookies stored.'}</span>`;
+        } else {
+            throw new Error(data.detail || 'Harvest failed');
+        }
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    }
+}
+
+async function testProxyMesh() {
+    const statusEl = document.getElementById('proxy-test-status');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-success"></span>Pinging egress IP &amp; latency...';
+    try {
+        const resp = await fetch('/api/ingest/proxy/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({}),
+            credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            if (statusEl) {
+                if (data.results && Array.isArray(data.results)) {
+                    const healthyCount = data.results.filter(r => r.healthy).length;
+                    statusEl.innerHTML = `<span class="text-success"><i class="bi bi-broadcast me-1"></i>Tested ${data.results.length} proxies (${healthyCount} healthy)</span>`;
+                } else if (data.latency_ms !== undefined) {
+                    const color = data.healthy ? 'text-success' : 'text-warning';
+                    statusEl.innerHTML = `<span class="${color}"><i class="bi bi-broadcast me-1"></i>Latency: ${data.latency_ms}ms · IP: ${data.external_ip || 'Direct'}</span>`;
+                } else {
+                    statusEl.innerHTML = `<span class="text-success"><i class="bi bi-broadcast me-1"></i>Proxy test complete</span>`;
+                }
+            }
+        } else {
+            throw new Error(data.detail || 'Proxy test failed');
+        }
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    }
+}
+
+async function scanHotfolderNow() {
+    const statusEl = document.getElementById('hotfolder-scan-status');
+    if (statusEl) statusEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-warning"></span>Scanning hotfolder...';
+    try {
+        const resp = await fetch('/api/ingest/hotfolder/scan', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': getCsrfToken()
+            },
+            credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            const count = data.ingested_count ?? data.ingested ?? 0;
+            if (statusEl) statusEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Scan complete. Ingested: ${count}</span>`;
+        } else {
+            throw new Error(data.detail || 'Scan failed');
+        }
+    } catch (err) {
+        if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${err.message}</span>`;
+    }
 }
 </script>
 {% endblock %}

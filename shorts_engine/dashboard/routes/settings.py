@@ -10,8 +10,8 @@ from pathlib import Path
 import json
 from typing import Optional
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, File, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from shorts_engine.config.settings import settings
@@ -125,6 +125,13 @@ def view_settings(
     openrouter_key_items = _build_key_items(openrouter_keys)
     openai_key_items = _build_key_items(openai_keys)
 
+    from shorts_engine.services.storage.reset_service import ResetService
+    from shorts_engine.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        storage_inventory = ResetService.get_storage_inventory(db)
+        config_paths = ResetService.get_config_paths_inventory()
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -158,6 +165,19 @@ def view_settings(
             "masked_openrouter_key": mask_secret(openrouter_keys[0]) if openrouter_keys else "",
             "masked_openai_key": mask_secret(openai_keys[0]) if openai_keys else "",
             "masked_gemini_key": mask_secret(gemini_keys[0]) if gemini_keys else "",
+            "storage_inventory": storage_inventory,
+            "config_paths": config_paths,
+            "ingestion_policy_mode": getattr(settings, "INGESTION_POLICY_MODE", "two_tier"),
+            "ingestion_proxy_strict_mode": getattr(settings, "INGESTION_PROXY_STRICT_MODE", False),
+            "ingestion_proxy_pool_text": "\n".join(settings.get_proxy_pool()),
+            "ingestion_enable_oauth": getattr(settings, "INGESTION_ENABLE_OAUTH", True),
+            "hotfolder_enabled": getattr(settings, "HOTFOLDER_ENABLED", True),
+            "hotfolder_dir": str(getattr(settings, "HOTFOLDER_DIR", "")),
+            "allowed_policy_modes": [
+                ("two_tier", "Two-Tier Safety Triage (Recommended)"),
+                ("strict_gate", "Strict Pre-Ingestion Gate"),
+                ("auto_skip", "Auto-Skip Restricted Content"),
+            ],
             "msg": request.query_params.get("msg"),
             "msg_type": request.query_params.get("type", "success"),
         },
@@ -206,6 +226,11 @@ def update_settings(
     whisper_vad_filter: Optional[str] = Form(default="on"),
     whisper_language: Optional[str] = Form(default=None),
     whisper_temperature: Optional[float] = Form(default=0.0),
+    ingestion_policy_mode: Optional[str] = Form(default="two_tier"),
+    ingestion_proxy_strict_mode: Optional[str] = Form(default=None),
+    ingestion_proxy_pool: Optional[str] = Form(default=None),
+    ingestion_enable_oauth: Optional[str] = Form(default="on"),
+    hotfolder_enabled: Optional[str] = Form(default="on"),
     current_user: User = Depends(require_operator),
     csrf_ok: bool = Depends(verify_csrf),
 ):
@@ -315,7 +340,15 @@ def update_settings(
         "WHISPER_VAD_FILTER": is_vad_enabled,
         "WHISPER_LANGUAGE": whisper_language.strip() if whisper_language and whisper_language.strip() else None,
         "WHISPER_TEMPERATURE": float(whisper_temperature if whisper_temperature is not None else 0.0),
+        "INGESTION_POLICY_MODE": (ingestion_policy_mode or "two_tier").strip().lower(),
+        "INGESTION_PROXY_STRICT_MODE": ingestion_proxy_strict_mode is not None and ingestion_proxy_strict_mode.lower() in ("on", "true", "1", "yes"),
+        "INGESTION_ENABLE_OAUTH": ingestion_enable_oauth is not None and ingestion_enable_oauth.lower() in ("on", "true", "1", "yes"),
+        "HOTFOLDER_ENABLED": hotfolder_enabled is not None and hotfolder_enabled.lower() in ("on", "true", "1", "yes"),
     }
+
+    if ingestion_proxy_pool is not None:
+        new_proxies = [line.strip() for line in ingestion_proxy_pool.replace("\r", "\n").split("\n") if line.strip()]
+        updates["INGESTION_PROXY_POOL"] = new_proxies
 
     def _parse_keys_input(raw_text: Optional[str], fallback_single: Optional[str], current_keys: list) -> list:
         candidates = []
@@ -392,6 +425,24 @@ def delete_api_key(
             f"{prov.upper()}_API_KEY": remaining_keys[0] if remaining_keys else None,
         }
         save_runtime_settings(updates)
+
+        # Synchronize DB ApiKey vault
+        try:
+            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.models import ApiKey
+            from shorts_engine.db.security import decrypt_secret
+            with SessionLocal() as db:
+                for k_rec in db.query(ApiKey).filter_by(provider=prov).all():
+                    try:
+                        raw_val = decrypt_secret(k_rec.api_key_encrypted)
+                        if raw_val == removed or hash_api_key(raw_val)[:16] == key_hash or hash_api_key(raw_val) == key_hash:
+                            db.delete(k_rec)
+                    except Exception:
+                        pass
+                db.commit()
+        except Exception as e:
+            logger.warning("Could not synchronize ApiKey DB deletion: %s", e)
+
         logger.info("Operator '%s' removed %s API key [%s]", current_user.username, prov, key_hash)
         msg = f"{prov.title()} API key removed successfully"
         msg_type = "success"
@@ -427,7 +478,7 @@ def add_api_key(
     else:
         added = settings.add_api_key(prov, clean_key)
         if not added:
-            msg = f"Key could not be added (already configured or invalid)"
+            msg = "Key could not be added (already configured or invalid)"
             msg_type = "warning"
         else:
             updated_keys = getattr(settings, f"get_{prov}_keys")()
@@ -520,4 +571,507 @@ def test_api_key(
             "latency_ms": latency_ms,
             "message": f"Connection error: {str(e)[:80]}",
         }
+
+
+@router.post("/settings/keys/purge-invalid", summary="Test all keys and purge invalid or expired keys")
+@router.post("/api/settings/keys/purge-invalid", summary="API: Test all keys and purge invalid or expired keys")
+def purge_invalid_keys(
+    request: Request,
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    """
+    Pings every key configured across all providers.
+    Automatically prunes any key that returns HTTP 400, 401, or 403 (Invalid/Unauthorized).
+    Synchronizes runtime_settings.json, settings singleton, and the DB ApiKey vault.
+    """
+    from shorts_engine.db.session import SessionLocal
+    from shorts_engine.db.models import ApiKey
+    from shorts_engine.db.security import decrypt_secret
+
+    purged_keys = []
+    healthy_keys = []
+    providers = ["groq", "gemini", "openrouter", "openai"]
+
+    for prov in providers:
+        getter = getattr(settings, f"get_{prov}_keys", None)
+        if not getter:
+            continue
+        keys = list(getter())
+        for raw_k in keys:
+            h = hash_api_key(raw_k)[:16]
+            status_code = None
+            try:
+                if prov == "groq":
+                    resp = httpx.get("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {raw_k}"}, timeout=6.0)
+                    status_code = resp.status_code
+                elif prov == "gemini":
+                    resp = httpx.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={raw_k}", timeout=6.0)
+                    status_code = resp.status_code
+                elif prov == "openrouter":
+                    resp = httpx.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {raw_k}"}, timeout=6.0)
+                    status_code = resp.status_code
+                elif prov == "openai":
+                    resp = httpx.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {raw_k}"}, timeout=6.0)
+                    status_code = resp.status_code
+            except Exception:
+                # On transient connection timeouts, do NOT aggressively purge
+                status_code = None
+
+            if status_code in (400, 401, 403):
+                # Definite invalid/unauthorized key -> purge
+                settings.remove_api_key(prov, h)
+                usage_tracker.remove_key(prov, h)
+                purged_keys.append({"provider": prov, "hash": h, "masked": mask_api_key(raw_k), "status_code": status_code})
+            else:
+                healthy_keys.append({"provider": prov, "hash": h, "masked": mask_api_key(raw_k)})
+
+        # Update runtime settings for this provider
+        remaining = getattr(settings, f"get_{prov}_keys")()
+        save_runtime_settings({
+            f"{prov.upper()}_API_KEYS": remaining,
+            f"{prov.upper()}_API_KEY": remaining[0] if remaining else None,
+        })
+
+    # Also clean DB ApiKey records for any purged keys
+    if purged_keys:
+        purged_hashes = {p["hash"] for p in purged_keys}
+        try:
+            with SessionLocal() as db:
+                for k_rec in db.query(ApiKey).all():
+                    try:
+                        raw_val = decrypt_secret(k_rec.api_key_encrypted)
+                        if hash_api_key(raw_val)[:16] in purged_hashes or hash_api_key(raw_val) in purged_hashes:
+                            db.delete(k_rec)
+                    except Exception:
+                        pass
+                db.commit()
+        except Exception as e:
+            logger.warning("Could not synchronize ApiKey DB purge: %s", e)
+
+    msg = f"Purged {len(purged_keys)} invalid key(s). {len(healthy_keys)} healthy key(s) active."
+    logger.info("Operator '%s' purged %d invalid keys: %s", current_user.username, len(purged_keys), purged_keys)
+
+    is_browser = request.headers.get("sec-fetch-dest") == "document" or (
+        "text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")
+    )
+    if is_browser:
+        return RedirectResponse(
+            url=f"/settings?msg={urllib.parse.quote_plus(msg)}&type={'success' if purged_keys else 'info'}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    return {
+        "status": "success",
+        "purged_count": len(purged_keys),
+        "purged_keys": purged_keys,
+        "healthy_count": len(healthy_keys),
+        "healthy_keys": healthy_keys,
+        "message": msg,
+    }
+
+
+@router.get("/api/settings/export", summary="Export runtime settings as JSON")
+def export_settings_json(
+    current_user: User = Depends(require_viewer),
+):
+    reload_runtime_settings()
+    from shorts_engine.config.dynamic_store import DynamicConfigStore
+    from shorts_engine.db.session import SessionLocal
+    with SessionLocal() as db:
+        store = DynamicConfigStore.get_instance()
+        store.load_from_db(db)
+
+    return {
+        "LLM_PROVIDER": getattr(settings, "LLM_PROVIDER", "auto"),
+        "LLM_MODEL_NAME": getattr(settings, "LLM_MODEL_NAME", "gemini-3.8-flash"),
+        "GROQ_MODEL": getattr(settings, "GROQ_MODEL_NAME", "openai/gpt-oss-120b"),
+        "TARGET_DURATION_MIN_SEC": getattr(settings, "TARGET_DURATION_MIN_SEC", 15),
+        "TARGET_DURATION_MAX_SEC": getattr(settings, "TARGET_DURATION_MAX_SEC", 58),
+        "MAX_CLIPS_PER_VIDEO": getattr(settings, "MAX_SEGMENTS_PER_VIDEO", 5),
+        "MIN_CLIPS_PER_VIDEO": getattr(settings, "MIN_SEGMENTS_PER_VIDEO", 3),
+        "VIDEO_CRF": getattr(settings, "VIDEO_ENCODING_CRF", 18),
+        "VIDEO_PRESET": getattr(settings, "VIDEO_ENCODING_PRESET", "medium"),
+        "VIDEO_SCALE_ALGORITHM": getattr(settings, "VIDEO_SCALE_ALGORITHM", "lanczos"),
+        "TARGET_FPS": getattr(settings, "VIDEO_TARGET_FPS", 30),
+        "AUDIO_BITRATE": getattr(settings, "AUDIO_BITRATE", "320k"),
+        "AUDIO_SAMPLE_RATE": getattr(settings, "AUDIO_SAMPLE_RATE", 48000),
+        "DRY_RUN_PUBLISHING": getattr(settings, "DRY_RUN_PUBLISHING", True),
+        "DRIP_FEED_ENABLED": getattr(settings, "DRIP_FEED_ENABLED", True),
+        "DRIP_FEED_POLL_INTERVAL_SECONDS": getattr(settings, "DRIP_FEED_POLL_INTERVAL_SECONDS", 60),
+        "MAX_RETRY_COUNT": getattr(settings, "MAX_RETRY_COUNT", 3),
+        "WHISPER_MODEL_SIZE": getattr(settings, "WHISPER_MODEL_SIZE", "base"),
+        "WHISPER_BEAM_SIZE": getattr(settings, "WHISPER_BEAM_SIZE", 5),
+        "SILERO_VAD_FILTER": getattr(settings, "WHISPER_VAD_FILTER", True),
+        "WHISPER_LANGUAGE": getattr(settings, "WHISPER_LANGUAGE", "en"),
+        "INGESTION_POLICY_MODE": getattr(settings, "INGESTION_POLICY_MODE", "two_tier"),
+        "INGESTION_PROXY_STRICT_MODE": getattr(settings, "INGESTION_PROXY_STRICT_MODE", False),
+        "INGESTION_PROXY_POOL": getattr(settings, "INGESTION_PROXY_POOL", []),
+        "INGESTION_ENABLE_OAUTH": getattr(settings, "INGESTION_ENABLE_OAUTH", True),
+        "HOTFOLDER_ENABLED": getattr(settings, "HOTFOLDER_ENABLED", True),
+    }
+
+
+@router.post("/api/settings/save", summary="Save runtime settings via JSON")
+async def save_settings_json(
+    request: Request,
+    current_user: User = Depends(require_operator),
+):
+    body = await request.json()
+    from shorts_engine.config.dynamic_store import DynamicConfigStore
+    from shorts_engine.db.session import SessionLocal
+
+    save_runtime_settings(body)
+    with SessionLocal() as db:
+        store = DynamicConfigStore.get_instance()
+        for k, v in body.items():
+            store.set(k, v, db)
+
+    return {"status": "success", "message": "Settings saved and applied dynamically"}
+
+
+@router.post("/api/settings/import", summary="Restore configuration from JSON backup")
+async def import_settings_json(
+    request: Request,
+    current_user: User = Depends(require_operator),
+):
+    body = await request.json()
+    from shorts_engine.config.dynamic_store import DynamicConfigStore
+    from shorts_engine.db.session import SessionLocal
+
+    settings_data = body.get("settings", body)
+    if not isinstance(settings_data, dict):
+        raise HTTPException(status_code=400, detail="Invalid settings JSON format")
+
+    save_runtime_settings(settings_data)
+    with SessionLocal() as db:
+        store = DynamicConfigStore.get_instance()
+        for k, v in settings_data.items():
+            if isinstance(v, (str, int, float, bool)):
+                store.set(k, v, db)
+
+    return {"status": "success", "message": "Configuration successfully restored from backup"}
+
+
+@router.get("/api/settings/storage-inventory", summary="Get storage and database record inventory")
+def get_storage_inventory_api(
+    current_user: User = Depends(require_viewer),
+):
+    from shorts_engine.db.session import SessionLocal
+    from shorts_engine.services.storage.reset_service import ResetService
+    with SessionLocal() as db:
+        return ResetService.get_storage_inventory(db)
+
+
+@router.get("/api/settings/config-paths", summary="Get configuration files inventory")
+def get_config_paths_api(
+    current_user: User = Depends(require_viewer),
+):
+    from shorts_engine.services.storage.reset_service import ResetService
+    return ResetService.get_config_paths_inventory()
+
+
+@router.post("/api/settings/reset", summary="Granular data, storage and settings reset via JSON")
+async def api_reset_data(
+    request: Request,
+    current_user: User = Depends(require_operator),
+):
+    body = await request.json()
+    from shorts_engine.services.storage.reset_service import ResetService, ResetOptions
+    from shorts_engine.db.session import SessionLocal
+
+    options = ResetOptions(
+        delete_raw_downloads=bool(body.get("delete_raw_downloads", False)),
+        delete_rendered_outputs=bool(body.get("delete_rendered_outputs", False)),
+        delete_temp_files=bool(body.get("delete_temp_files", False)),
+        delete_publishing_logs=bool(body.get("delete_publishing_logs", False)),
+        delete_clips_and_candidates=bool(body.get("delete_clips_and_candidates", False)),
+        delete_pipeline_history=bool(body.get("delete_pipeline_history", False)),
+        delete_channels=bool(body.get("delete_channels", False)),
+        reset_settings=bool(body.get("reset_settings", False)),
+        delete_api_keys=bool(body.get("delete_api_keys", False)),
+        delete_users=bool(body.get("delete_users", False)),
+        preserve_admin=bool(body.get("preserve_admin", True)),
+    )
+
+    is_total_wipe = bool(body.get("is_total_wipe", False))
+    confirm_code = str(body.get("confirm_code", "")).strip().upper()
+    if is_total_wipe and confirm_code not in ("RESET", "DELETE", "CONFIRM"):
+        raise HTTPException(
+            status_code=400,
+            detail="Safety confirmation code 'RESET' or 'DELETE' required for total reset.",
+        )
+
+    with SessionLocal() as db:
+        result = ResetService.execute_granular_reset(options, db, current_user)
+    return result
+
+
+@router.post("/settings/reset", summary="Execute granular reset from HTML form")
+def form_reset_data(
+    request: Request,
+    confirm_code: Optional[str] = Form(default=""),
+    delete_raw_downloads: Optional[str] = Form(default=None),
+    delete_rendered_outputs: Optional[str] = Form(default=None),
+    delete_temp_files: Optional[str] = Form(default=None),
+    delete_publishing_logs: Optional[str] = Form(default=None),
+    delete_clips_and_candidates: Optional[str] = Form(default=None),
+    delete_pipeline_history: Optional[str] = Form(default=None),
+    delete_channels: Optional[str] = Form(default=None),
+    reset_settings: Optional[str] = Form(default=None),
+    delete_api_keys: Optional[str] = Form(default=None),
+    delete_users: Optional[str] = Form(default=None),
+    preserve_admin: Optional[str] = Form(default="on"),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.storage.reset_service import ResetService, ResetOptions
+    from shorts_engine.db.session import SessionLocal
+
+    options = ResetOptions(
+        delete_raw_downloads=bool(delete_raw_downloads),
+        delete_rendered_outputs=bool(delete_rendered_outputs),
+        delete_temp_files=bool(delete_temp_files),
+        delete_publishing_logs=bool(delete_publishing_logs),
+        delete_clips_and_candidates=bool(delete_clips_and_candidates),
+        delete_pipeline_history=bool(delete_pipeline_history),
+        delete_channels=bool(delete_channels),
+        reset_settings=bool(reset_settings),
+        delete_api_keys=bool(delete_api_keys),
+        delete_users=bool(delete_users),
+        preserve_admin=bool(preserve_admin),
+    )
+
+    is_total_wipe = (
+        options.delete_raw_downloads
+        and options.delete_rendered_outputs
+        and options.delete_temp_files
+        and options.delete_publishing_logs
+        and options.delete_clips_and_candidates
+        and options.delete_pipeline_history
+        and options.delete_channels
+        and options.reset_settings
+        and options.delete_api_keys
+    )
+
+    clean_code = (confirm_code or "").strip().upper()
+    if is_total_wipe and clean_code not in ("RESET", "DELETE", "CONFIRM"):
+        encoded_err = urllib.parse.quote("Safety confirmation code 'RESET' or 'DELETE' required for total system wipe.")
+        return RedirectResponse(
+            url=f"/settings?msg={encoded_err}&type=danger",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    with SessionLocal() as db:
+        res = ResetService.execute_granular_reset(options, db, current_user)
+
+    msg = f"Reset complete! Cleaned {res.get('total_files_deleted', 0)} files ({res.get('total_reclaimed_mb', 0)} MB) and {res.get('total_db_records_deleted', 0)} DB records."
+    encoded_msg = urllib.parse.quote(msg)
+    return RedirectResponse(
+        url=f"/settings?msg={encoded_msg}&type=success",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+# =========================================================================
+# API Keys & Full System Snapshot Backup & Restore Endpoints
+# =========================================================================
+
+@router.get("/api/settings/keys/export", summary="Export API key vault (plaintext or encrypted)")
+def export_api_keys_route(
+    mode: str = "plaintext",
+    passphrase: Optional[str] = None,
+    current_user: User = Depends(require_viewer),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            result = BackupService.export_api_keys(mode=mode, passphrase=passphrase, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    filename = "api_keys_encrypted_backup.json" if mode.lower() == "encrypted" else "api_keys_backup.json"
+    content = json.dumps(result, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/api/settings/keys/import", summary="Restore API keys from backup archive")
+async def import_api_keys_api(
+    request: Request,
+    current_user: User = Depends(require_operator),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+
+    payload = body.get("payload", body)
+    passphrase = body.get("passphrase")
+
+    try:
+        with SessionLocal() as db:
+            res = BackupService.import_api_keys(payload, passphrase=passphrase, db=db)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Unhandled error restoring API keys: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to restore API keys: {e}")
+
+
+@router.post("/settings/keys/import", summary="Restore API keys via HTML form upload")
+async def import_api_keys_form(
+    request: Request,
+    backup_file: Optional[UploadFile] = File(None),
+    backup_json: Optional[str] = Form(None),
+    passphrase: Optional[str] = Form(None),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    payload = None
+    if backup_file and backup_file.filename:
+        try:
+            content = await backup_file.read()
+            payload = json.loads(content.decode("utf-8"))
+        except Exception as e:
+            err = urllib.parse.quote(f"Could not parse uploaded file: {e}")
+            return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+    elif backup_json and backup_json.strip():
+        try:
+            payload = json.loads(backup_json.strip())
+        except Exception as e:
+            err = urllib.parse.quote(f"Invalid JSON string: {e}")
+            return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+    if not payload:
+        err = urllib.parse.quote("No API keys backup file or JSON provided.")
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        with SessionLocal() as db:
+            res = BackupService.import_api_keys(payload, passphrase=passphrase, db=db)
+        msg = urllib.parse.quote(
+            f"API keys restored successfully! Added: {res['imported']}, Skipped: {res['skipped']}, Providers: {', '.join(res['updated_providers']) or 'None'}."
+        )
+        return RedirectResponse(url=f"/settings?msg={msg}&type=success", status_code=status.HTTP_303_SEE_OTHER)
+    except ValueError as e:
+        err = urllib.parse.quote(str(e))
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        err = urllib.parse.quote(f"Key restoration failed: {e}")
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/api/settings/snapshot/export", summary="Export full system snapshot archive")
+def export_full_snapshot_route(
+    mode: str = "plaintext",
+    passphrase: Optional[str] = None,
+    current_user: User = Depends(require_viewer),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            result = BackupService.export_full_system_snapshot(db, mode=mode, passphrase=passphrase)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    filename = "system_snapshot_encrypted.json" if mode.lower() == "encrypted" else "system_snapshot.json"
+    content = json.dumps(result, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/api/settings/snapshot/import", summary="Restore full system snapshot from JSON")
+async def import_full_snapshot_api(
+    request: Request,
+    current_user: User = Depends(require_operator),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+
+    payload = body.get("payload", body)
+    passphrase = body.get("passphrase")
+
+    try:
+        with SessionLocal() as db:
+            res = BackupService.import_full_system_snapshot(payload, db=db, passphrase=passphrase)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Unhandled error restoring full system snapshot: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to restore system snapshot: {e}")
+
+
+@router.post("/settings/snapshot/import", summary="Restore full system snapshot via HTML form")
+async def import_full_snapshot_form(
+    request: Request,
+    backup_file: Optional[UploadFile] = File(None),
+    backup_json: Optional[str] = Form(None),
+    passphrase: Optional[str] = Form(None),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.storage.backup_service import BackupService
+    from shorts_engine.db.session import SessionLocal
+
+    payload = None
+    if backup_file and backup_file.filename:
+        try:
+            content = await backup_file.read()
+            payload = json.loads(content.decode("utf-8"))
+        except Exception as e:
+            err = urllib.parse.quote(f"Could not parse uploaded file: {e}")
+            return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+    elif backup_json and backup_json.strip():
+        try:
+            payload = json.loads(backup_json.strip())
+        except Exception as e:
+            err = urllib.parse.quote(f"Invalid JSON string: {e}")
+            return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+    if not payload:
+        err = urllib.parse.quote("No system snapshot file or JSON provided.")
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        with SessionLocal() as db:
+            res = BackupService.import_full_system_snapshot(payload, db=db, passphrase=passphrase)
+        ch_res = res.get("channels") or {}
+        k_res = res.get("keys") or {}
+        msg = urllib.parse.quote(
+            f"Full system snapshot restored successfully! Settings: updated, Channels: {ch_res.get('imported', 0)} added / {ch_res.get('updated', 0)} updated, Keys: {k_res.get('imported', 0)} added."
+        )
+        return RedirectResponse(url=f"/settings?msg={msg}&type=success", status_code=status.HTTP_303_SEE_OTHER)
+    except ValueError as e:
+        err = urllib.parse.quote(str(e))
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        err = urllib.parse.quote(f"System snapshot restoration failed: {e}")
+        return RedirectResponse(url=f"/settings?msg={err}&type=danger", status_code=status.HTTP_303_SEE_OTHER)
+
+
+
 

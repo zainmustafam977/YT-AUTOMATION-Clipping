@@ -6,7 +6,7 @@ and audio is intelligible.
 
 import logging
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple
 import cv2
 import numpy as np
 from shorts_engine.config.settings import settings

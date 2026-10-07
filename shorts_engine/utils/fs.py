@@ -4,7 +4,6 @@ Contains ZERO imports from shorts_engine to guarantee no circular dependencies.
 """
 
 import os
-import sys
 import json
 import time
 import logging

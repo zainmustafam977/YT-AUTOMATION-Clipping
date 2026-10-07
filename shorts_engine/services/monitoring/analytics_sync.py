@@ -4,15 +4,12 @@ Syncs live view counts, like ratios, comments, and audience retention metrics
 for published YouTube Shorts into the database.
 """
 
-import os
-import json
 import logging
 import hashlib
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from shorts_engine.db.models import Clip, ClipStatus, PublishLog
-from shorts_engine.config.settings import settings
+from shorts_engine.db.models import Clip, ClipStatus
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +30,7 @@ class YouTubeAnalyticsSync:
             self.db.query(Clip)
             .filter(
                 (Clip.status == ClipStatus.PUBLISHED) |
-                (Clip.publish_log != None)
+                (Clip.publish_log != None)  # noqa: E711
             )
             .all()
         )

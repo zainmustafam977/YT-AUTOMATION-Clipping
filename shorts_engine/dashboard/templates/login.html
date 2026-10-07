@@ -10,16 +10,27 @@
             </div>
             <div class="card-body p-4">
                 <form id="loginForm" method="POST" action="/login">
+                    <div id="infoAlert" class="alert alert-info d-none" role="alert"></div>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
-                        <input type="text" class="form-control bg-dark text-light border-secondary" id="username" name="username" required autocomplete="username">
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="username" name="username" required autocomplete="username" placeholder="admin">
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control bg-dark text-light border-secondary" id="password" name="password" required autocomplete="current-password">
+                        <div class="input-group">
+                            <input type="password" class="form-control bg-dark text-light border-secondary" id="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+                            <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn" title="Toggle password visibility">
+                                👁️
+                            </button>
+                        </div>
                     </div>
                     <div id="errorAlert" class="alert alert-danger d-none" role="alert"></div>
                     <button type="submit" class="btn btn-primary w-100" style="background-color: #7c4dff; border-color: #7c4dff;">Sign In</button>
+                    <div class="mt-3 text-center text-muted small">
+                        <span class="badge bg-dark border border-secondary text-info px-2 py-1" style="font-size: 0.8rem;">
+                            Default: <strong>admin</strong> / <strong>AdminPass12345!</strong>
+                        </span>
+                    </div>
                 </form>
             </div>
         </div>
@@ -27,6 +38,27 @@
 </div>
 
 <script>
+// Check for info message in URL params (e.g., from logout)
+const params = new URLSearchParams(window.location.search);
+const msg = params.get('msg');
+if (msg) {
+    const infoAlert = document.getElementById('infoAlert');
+    infoAlert.textContent = msg;
+    infoAlert.classList.remove('d-none');
+}
+
+// Password toggle
+document.getElementById('togglePasswordBtn')?.addEventListener('click', function() {
+    const pwd = document.getElementById('password');
+    if (pwd.type === 'password') {
+        pwd.type = 'text';
+        this.textContent = '🙈';
+    } else {
+        pwd.type = 'password';
+        this.textContent = '👁️';
+    }
+});
+
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const formData = new FormData(this);

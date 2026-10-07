@@ -6,6 +6,7 @@ and automatically uploads them to YouTube (or simulates in DRY_RUN mode).
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_clip_metadata(clip: Clip) -> ShortsMetadata:
-    """Extracts or infers YouTube title, description, and hashtags for a clip."""
+    """Extracts or infers YouTube title, description, and hashtags for a clip, preserving SEO and channel defaults."""
     cand = clip.candidate
     title = clip.generated_title or (cand.hook_text if cand else "Viral Short")
     if len(title) > 90:
@@ -29,19 +30,78 @@ def build_clip_metadata(clip: Clip) -> ShortsMetadata:
     if "#shorts" not in title.lower():
         title = f"{title} #shorts"
 
-    base_desc = cand.hook_text if cand else title
-    # Embed unique [clip:<clip_id>] token for out-of-band upload matching (PLAN-P0-05)
-    token = f"[clip:{clip.id}]"
-    description = f"{base_desc}\n\n#shorts #viral #trending\n\n{token}"
-    tags = ["#shorts", "#viral", "#trending"]
+    token = f"[c:{clip.id}]"
+    legacy_token = f"[clip:{clip.id}]"
+    if clip.generated_description and len(clip.generated_description.strip()) > 10:
+        description = clip.generated_description
+        if token not in description:
+            description = f"{description}\n\n{token} {legacy_token}"
+        elif legacy_token not in description:
+            description = f"{description} {legacy_token}"
+    else:
+        base_desc = cand.hook_text if cand else title
+        description = f"{base_desc}\n\n#shorts #viral #trending\n\n{token} {legacy_token}"
+
+    tags = None
+    if clip.generated_tags:
+        try:
+            import json
+            parsed = json.loads(clip.generated_tags)
+            if isinstance(parsed, list) and parsed:
+                tags = [str(t) for t in parsed]
+        except Exception:
+            tags = None
+
+    channel = None
     if cand and cand.source_video and cand.source_video.channel:
-        tags.append(cand.source_video.channel.name.lower().replace(" ", ""))
+        channel = cand.source_video.channel
+
+    channel_defaults = getattr(channel, "upload_defaults", {}) if channel else {}
+    if not tags:
+        tags = ["#shorts", "#viral", "#trending"]
+        if channel:
+            tags.append(channel.name.lower().replace(" ", ""))
+        if channel_defaults.get("default_tags"):
+            raw_def_tags = channel_defaults["default_tags"]
+            if isinstance(raw_def_tags, list):
+                def_tags = [str(t).strip() for t in raw_def_tags if str(t).strip()]
+            else:
+                def_tags = [t.strip() for t in str(raw_def_tags).split(",") if t.strip()]
+            tags.extend(def_tags)
+
+    privacy = channel_defaults.get("privacy_status", "unlisted")
+    category_id = channel_defaults.get("category_id", "22")
+    made_for_kids = bool(channel_defaults.get("made_for_kids", False))
+    language = channel_defaults.get("default_language", "en")
+    license_type = channel_defaults.get("license", "youtube")
 
     return ShortsMetadata(
         title=title,
         description=description,
         tags=tags,
+        privacy_status=privacy,
+        category_id=category_id,
+        made_for_kids=made_for_kids,
+        default_language=language,
+        license=license_type,
     )
+
+
+def extract_clip_id_from_description(description: str) -> Optional[str]:
+    """Parses [c:<clip_id>] token from a YouTube description string."""
+    if not description:
+        return None
+    match = re.search(r'\[c:([^\]]+)\]', description)
+    return match.group(1) if match else None
+
+
+def check_duplicate_upload(clip_id: str, channel_recent_descriptions: List[str]) -> bool:
+    """Returns True if any description in the list contains [c:<clip_id>]."""
+    token = f"[c:{clip_id}]"
+    for desc in channel_recent_descriptions:
+        if desc and token in desc:
+            return True
+    return False
 
 
 def check_and_publish_due_clips(db: Session) -> List[str]:

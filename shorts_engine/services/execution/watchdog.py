@@ -15,7 +15,7 @@ import subprocess
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict
 import psutil
 
 logger = logging.getLogger(__name__)
@@ -215,9 +215,20 @@ class SubprocessWatchdog:
                 errors="replace",
             )
 
+            # Assign child process to Win32 Job Object on Windows to prevent zombie processes
+            if sys.platform == "win32":
+                try:
+                    from shorts_engine.services.execution.win32_job import win32_job_manager
+                    if win32_job_manager.is_active:
+                        handle = getattr(proc, "_handle", None)
+                        win32_job_manager.assign_process(handle if handle else proc.pid)
+                except Exception as _je:
+                    logger.debug("Win32 Job assignment notice: %s", _je)
+
             try:
                 stdout_text, stderr_text = proc.communicate(timeout=timeout_sec)
                 exit_code = proc.returncode
+
             except subprocess.TimeoutExpired:
                 timed_out = True
                 logger.error(

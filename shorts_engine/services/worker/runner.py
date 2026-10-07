@@ -6,26 +6,25 @@ flushes CUDA cache between jobs, enforces VRAM limits, and executes rendering & 
 
 import os
 import re
-import sys
 import time
 import json
 import uuid
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import reload_runtime_settings
 from shorts_engine.db.session import SessionLocal, is_postgres
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel
+from shorts_engine.db.models import Clip, ClipStatus
 from shorts_engine.services.reframing.cropper import VideoReframer
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
 from shorts_engine.services.captioning.sfx_mapper import SFXMapper
 from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
-from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
+from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.monitoring.alerter import PipelineAlerter
 
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ def claim_next_clip(db: Session, worker_id: Optional[str] = None) -> Optional[Cl
             db.query(Clip)
             .filter(
                 Clip.status == ClipStatus.RENDERING,
-                or_(Clip.rendered_path == None, Clip.rendered_path.startswith("CLAIMED:") == False),
+                or_(Clip.rendered_path.is_(None), Clip.rendered_path.startswith("CLAIMED:").is_(False)),  # noqa: E711
             )
             .order_by(Clip.created_at.asc())
             .with_for_update(skip_locked=True)
@@ -77,7 +76,7 @@ def claim_next_clip(db: Session, worker_id: Optional[str] = None) -> Optional[Cl
             db.query(Clip)
             .filter(
                 Clip.status == ClipStatus.RENDERING,
-                or_(Clip.rendered_path == None, Clip.rendered_path.startswith("CLAIMED:") == False),
+                or_(Clip.rendered_path.is_(None), Clip.rendered_path.startswith("CLAIMED:").is_(False)),  # noqa: E711
             )
             .order_by(Clip.created_at.asc())
             .first()

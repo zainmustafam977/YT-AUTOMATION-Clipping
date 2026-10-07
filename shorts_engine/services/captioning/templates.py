@@ -3,9 +3,8 @@ Caption Style Template Engine: provides declarative presets, color conversions,
 and custom template customization for YouTube Shorts subtitles.
 """
 
-import re
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from shorts_engine.config.settings import settings
 
@@ -41,9 +40,12 @@ def hex_to_ass_color(hex_str: str) -> str:
 
 def ass_to_hex_color(ass_str: str) -> str:
     """Converts ASS color format (&H00BBGGRR) to HTML hex format (#RRGGBB)."""
-    if not ass_str or not ass_str.startswith("&H"):
-        return "#FFFFFF"
-    clean = ass_str[2:].zfill(8)
+    if not ass_str:
+        return "#ffffff"
+    clean_str = ass_str.strip()
+    if not (clean_str.startswith("&H") or clean_str.startswith("&h")):
+        return "#ffffff"
+    clean = clean_str[2:].zfill(8)
     # format: AABBGGRR
     b = clean[2:4]
     g = clean[4:6]
@@ -62,9 +64,14 @@ class CaptionStyleTemplate(BaseModel):
     outline_color: str = "&H00000000"     # Black
     outline_width: float = 4.0
     shadow_depth: float = 2.0
+    shadow_color: str = "&H80000000"
+    background_box: bool = False
+    box_color: str = "&H80000000"
     margin_vertical: int = 420            # Baseline margin from bottom
     max_words_per_line: int = 4
     case_transform: str = "uppercase"     # uppercase, lowercase, capitalize, none
+    scale_pop: bool = True
+    active_scale: int = 115
 
     def to_ass_overrides(self) -> Dict[str, Any]:
         """Maps template properties directly to ASSSubtitleGenerator override keys."""
@@ -76,9 +83,14 @@ class CaptionStyleTemplate(BaseModel):
             "outline_color": hex_to_ass_color(self.outline_color),
             "outline_width": self.outline_width,
             "shadow_depth": self.shadow_depth,
+            "shadow_color": hex_to_ass_color(self.shadow_color),
+            "background_box": self.background_box,
+            "box_color": hex_to_ass_color(self.box_color),
             "margin_vertical": self.margin_vertical,
             "max_words_per_line": self.max_words_per_line,
             "case_transform": self.case_transform,
+            "scale_pop": self.scale_pop,
+            "active_scale": self.active_scale,
         }
 
     def to_ui_dict(self) -> Dict[str, Any]:
@@ -94,9 +106,14 @@ class CaptionStyleTemplate(BaseModel):
             "outline_hex": ass_to_hex_color(self.outline_color),
             "outline_width": self.outline_width,
             "shadow_depth": self.shadow_depth,
+            "shadow_hex": ass_to_hex_color(self.shadow_color),
+            "background_box": self.background_box,
+            "box_hex": ass_to_hex_color(self.box_color),
             "margin_vertical": self.margin_vertical,
             "max_words_per_line": self.max_words_per_line,
             "case_transform": self.case_transform,
+            "scale_pop": self.scale_pop,
+            "active_scale": self.active_scale,
         }
 
 
@@ -171,24 +188,78 @@ BUILTIN_TEMPLATES: Dict[str, CaptionStyleTemplate] = {
         primary_color="&H00FFFFFF",
         highlight_color="&H0000E5FF",  # Amber Yellow
         outline_color="&H00000000",
-        outline_width=6.0,
+        outline_width=2.0,
         shadow_depth=0.0,
+        background_box=True,
+        box_color="&H80000000",
         margin_vertical=settings.CAPTION_MARGIN_VERTICAL,
         max_words_per_line=3,
         case_transform="uppercase",
     ),
 }
 
+TEMPLATE_ALIASES: Dict[str, str] = {
+    "cyberpunk": "neon",
+    "high_contrast": "high_contrast_box",
+}
 
-def get_caption_template(preset_or_id: Optional[str] = None) -> CaptionStyleTemplate:
+
+def get_caption_template(preset_or_id: Optional[str] = None, db: Optional[Any] = None) -> CaptionStyleTemplate:
     """Returns the requested template or falls back to the default preset."""
-    key = (preset_or_id or settings.DEFAULT_CAPTION_PRESET or "hormozi").lower().strip()
-    return BUILTIN_TEMPLATES.get(key, BUILTIN_TEMPLATES["hormozi"])
+    raw_key = (preset_or_id or settings.DEFAULT_CAPTION_PRESET or "hormozi").strip()
+    key = raw_key.lower()
+
+    # Direct alias resolution
+    resolved_key = TEMPLATE_ALIASES.get(key, key)
+    if resolved_key in BUILTIN_TEMPLATES:
+        return BUILTIN_TEMPLATES[resolved_key]
+
+    # Try DB lookup if session provided
+    if db is not None:
+        try:
+            from shorts_engine.db.models import CaptionPreset
+            preset = db.query(CaptionPreset).filter(
+                (CaptionPreset.id == raw_key) | (CaptionPreset.name.ilike(raw_key))
+            ).first()
+            if preset:
+                return CaptionStyleTemplate(
+                    template_id=preset.id,
+                    name=preset.name,
+                    description=preset.description or "",
+                    font_name=preset.font_family,
+                    font_size=preset.font_size,
+                    primary_color=preset.primary_color,
+                    highlight_color=preset.highlight_color,
+                    outline_color=preset.outline_color,
+                    outline_width=preset.outline_width,
+                    shadow_depth=preset.shadow_depth,
+                    shadow_color=preset.shadow_color,
+                    background_box=preset.background_box,
+                    box_color=preset.box_color,
+                    margin_vertical=preset.margin_vertical,
+                    max_words_per_line=preset.max_words_per_line,
+                    case_transform=preset.case_transform,
+                    scale_pop=preset.scale_pop,
+                    active_scale=preset.active_scale,
+                )
+        except Exception:
+            pass
+
+    return BUILTIN_TEMPLATES["hormozi"]
 
 
-def list_caption_templates() -> List[Dict[str, Any]]:
-    """Returns a list of all available templates formatted for the dashboard UI."""
-    return [t.to_ui_dict() for t in BUILTIN_TEMPLATES.values()]
+def list_caption_templates(db: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """Returns a list of all available templates (builtins + custom DB presets) formatted for the UI."""
+    results = [t.to_ui_dict() for t in BUILTIN_TEMPLATES.values()]
+    if db is not None:
+        try:
+            from shorts_engine.db.models import CaptionPreset
+            custom_presets = db.query(CaptionPreset).filter(CaptionPreset.is_builtin.is_(False)).all()
+            for cp in custom_presets:
+                results.append(cp.to_dict())
+        except Exception:
+            pass
+    return results
 
 
 def parse_custom_template(data: Dict[str, Any]) -> CaptionStyleTemplate:
@@ -196,19 +267,111 @@ def parse_custom_template(data: Dict[str, Any]) -> CaptionStyleTemplate:
     p_color = hex_to_ass_color(data.get("primary_color") or data.get("primary_hex") or "&H00FFFFFF")
     h_color = hex_to_ass_color(data.get("highlight_color") or data.get("highlight_hex") or "&H0000FFFF")
     o_color = hex_to_ass_color(data.get("outline_color") or data.get("outline_hex") or "&H00000000")
+    s_color = hex_to_ass_color(data.get("shadow_color") or data.get("shadow_hex") or "&H80000000")
+    b_color = hex_to_ass_color(data.get("box_color") or data.get("box_hex") or "&H80000000")
+    bg_box = bool(data.get("background_box", False) or data.get("box_enabled", False))
+    scale_pop = bool(data.get("scale_pop", True))
+    active_scale = int(data.get("active_scale", 115))
 
     return CaptionStyleTemplate(
         template_id=data.get("template_id") or "custom",
         name=data.get("name") or "Custom Style",
         description=data.get("description") or "Operator customized caption template",
-        font_name=data.get("font_name") or "Arial Black",
+        font_name=data.get("font_name") or data.get("font_family") or "Arial Black",
         font_size=int(data.get("font_size", 56)),
         primary_color=p_color,
         highlight_color=h_color,
         outline_color=o_color,
         outline_width=float(data.get("outline_width", 4.0)),
         shadow_depth=float(data.get("shadow_depth", 2.0)),
+        shadow_color=s_color,
+        background_box=bg_box,
+        box_color=b_color,
         margin_vertical=int(data.get("margin_vertical", settings.CAPTION_MARGIN_VERTICAL)),
         max_words_per_line=int(data.get("max_words_per_line", 4)),
         case_transform=data.get("case_transform", "uppercase"),
+        scale_pop=scale_pop,
+        active_scale=active_scale,
     )
+
+
+def save_preset_to_db(db: Any, data: Dict[str, Any]) -> Any:
+    """Creates or updates a custom CaptionPreset in the database."""
+    from shorts_engine.db.models import CaptionPreset
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise ValueError("Caption preset name is required")
+
+    reserved = set(BUILTIN_TEMPLATES.keys()) | set(TEMPLATE_ALIASES.keys())
+    if name.lower() in reserved:
+        raise ValueError(f"'{name}' is a reserved built-in preset identifier")
+
+    existing = db.query(CaptionPreset).filter(CaptionPreset.name == name).first()
+    if not existing and data.get("id"):
+        existing = db.query(CaptionPreset).filter(CaptionPreset.id == data["id"]).first()
+
+    p_color = hex_to_ass_color(data.get("primary_color") or data.get("primary_hex") or "&H00FFFFFF")
+    h_color = hex_to_ass_color(data.get("highlight_color") or data.get("highlight_hex") or "&H0000FFFF")
+    o_color = hex_to_ass_color(data.get("outline_color") or data.get("outline_hex") or "&H00000000")
+    s_color = hex_to_ass_color(data.get("shadow_color") or data.get("shadow_hex") or "&H80000000")
+    b_color = hex_to_ass_color(data.get("box_color") or data.get("box_hex") or "&H80000000")
+    bg_box = bool(data.get("background_box", False) or data.get("box_enabled", False))
+
+    if existing:
+        existing.description = data.get("description", existing.description)
+        existing.font_family = data.get("font_family") or data.get("font_name", existing.font_family)
+        existing.font_size = int(data.get("font_size", existing.font_size))
+        existing.primary_color = p_color
+        existing.highlight_color = h_color
+        existing.outline_color = o_color
+        existing.outline_width = float(data.get("outline_width", existing.outline_width))
+        existing.shadow_depth = float(data.get("shadow_depth", existing.shadow_depth))
+        existing.shadow_color = s_color
+        existing.background_box = bg_box
+        existing.box_color = b_color
+        existing.margin_vertical = int(data.get("margin_vertical", existing.margin_vertical))
+        existing.max_words_per_line = int(data.get("max_words_per_line", existing.max_words_per_line))
+        existing.case_transform = data.get("case_transform", existing.case_transform)
+        existing.scale_pop = bool(data.get("scale_pop", existing.scale_pop))
+        existing.active_scale = int(data.get("active_scale", existing.active_scale))
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        preset = CaptionPreset(
+            name=name,
+            description=data.get("description", ""),
+            font_family=data.get("font_family") or data.get("font_name", "Arial Black"),
+            font_size=int(data.get("font_size", 56)),
+            primary_color=p_color,
+            highlight_color=h_color,
+            outline_color=o_color,
+            outline_width=float(data.get("outline_width", 4.0)),
+            shadow_depth=float(data.get("shadow_depth", 2.0)),
+            shadow_color=s_color,
+            background_box=bg_box,
+            box_color=b_color,
+            margin_vertical=int(data.get("margin_vertical", settings.CAPTION_MARGIN_VERTICAL)),
+            max_words_per_line=int(data.get("max_words_per_line", 4)),
+            case_transform=data.get("case_transform", "uppercase"),
+            scale_pop=bool(data.get("scale_pop", True)),
+            active_scale=int(data.get("active_scale", 115)),
+            is_builtin=False,
+        )
+        db.add(preset)
+        db.commit()
+        db.refresh(preset)
+        return preset
+
+
+def delete_preset_from_db(db: Any, preset_id: str) -> bool:
+    """Deletes a custom preset from the database. Builtins cannot be deleted."""
+    from shorts_engine.db.models import CaptionPreset
+    preset = db.query(CaptionPreset).filter(CaptionPreset.id == preset_id).first()
+    if not preset or preset.is_builtin:
+        return False
+    db.delete(preset)
+    db.commit()
+    return True
+

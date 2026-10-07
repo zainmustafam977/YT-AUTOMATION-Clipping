@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,19 +11,32 @@
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
     {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+    {% block head_extra %}{% endblock %}
     <style>
-        :root {
-            --bs-body-color: #e8eaf6;
-            --bs-secondary-color: #b0bec5;
+        :root, [data-bs-theme="dark"] {
+            --bs-body-color: #f8fafc !important;
+            --bs-secondary-color: #b0bec5 !important;
+            --bs-dark-bg-subtle: #1a1e2e !important;
+            --bs-secondary-bg-subtle: #242b3d !important;
+            --bs-border-color: #334155 !important;
         }
-        body { background: #0f1117; color: #e8eaf6; }
-        .text-muted { color: #b0bec5 !important; }
-        .navbar { background: #1a1d27 !important; border-bottom: 1px solid #2d3148; }
+        body { background: #0f1117; color: #f8fafc !important; }
+        .bg-dark-subtle { background-color: #1a1e2e !important; }
+        .border-secondary-subtle { border-color: #334155 !important; }
+        .card.bg-dark-subtle {
+            background-color: #1a1e2e !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        .card.bg-dark-subtle .text-muted, .card.bg-dark .text-muted, .text-muted {
+            color: #cbd5e1 !important;
+        }
+        .navbar { background: #1a1e2e !important; border-bottom: 1px solid #334155; }
         .navbar-brand { color: #7c4dff !important; font-weight: 700; letter-spacing: 1px; }
-        .navbar-nav .nav-link { color: #b0bec5 !important; }
-        .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active { color: #7c4dff !important; }
+        .navbar-nav .nav-link { color: #cbd5e1 !important; }
+        .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active { color: #ffffff !important; }
         .nav-pills .nav-link {
-            color: #b0bec5 !important;
+            color: #cbd5e1 !important;
             transition: all 0.2s ease-in-out;
         }
         .nav-pills .nav-link:hover {
@@ -36,31 +49,56 @@
             font-weight: 600 !important;
             box-shadow: 0 2px 8px rgba(124, 77, 255, 0.4) !important;
         }
-        .card { background: #1a1d27; border: 1px solid #2d3148; }
-        .card-header { background: #22263a; border-bottom: 1px solid #2d3148; }
-        .stat-card { border-left: 4px solid #7c4dff; }
-        .stat-card.warning { border-left-color: #ff9800; }
-        .stat-card.danger { border-left-color: #f44336; }
-        .stat-card.success { border-left-color: #4caf50; }
-        .stat-number { font-size: 2rem; font-weight: 700; }
+        .card, .stat-card {
+            background-color: #1a1e2e !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        .card-header {
+            background-color: #242b3d !important;
+            border-bottom: 1px solid #334155 !important;
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+        .card .text-muted, .stat-card .text-muted, .text-muted {
+            color: #cbd5e1 !important;
+            font-weight: 500;
+        }
+        .card small, .stat-card small {
+            color: #cbd5e1 !important;
+        }
+        .card label, .card .form-label {
+            color: #f8fafc !important;
+            font-weight: 600;
+        }
+        .card.bg-black, .card.bg-dark, .bg-black, .bg-dark {
+            background-color: #121622 !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        .stat-card { border-left: 4px solid #7c4dff !important; }
+        .stat-card.warning { border-left-color: #ff9800 !important; }
+        .stat-card.danger { border-left-color: #f44336 !important; }
+        .stat-card.success { border-left-color: #4caf50 !important; }
+        .stat-number { font-size: 2rem; font-weight: 700; color: #ffffff !important; }
         .badge-status { font-size: 0.75rem; }
-        table { color: #e8eaf6; }
+        table { color: #f8fafc; }
         .table-dark {
-            --bs-table-bg: #1a1d27;
-            --bs-table-color: #e8eaf6;
-            color: #e8eaf6;
+            --bs-table-bg: #1a1e2e;
+            --bs-table-color: #f8fafc;
+            color: #f8fafc;
         }
         .table-dark th {
-            color: #b0bec5 !important;
+            color: #cbd5e1 !important;
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         .table-dark td {
-            color: #e8eaf6 !important;
+            color: #f8fafc !important;
         }
         .table-dark .text-muted {
-            color: #b0bec5 !important;
+            color: #cbd5e1 !important;
         }
         * {
             scrollbar-width: thin;
@@ -107,6 +145,7 @@
                 <a class="nav-link {% if '/channels' in request.url.path %}active{% endif %}" href="/channels">Channels</a>
                 <a class="nav-link {% if '/settings' in request.url.path %}active{% endif %}" href="/settings">Settings</a>
                 <a class="nav-link {% if '/logs' in request.url.path %}active{% endif %}" href="/logs">Logs</a>
+                <a class="nav-link d-flex align-items-center" href="/app" title="Launch Modern React 19 Studio UI"><span class="badge px-2 py-1" style="font-size:0.75rem; background:rgba(124,77,255,0.25); border:1px solid #7c4dff; color:#b388ff;">⚛️ React Studio</span></a>
 
                 {% if current_user and (current_user.role.value if current_user.role.value is defined else current_user.role)|string|lower == 'admin' %}
                 <a class="nav-link {% if '/admin/users' in request.url.path %}active{% endif %}" href="/admin/users">Users</a>
@@ -206,6 +245,116 @@
         }, 4000);
     };
 
+    // ── Real-Time SSE Event Stream & Activity Toast Bubble Handler ───────
+    function showPlatformEventBubble(event) {
+        if (!event || !event.title) return;
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+
+        var level = (event.level || 'INFO').toUpperCase();
+        var colors = {
+            'SUCCESS': { bg: '#064e3b', border: '#10b981', text: '#d1fae5', icon: '✅' },
+            'INFO': { bg: '#164e63', border: '#06b6d4', text: '#cffafe', icon: 'ℹ️' },
+            'WARNING': { bg: '#78350f', border: '#f59e0b', text: '#fef3c7', icon: '⚠️' },
+            'ERROR': { bg: '#7f1d1d', border: '#ef4444', text: '#fee2e2', icon: '❌' },
+            'CRITICAL': { bg: '#881337', border: '#f43f5e', text: '#ffe4e6', icon: '🚨' },
+            'DEBUG': { bg: '#1f2937', border: '#6b7280', text: '#e5e7eb', icon: '🔍' }
+        };
+        var conf = colors[level] || colors.INFO;
+        var toast = document.createElement('div');
+        toast.className = 'toast show shadow-lg mb-2';
+        toast.style.backgroundColor = conf.bg;
+        toast.style.border = '1px solid ' + conf.border;
+        toast.style.color = conf.text;
+        toast.style.minWidth = '320px';
+        toast.style.maxWidth = '420px';
+        toast.style.borderRadius = '8px';
+        toast.style.backdropFilter = 'blur(8px)';
+        toast.style.transition = 'all 0.3s ease';
+
+        var timeStr = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+        var actionLinkHtml = event.action_url ? '<div class="mt-2"><a href="' + event.action_url + '" class="badge bg-light text-dark text-decoration-none fw-bold px-2 py-1">Inspect Entity →</a></div>' : '';
+        var progressHtml = (event.stage_progress_pct !== null && event.stage_progress_pct !== undefined) ? 
+            '<div class="progress mt-2" style="height: 4px; background: rgba(255,255,255,0.2);"><div class="progress-bar" style="width: ' + event.stage_progress_pct + '%; background-color: ' + conf.border + ';"></div></div>' : '';
+
+        toast.innerHTML = 
+            '<div class="p-3">' +
+                '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                    '<span class="fw-bold small text-uppercase d-flex align-items-center gap-1"><span>' + conf.icon + '</span> <span>' + event.title + '</span></span>' +
+                    '<div class="d-flex align-items-center gap-2">' +
+                        '<span class="small opacity-75" style="font-size:0.75rem;">' + timeStr + '</span>' +
+                        '<button type="button" class="btn-close btn-close-white" style="font-size:0.65rem;" onclick="this.closest(\'.toast\').remove()"></button>' +
+                    '</div>' +
+                '</div>' +
+                '<p class="mb-0 small" style="opacity:0.95;">' + event.message + '</p>' +
+                progressHtml +
+                actionLinkHtml +
+            '</div>';
+
+        container.appendChild(toast);
+        var autoDismissMs = (level === 'ERROR' || level === 'CRITICAL') ? 10000 : 5000;
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(20px)';
+            setTimeout(function() { toast.remove(); }, 350);
+        }, autoDismissMs);
+    }
+    window.showPlatformEventBubble = showPlatformEventBubble;
+
+    (function initSSEEventStream() {
+        if (!window.EventSource) return;
+
+        var sseSource = null;
+        var reconnectDelay = 1000;
+        var maxReconnectDelay = 30000;
+
+        function connect() {
+            try {
+                sseSource = new EventSource('/api/events/stream');
+
+                sseSource.onopen = function() {
+                    reconnectDelay = 1000;
+                };
+
+                sseSource.onmessage = function(e) {
+                    try {
+                        var event = JSON.parse(e.data);
+                        showPlatformEventBubble(event);
+                        window.dispatchEvent(new CustomEvent('platformEvent', { detail: event }));
+                        if (typeof window.updatePipelineStatus === 'function') {
+                            window.updatePipelineStatus(event);
+                        }
+                    } catch(err) {
+                        // ignore heartbeat or parse errors
+                    }
+                };
+
+                sseSource.onerror = function() {
+                    if (sseSource) {
+                        sseSource.close();
+                        sseSource = null;
+                    }
+                    setTimeout(connect, reconnectDelay);
+                    reconnectDelay = Math.min(reconnectDelay * 1.5, maxReconnectDelay);
+                };
+            } catch(e) {
+                setTimeout(connect, reconnectDelay);
+            }
+        }
+
+        function cleanup() {
+            if (sseSource) {
+                sseSource.close();
+                sseSource = null;
+            }
+        }
+        window.addEventListener('beforeunload', cleanup);
+        window.addEventListener('pagehide', cleanup);
+
+        connect();
+    })();
+
+
     // HTMX Global Hooks
     document.body.addEventListener('showToast', function(evt) {
         if (evt.detail) {
@@ -288,7 +437,7 @@
     window.openClipFolder = function(clipId) {
         var tokenMeta = document.querySelector('meta[name="csrf-token"]');
         var csrfToken = tokenMeta ? tokenMeta.content : '';
-        fetch('/api/clip/' + clipId + '/open-folder', {
+        fetch('/api/clips/' + clipId + '/open-folder', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

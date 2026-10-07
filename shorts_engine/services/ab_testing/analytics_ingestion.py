@@ -7,7 +7,7 @@ Two-Tier Analytics Ingestion & Rubric Refinement.
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

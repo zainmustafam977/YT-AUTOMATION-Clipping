@@ -4,7 +4,6 @@ Supports chunked resumable video uploads, creator info privacy verification,
 asynchronous publishing status polling, and dry-run simulation safety.
 """
 
-import json
 import logging
 import math
 import os

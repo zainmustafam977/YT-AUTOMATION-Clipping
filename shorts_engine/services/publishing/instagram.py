@@ -4,7 +4,6 @@ Implements media container initialization, status polling state machine,
 container publishing, permalink retrieval, and dry-run simulation safety.
 """
 
-import json
 import logging
 import os
 import time

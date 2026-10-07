@@ -12,7 +12,6 @@ Standard cloud-native Kubernetes & Docker health endpoints:
 import time
 import shutil
 import logging
-from pathlib import Path
 from typing import Dict, Any
 from fastapi import APIRouter, status, Response
 from sqlalchemy import text

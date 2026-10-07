@@ -6,7 +6,7 @@ Automatically downloads the official lightweight (~300KB) YuNet model if not pre
 import logging
 import urllib.request
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional
 import cv2
 import numpy as np
 from shorts_engine.config.settings import settings

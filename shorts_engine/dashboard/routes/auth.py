@@ -22,7 +22,6 @@ from shorts_engine.dashboard.auth import (
     verify_csrf,
     get_current_user,
     require_admin,
-    require_viewer,
     SESSION_COOKIE_NAME,
 )
 from shorts_engine.db.models import User, UserRole

@@ -4,7 +4,7 @@ to dynamically adjust text outline, shadow, and opacity for maximum legibility.
 """
 
 import logging
-from typing import Tuple, Optional
+from typing import Tuple
 import cv2
 import numpy as np
 

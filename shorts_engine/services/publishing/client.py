@@ -24,20 +24,56 @@ logger = logging.getLogger(__name__)
 def _build_youtube_client(oauth_token_json: str):
     """
     Builds an authenticated YouTube Data API v3 client from a decrypted OAuth token JSON blob.
-    The blob must contain: client_id, client_secret, refresh_token, token_uri.
+    The blob must contain: refresh_token, and optionally client_id, client_secret, token_uri.
     """
     import google.oauth2.credentials
     import googleapiclient.discovery
     import googleapiclient.http
 
-    token_data = json.loads(oauth_token_json)
+    try:
+        token_data = json.loads(oauth_token_json)
+    except Exception as e:
+        raise ValueError(
+            f"Invalid OAuth credentials format in database ({e}). "
+            "Please authorize the channel via Google OAuth consent screen in Publishing Studio."
+        ) from e
+
+    if not isinstance(token_data, dict):
+        raise ValueError(
+            "Channel credentials do not contain a valid OAuth token dictionary. "
+            "Please authorize the channel via Google OAuth consent screen."
+        )
+
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        raise ValueError(
+            "Channel OAuth credentials do not contain a valid refresh_token. "
+            "Please click 'Connect Channel' in the Publishing Studio to complete Google authorization."
+        )
+
+    client_id = token_data.get("client_id")
+    client_secret = token_data.get("client_secret")
+
+    # Fall back to client secrets file if missing in token blob
+    if not client_id or not client_secret:
+        try:
+            from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
+            cfg = ChannelOAuthManager().get_client_config()
+            client_id = client_id or cfg.get("client_id")
+            client_secret = client_secret or cfg.get("client_secret")
+        except Exception:
+            pass
+
+    if not client_id or not client_secret:
+        raise ValueError("OAuth client_id or client_secret missing from credentials and storage/client_secret.json")
+
     credentials = google.oauth2.credentials.Credentials(
         token=token_data.get("access_token"),
-        refresh_token=token_data["refresh_token"],
+        refresh_token=refresh_token,
         token_uri=token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
-        client_id=token_data["client_id"],
-        client_secret=token_data["client_secret"],
-        scopes=["https://www.googleapis.com/auth/youtube.upload"],
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=token_data.get("scopes", ["https://www.googleapis.com/auth/youtube.upload"]),
     )
     return googleapiclient.discovery.build(
         "youtube", "v3", credentials=credentials, cache_discovery=False
@@ -48,22 +84,14 @@ def _upload_video(client, video_path: Path, metadata: "ShortsMetadata",
                   privacy_status: str = "unlisted") -> str:
     """
     Calls YouTube Data API v3 videos.insert() to upload the rendered clip.
+    Supports instant public/unlisted/private uploads as well as scheduled publishAt releases.
     Returns the published YouTube video ID.
     """
     import googleapiclient.http
 
-    body = {
-        "snippet": {
-            "title": metadata.title,
-            "description": metadata.description,
-            "tags": metadata.tags,
-            "categoryId": "22",  # People & Blogs (common for Shorts)
-        },
-        "status": {
-            "privacyStatus": privacy_status,
-            "selfDeclaredMadeForKids": False,
-        },
-    }
+    body = metadata.to_dict()
+    if privacy_status and not metadata.publish_at:
+        body["status"]["privacyStatus"] = privacy_status
 
     media = googleapiclient.http.MediaFileUpload(
         str(video_path),
@@ -197,7 +225,7 @@ class YouTubePublisher:
             raise FileNotFoundError(f"Rendered video file not found for clip {clip.id}")
 
         # Check quota availability before attempting publish (Spec 15.2 / acceptance criteria)
-        can_pub, remaining_quota, quota_reason = self.quota_tracker.can_publish()
+        can_pub, remaining_quota, quota_reason = self.quota_tracker.can_publish(db=self.db)
         if not can_pub:
             logger.warning("YouTube quota exhausted for clip %s: %s", clip.id, quota_reason)
             return {
@@ -246,10 +274,11 @@ class YouTubePublisher:
                     raw_token = raw_token or channel.encrypted_oauth_token
                     channel_yt_id = channel.youtube_channel_id
 
+                channel_name = channel.name if channel else "target channel"
                 if not raw_token:
                     raise ValueError(
-                        f"No OAuth token available for clip {clip.id}. "
-                        "Set DRY_RUN_PUBLISHING=true or configure channel OAuth credentials."
+                        f"No OAuth token configured for channel '{channel_name}' (clip {clip.id}). "
+                        "Please click 'Connect Channel' in the Publishing Studio or enable DRY_RUN_PUBLISHING."
                     )
 
                 decrypted_token = decrypt_secret(raw_token)
@@ -291,11 +320,12 @@ class YouTubePublisher:
                         "reason": reason,
                     }
 
+                upload_privacy = metadata.privacy_status or getattr(settings, "DEFAULT_PRIVACY_STATUS", "unlisted")
                 youtube_video_id = _upload_video(
                     client,
                     video_path,
                     metadata,
-                    privacy_status=settings.DEFAULT_PRIVACY_STATUS,
+                    privacy_status=upload_privacy,
                 )
 
             # 4. Record quota consumption
@@ -319,6 +349,7 @@ class YouTubePublisher:
                 "dry_run": is_dry_run,
             }
         except Exception as e:
+            clip.status = ClipStatus.APPROVED
             publish_log.status = "FAILED"
             publish_log.error_message = str(e)
             self.db.commit()

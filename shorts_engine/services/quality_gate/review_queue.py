@@ -3,11 +3,10 @@ Quality Gate Review Queue & State Machine: orchestrates technical, multimodal,
 and semantic verifiers to transition clips to WAITING_APPROVAL, APPROVED, or REJECTED.
 """
 
-import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List
-from shorts_engine.db.models import Clip, ClipStatus
+from typing import Dict, Any, Tuple, Optional
+from shorts_engine.db.models import ClipStatus
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
 from shorts_engine.services.quality_gate.render_inspector import RenderInspector
 from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier

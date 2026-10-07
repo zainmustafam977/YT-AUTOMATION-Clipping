@@ -2,11 +2,32 @@
 {% block title %}Review Queue{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
         <h4 class="text-light m-0">Review Queue</h4>
         <span class="badge bg-dark border border-secondary text-muted">{{ total_items }} total in this view</span>
+        <!-- YouTube Data API Quota Telemetry -->
+        <div class="quota-box px-3 py-1 rounded bg-black border border-secondary d-flex align-items-center gap-2 ms-lg-2">
+            <div class="d-flex flex-column text-end" style="font-size: 0.75rem;">
+                <div class="d-flex align-items-center gap-2 justify-content-end">
+                    <span class="text-light fw-bold">YouTube API Quota</span>
+                    <span class="badge {% if quota and quota.pct > 80 %}bg-danger{% elif quota and quota.pct > 50 %}bg-warning text-dark{% else %}bg-primary{% endif %}">
+                        {{ quota.used_units if quota else 0 }} / {{ quota.daily_limit if quota else 10000 }} units ({{ quota.pct if quota else 0 }}%)
+                    </span>
+                </div>
+                <span class="text-muted" style="font-size: 0.7rem;">~{{ quota.remaining_uploads if quota else 6 }} video uploads remaining today (1,600 units/upload)</span>
+            </div>
+            <div class="progress" style="width: 80px; height: 8px; background-color: #2d3748;">
+                <div class="progress-bar {% if quota and quota.pct > 80 %}bg-danger{% elif quota and quota.pct > 50 %}bg-warning{% else %}bg-info{% endif %}" role="progressbar" style="width: {{ quota.pct if quota else 0 }}%;"></div>
+            </div>
+        </div>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#externalVideoIngestModal" title="Ingest external MP4 video directly into Publishing Studio">
+            ➕ Add External Video
+        </button>
+        <button type="button" class="btn btn-sm {% if studio_open %}btn-primary{% else %}btn-outline-primary{% endif %}" id="studioToggleBtn" onclick="togglePublishingStudio()" title="Toggle docked master-detail Publishing Studio">
+            🚀 Video Publishing Studio
+        </button>
         <div class="btn-group" role="group" aria-label="View toggle">
             <button type="button" class="btn btn-sm btn-outline-primary active" id="viewGroupedBtn" onclick="setViewMode('grouped')">
                 🗂 Grouped View
@@ -140,15 +161,23 @@
 </div>
 {% endif %}
 
-{% if not clips %}
-<div class="alert alert-success">
-    {% if current_tab == 'rejected' %}
-    No rejected clips found.
-    {% else %}
-    No clips awaiting review. 🎉
-    {% endif %}
-</div>
-{% else %}
+<div class="row g-3" id="queueWorkspaceRow">
+    <div class="{% if studio_open %}col-xl-7 col-lg-6{% else %}col-12{% endif %}" id="queueClipsColumn">
+        {% if not clips %}
+        <div class="alert alert-dark border-secondary p-4 text-center">
+            <h5 class="text-light">
+                {% if current_tab == 'rejected' %}
+                No rejected clips found.
+                {% else %}
+                No clips awaiting review. 🎉
+                {% endif %}
+            </h5>
+            <p class="text-muted small">You can ingest external MP4 videos directly into the Publishing Studio or wait for automated processing.</p>
+            <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#externalVideoIngestModal">
+                ➕ Add External Video
+            </button>
+        </div>
+        {% else %}
 
 <form id="bulkActionForm" method="post" action="/queue/bulk-action">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -269,6 +298,9 @@
                                 {% if clip.status.value == 'FAILED_NEEDS_REVIEW' or clip.status == 'FAILED_NEEDS_REVIEW' %}
                                 <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;" title="Ambiguous Upload: Requires Operator Review">⚠️ Needs Review</span>
                                 {% endif %}
+                                {% if clip.is_sensitive %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger ms-1" style="font-size:0.65rem;" title="Flagged by Policy Gate as Sensitive Content (Violence, Tragedy, Hate, Adult)">⚠️ SENSITIVE_CONTENT</span>
+                                {% endif %}
                                 {% if clip.analytics and clip.analytics.views %}
                                 <span class="badge bg-success-subtle text-success border border-success ms-1" style="font-size:0.65rem;" title="YouTube Analytics">👁️ {{ "{:,}".format(clip.analytics.views) }}</span>
                                 {% endif %}
@@ -333,6 +365,12 @@
                             <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top border-secondary gap-1 flex-wrap">
                                 <div class="d-flex gap-1 align-items-center">
                                     {% if clip.rendered_path %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-open-studio fw-bold"
+                                            style="font-size: 0.75rem;"
+                                            title="Open in Video Publishing Studio"
+                                            onclick="openPublishingStudio('{{ clip.id }}', '{{ (clip.generated_title or clip.source_title or '')|replace('\'', '\\\'') }}')">
+                                        🚀 Studio
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-outline-info py-0 px-2"
                                             style="font-size: 0.75rem;"
                                             data-bs-toggle="modal"
@@ -342,10 +380,11 @@
                                             data-clip-title="{{ clip.source_title }}">
                                         ▶ Play
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-warning py-0 px-2"
+                                    <button type="button" class="btn btn-sm btn-outline-warning py-0 px-2 btn-open-style"
                                             style="font-size: 0.75rem;"
                                             title="Change Caption Template & Re-render"
-                                            onclick="openStyleModal('{{ clip.id }}', '{{ clip.caption_style or 'hormozi' }}')">
+                                            data-clip-id="{{ clip.id }}"
+                                            data-caption-style="{{ clip.caption_style | e if clip.caption_style else 'hormozi' }}">
                                         🎨 Style
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-light py-0 px-2"
@@ -487,6 +526,9 @@
                 {% if clip.ml_virality_score is not none %}
                 <span class="badge bg-info text-dark ms-1" style="font-size:0.75rem;" title="ML Predicted Virality Score">🤖 ML: {{ clip.ml_virality_score }}</span>
                 {% endif %}
+                {% if clip.is_sensitive %}
+                <span class="badge bg-danger-subtle text-danger border border-danger ms-1" style="font-size:0.75rem;" title="Flagged by Policy Gate as Sensitive Content">⚠️ SENSITIVE_CONTENT</span>
+                {% endif %}
                 {% if clip.hook_preview %}
                 <div class="small text-muted fst-italic text-truncate mt-1" style="max-width: 280px;" title="{{ clip.hook_preview }}">
                     “{{ clip.hook_preview }}”
@@ -500,6 +542,12 @@
                         {{ clip.rendered_path.split('/')[-1] if '/' in clip.rendered_path else clip.rendered_path.split('\\')[-1] }}
                     </span>
                     <div class="d-flex gap-1 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold"
+                                style="font-size: 0.75rem;"
+                                title="Open in Video Publishing Studio"
+                                onclick="openPublishingStudio('{{ clip.id }}', '{{ (clip.generated_title or clip.source_title or '')|replace('\'', '\\\'') }}')">
+                            🚀 Studio
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-info py-0 px-2"
                                 style="font-size: 0.75rem;"
                                 data-bs-toggle="modal"
@@ -508,6 +556,13 @@
                                 data-clip-id="{{ clip.id[:8] }}"
                                 data-clip-title="{{ clip.source_title }}">
                             ▶ Play Short
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning py-0 px-2 btn-open-style"
+                                style="font-size: 0.75rem;"
+                                title="Change Caption Template & Re-render"
+                                data-clip-id="{{ clip.id }}"
+                                data-caption-style="{{ clip.caption_style | e if clip.caption_style else 'hormozi' }}">
+                            🎨 Style
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-light py-0 px-2"
                                 style="font-size: 0.75rem;"
@@ -667,6 +722,321 @@
 {% endif %}
 
 {% endif %}
+    </div>
+
+    <!-- Docked Master-Detail Publishing Studio Column -->
+    <div class="{% if studio_open %}col-xl-5 col-lg-6 d-block studio-open{% else %}d-none{% endif %}" id="publishingStudioColumn">
+        <div class="card bg-dark border-secondary shadow-lg studio-sticky-card">
+            <!-- Studio Header -->
+            <div class="card-header bg-black py-2 px-3 d-flex justify-content-between align-items-center border-secondary">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-light fw-bold">🚀 Video Publishing Studio</span>
+                    <span id="studioClipIdBadge" class="badge bg-secondary font-monospace" style="font-size: 0.7rem;">
+                        {% if selected_clip_id %}Clip {{ selected_clip_id[:8] }}{% else %}No Clip Selected{% endif %}
+                    </span>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 text-light" onclick="closePublishingStudio()" title="Close Publishing Studio">✕</button>
+                </div>
+            </div>
+
+            <div class="card-body p-3">
+                <!-- Target Channel Selector & OAuth Badge -->
+                <div class="mb-3 p-2 bg-black rounded border border-secondary">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.68rem;">Target Channel</span>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-xs btn-outline-info py-0 px-1" style="font-size: 0.65rem;" onclick="connectStudioChannel()" title="Connect channel with Google OAuth">🔑 Connect</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 0.65rem;" onclick="verifyStudioChannel()" title="Verify channel credentials">✓ Verify</button>
+                            <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size: 0.65rem;" onclick="disconnectStudioChannel()" title="Disconnect channel">Disconnect</button>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <select id="studioChannelSelect" class="form-select form-select-sm bg-dark text-light border-secondary" onchange="onStudioChannelChange(this.value)">
+                            {% for ch in channels %}
+                            <option value="{{ ch.id }}" {% if selected_channel and (ch.id == selected_channel.id or ch.youtube_channel_id == selected_channel.youtube_channel_id) %}selected{% endif %}>
+                                {{ ch.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span id="studioChannelBadge" class="badge {% if selected_channel and selected_channel.is_authorized %}bg-success{% else %}bg-danger{% endif %} py-1 px-2" style="font-size: 0.75rem;">
+                            {% if selected_channel and selected_channel.is_authorized %}🟢 Authorized{% else %}🔴 Needs Auth{% endif %}
+                        </span>
+                    </div>
+                    <div id="studioVerifyResult" class="small mt-1 text-info d-none"></div>
+                </div>
+
+                <!-- YouTube API Quota Telemetry -->
+                <div class="quota-box p-2 mb-3 rounded bg-black border border-secondary">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small text-light fw-bold" style="font-size: 0.75rem;">YouTube API Quota</span>
+                        <span id="studioQuotaBadge" class="badge {% if quota and quota.pct > 80 %}bg-danger{% elif quota and quota.pct > 50 %}bg-warning text-dark{% else %}bg-primary{% endif %}" style="font-size: 0.7rem;">
+                            {{ quota.used_units if quota else 0 }} / {{ quota.daily_limit if quota else 10000 }} units ({{ quota.pct if quota else 0 }}%)
+                        </span>
+                    </div>
+                    <div class="progress mb-1" style="height: 6px; background-color: #2d3748;">
+                        <div id="studioQuotaProgressBar" class="progress-bar {% if quota and quota.pct > 80 %}bg-danger{% elif quota and quota.pct > 50 %}bg-warning{% else %}bg-info{% endif %}" role="progressbar" style="width: {{ quota.pct if quota else 0 }}%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.68rem;">
+                        <span>~{{ quota.remaining_uploads if quota else 6 }} uploads remaining today</span>
+                        <span>1,600 units / upload</span>
+                    </div>
+                </div>
+
+                <!-- Video Preview & Folder -->
+                <div class="mb-3">
+                    <div class="video-preview-wrapper bg-black rounded p-2 border border-secondary text-center position-relative" style="min-height: 220px; display: flex; align-items: center; justify-content: center;">
+                        <video id="studioPreviewVideo" controls playsinline class="w-100 rounded d-none" style="max-height: 260px; aspect-ratio: 9/16; object-fit: contain;"></video>
+                        <div id="studioVideoPlaceholder" class="p-3 text-muted">
+                            <div style="font-size: 2.2rem;">▶️</div>
+                            <p class="small mt-2 mb-0">Select a clip from the queue or click "Add External Video"</p>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1 px-1">
+                        <span id="studioVideoDuration" class="text-muted small" style="font-size: 0.72rem;">Duration: —</span>
+                        <button type="button" class="btn btn-xs btn-link text-info p-0 text-decoration-none" id="studioOpenFolderBtn" onclick="openStudioFolder()" disabled style="font-size: 0.75rem;">
+                            📁 Open in Explorer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Title & Autosave -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label text-light small fw-bold m-0" style="font-size: 0.75rem;">Title (Max 100 chars)</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <span id="studioAutosaveStatus" class="text-muted" style="font-size: 0.68rem;">All changes saved</span>
+                            <span id="studioTitleCounter" class="text-muted" style="font-size: 0.68rem;">0/100</span>
+                        </div>
+                    </div>
+                    <input type="text" id="studioTitleInput" class="form-control form-control-sm bg-black text-light border-secondary" maxlength="100" placeholder="Enter video title..." oninput="onStudioFieldChange()">
+                    <!-- AI Angle Buttons -->
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                        <span class="text-muted small align-self-center" style="font-size: 0.65rem;">AI Angles:</span>
+                        <button type="button" class="btn btn-xs btn-outline-warning py-0 px-1" style="font-size: 0.65rem;" onclick="applyStudioAiAngle('curiosity')">🔥 Curiosity</button>
+                        <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size: 0.65rem;" onclick="applyStudioAiAngle('stakes')">⚡ High Stakes</button>
+                        <button type="button" class="btn btn-xs btn-outline-info py-0 px-1" style="font-size: 0.65rem;" onclick="applyStudioAiAngle('question')">❓ Question</button>
+                        <button type="button" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size: 0.65rem;" onclick="applyStudioAiAngle('punchy')">🎯 Punchy</button>
+                    </div>
+                </div>
+
+                <!-- Description & Presets -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label text-light small fw-bold m-0" style="font-size: 0.75rem;">Description & Hashtags</label>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 0.65rem;" onclick="appendStudioPreset('#Shorts #Viral #Trending')">+ Viral Tags</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 0.65rem;" onclick="appendStudioPreset('Subscribe for more daily shorts!')">+ Subscribe CTA</button>
+                        </div>
+                    </div>
+                    <textarea id="studioDescriptionInput" rows="3" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="Enter description, credits, and hashtags..." oninput="onStudioFieldChange()"></textarea>
+                </div>
+
+                <!-- Tags -->
+                <div class="mb-3">
+                    <label class="form-label text-light small fw-bold mb-1" style="font-size: 0.75rem;">Tags (comma separated)</label>
+                    <input type="text" id="studioTagsInput" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="e.g. shorts, podcast, viral" oninput="onStudioFieldChange()">
+                </div>
+
+                <!-- Category & Privacy -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-light small fw-bold mb-1" style="font-size: 0.75rem;">Category</label>
+                        <select id="studioCategorySelect" class="form-select form-select-sm bg-black text-light border-secondary" onchange="onStudioFieldChange()">
+                            <option value="22" selected>People & Blogs (22)</option>
+                            <option value="24">Entertainment (24)</option>
+                            <option value="20">Gaming (20)</option>
+                            <option value="28">Science & Tech (28)</option>
+                            <option value="27">Education (27)</option>
+                            <option value="25">News & Politics (25)</option>
+                            <option value="17">Sports (17)</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-light small fw-bold mb-1" style="font-size: 0.75rem;">Privacy</label>
+                        <select id="studioPrivacySelect" class="form-select form-select-sm bg-black text-light border-secondary" onchange="onStudioPrivacyChange(this.value)">
+                            <option value="unlisted" selected>Unlisted 🛡️ (Safe Default)</option>
+                            <option value="public">Public 🌍 (Instant Release)</option>
+                            <option value="private">Private 🔒 (Owner Only)</option>
+                            <option value="scheduled">Scheduled 📅 (Release Later)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Schedule Picker (shown when scheduled chosen) -->
+                <div id="studioSchedulePickerGroup" class="mb-3 p-2 rounded bg-black border border-secondary d-none">
+                    <label class="form-label text-light small fw-bold mb-1" style="font-size: 0.75rem;">Release Date & Time (UTC)</label>
+                    <input type="datetime-local" id="studioScheduledAtInput" class="form-control form-control-sm bg-dark text-light border-secondary">
+                    <span class="text-muted" style="font-size: 0.68rem;">Will be uploaded and scheduled per Pacific quota cap.</span>
+                </div>
+
+                <!-- Made for Kids & Dry Run -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="studioMadeForKids" onchange="onStudioFieldChange()">
+                        <label class="form-check-label text-muted small" for="studioMadeForKids" style="font-size: 0.72rem;">Made for Kids</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="studioDryRunToggle">
+                        <label class="form-check-label text-warning small" for="studioDryRunToggle" style="font-size: 0.72rem;" title="Simulate upload without consuming quota">Dry-Run Test</label>
+                    </div>
+                </div>
+
+                <!-- Publish / Schedule CTA -->
+                <div class="d-flex gap-2 mb-3">
+                    <button type="button" class="btn btn-success btn-sm w-100 fw-bold py-2 shadow-sm d-flex align-items-center justify-content-center gap-1" id="studioPublishBtn" onclick="executeStudioPublish()" disabled>
+                        <span>🚀</span> <span id="studioPublishBtnText">Publish to YouTube</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm fw-bold px-3 d-flex align-items-center justify-content-center gap-1" id="studioScheduleBtn" onclick="executeStudioSchedule()" disabled>
+                        <span>📅</span> <span>Schedule</span>
+                    </button>
+                </div>
+                <div id="studioPublishFeedback" class="small mt-1 text-center d-none"></div>
+
+                <!-- Publishing Outbox / Jobs History -->
+                <div class="border-top border-secondary pt-3 mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-light fw-bold small" style="font-size: 0.75rem;">📋 Publishing Outbox</span>
+                        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" onclick="refreshPublishJobs()" title="Refresh Outbox" style="font-size: 0.65rem;">↻ Refresh</button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+                        <table class="table table-dark table-sm table-hover align-middle m-0" style="font-size: 0.72rem;">
+                            <tbody id="studioJobsTableBody">
+                                {% if publish_jobs %}
+                                {% for job in publish_jobs %}
+                                <tr>
+                                    <td class="text-truncate" style="max-width: 130px;" title="{{ job.title }}">{{ job.title or job.clip_id[:8] }}</td>
+                                    <td>
+                                        <span class="badge {% if job.status.value == 'PUBLISHED' or job.status == 'PUBLISHED' %}bg-success{% elif job.status.value == 'UPLOADING' or job.status == 'UPLOADING' %}bg-info{% elif job.status.value == 'SCHEDULED' or job.status == 'SCHEDULED' %}bg-primary{% elif job.status.value == 'PAUSED_NEEDS_ATTENTION' or job.status == 'PAUSED_NEEDS_ATTENTION' %}bg-warning text-dark{% else %}bg-danger{% endif %}" style="font-size: 0.65rem;">
+                                            {{ job.status.value if job.status.value is defined else job.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if job.youtube_video_id %}
+                                        <a href="https://youtu.be/{{ job.youtube_video_id }}" target="_blank" class="text-info text-decoration-none">📺 Watch</a>
+                                        {% elif job.status.value == 'FAILED' or job.status == 'FAILED' or job.status.value == 'PAUSED_NEEDS_ATTENTION' or job.status == 'PAUSED_NEEDS_ATTENTION' %}
+                                        <button type="button" class="btn btn-xs btn-outline-warning py-0 px-1" onclick="retryPublishJob('{{ job.id }}')" style="font-size: 0.65rem;">↻ Retry</button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr><td colspan="3" class="text-muted text-center py-2">No publishing jobs in outbox.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: External Video Ingest -->
+<div class="modal fade" id="externalVideoIngestModal" tabindex="-1" aria-labelledby="externalVideoIngestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-secondary shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="externalVideoIngestModalLabel">➕ Add External Video</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="externalVideoIngestForm" onsubmit="handleExternalVideoIngest(event)">
+                <div class="modal-body">
+                    <p class="text-muted small">Upload an external rendered <code>.mp4</code> video to review and publish via Shorts Engine.</p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Select Video File (.mp4)</label>
+                        <input type="file" id="externalVideoFile" class="form-control form-control-sm bg-black text-light border-secondary" accept="video/mp4,video/quicktime,video/webm" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Clip Title</label>
+                        <input type="text" id="externalVideoTitle" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="Enter video title...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Target Channel</label>
+                        <select id="externalVideoChannel" class="form-select form-select-sm bg-black text-light border-secondary">
+                            {% for ch in channels %}
+                            <option value="{{ ch.id }}" {% if selected_channel and (ch.id == selected_channel.id or ch.youtube_channel_id == selected_channel.youtube_channel_id) %}selected{% endif %}>{{ ch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div id="externalIngestProgress" class="progress d-none mb-2" style="height: 8px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="externalIngestSubmitBtn" class="btn btn-sm btn-primary fw-bold">Upload & Ingest</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: OAuth Channel Mismatch Dialog -->
+<div class="modal fade" id="oauthMismatchModal" tabindex="-1" aria-labelledby="oauthMismatchModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-danger shadow-lg">
+            <div class="modal-header border-danger bg-danger-subtle py-2">
+                <h5 class="modal-title text-danger fw-bold" id="oauthMismatchModalLabel">⚠️ YouTube Channel Mismatch Detected</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2 small mb-3">
+                    The authenticated Google Account owns a channel different from the one configured in Shorts Engine.
+                </div>
+                <div class="p-3 bg-black rounded border border-secondary mb-3 small">
+                    <div class="mb-2">
+                        <span class="text-muted">Target Channel in Engine:</span><br>
+                        <strong id="mismatchExpectedName" class="text-light"></strong> (<code id="mismatchExpectedId"></code>)
+                    </div>
+                    <div>
+                        <span class="text-muted">Channel Authorized via Google:</span><br>
+                        <strong id="mismatchActualName" class="text-warning"></strong> (<code id="mismatchActualId"></code>)
+                    </div>
+                </div>
+                <p class="small text-light mb-3">How would you like to resolve this discrepancy?</p>
+                <div class="d-flex flex-column gap-2">
+                    <button type="button" class="btn btn-warning btn-sm text-start" onclick="resolveMismatchAction('rebind')">
+                        <strong>1. Update channel binding:</strong> Re-link target channel to the detected YouTube channel.
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm text-start" onclick="resolveMismatchAction('create_new')">
+                        <strong>2. Create new channel entry:</strong> Keep the target channel and register the detected channel as a new entry.
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm text-start" onclick="resolveMismatchAction('cancel')">
+                        <strong>3. Cancel:</strong> Discard this authorization attempt and keep existing bindings unchanged.
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media (max-width: 1023px) {
+    #publishingStudioColumn.studio-open {
+        position: fixed !important;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 500px;
+        z-index: 1060;
+        overflow-y: auto;
+        background: #18181b;
+        box-shadow: -5px 0 25px rgba(0,0,0,0.85);
+        border-left: 1px solid #3f3f46;
+        padding: 1rem;
+        display: block !important;
+    }
+}
+.studio-sticky-card {
+    position: sticky;
+    top: 1rem;
+    z-index: 1020;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+</style>
 
 <!-- 9:16 Vertical Video Preview Modal -->
 <div class="modal fade" id="videoPlayerModal" tabindex="-1" aria-labelledby="videoPlayerModalLabel" aria-hidden="true">
@@ -676,10 +1046,28 @@
                 <h6 class="modal-title text-truncate" id="videoPlayerModalLabel">Short Video Preview</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-2 d-flex justify-content-center align-items-center" style="background: #000; min-height: 520px;">
-                <video id="modalVideoElement" controls playsinline preload="metadata" style="max-width: 100%; max-height: 70vh; aspect-ratio: 9/16; border-radius: 8px; background: #000;">
+            <div class="modal-body p-2 d-flex flex-column justify-content-center align-items-center" style="background: #000; min-height: 520px;">
+                <video id="modalVideoElement" controls playsinline preload="metadata" style="max-width: 100%; max-height: 65vh; aspect-ratio: 9/16; border-radius: 8px; background: #000;">
                     Your browser does not support HTML5 video streaming.
                 </video>
+                <!-- Enhancement 7: YouTube Short Cover Frame Selector -->
+                <div class="w-100 mt-2 p-2 rounded bg-dark border border-secondary" style="font-size: 0.85rem;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-warning fw-bold"><i class="bi bi-camera me-1"></i>Cover Frame (0.033s Injection)</span>
+                        <span id="coverFrameTimeDisplay" class="badge bg-secondary font-monospace">0.00s</span>
+                    </div>
+                    <input type="range" class="form-range" id="coverFrameScrubber" min="0" max="60" step="0.05" value="0">
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" id="coverFrameCurrentBtn">
+                            Use Video Pos
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning py-0 px-2 fw-semibold" id="setCoverFrameBtn">
+                            <span id="setCoverFrameSpinner" class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+                            Set as Cover Frame
+                        </button>
+                    </div>
+                    <div id="coverFrameFeedback" class="small mt-1 text-center d-none"></div>
+                </div>
             </div>
             <div class="modal-footer border-secondary py-1 px-3 d-flex justify-content-between align-items-center">
                 <small id="modalClipTitle" class="text-muted text-truncate" style="max-width: 280px;"></small>
@@ -771,6 +1159,15 @@
                 console.warn("Queue SSE parse failed:", err);
             }
         };
+
+        function cleanupQueueSSE() {
+            if (source) {
+                source.close();
+                source = null;
+            }
+        }
+        window.addEventListener('beforeunload', cleanupQueueSSE);
+        window.addEventListener('pagehide', cleanupQueueSSE);
     })();
 
     // View Mode Management (Grouped vs Flat Table)
@@ -932,29 +1329,116 @@
         }
     }
 
-    // Modal video player lifecycle management
+    // Modal video player lifecycle management & Cover Frame Scrubber (Enhancement 7)
     var videoModal = document.getElementById('videoPlayerModal');
+    var currentPreviewClipId = null;
+    var currentPreviewVideoUrl = null;
+
     if (videoModal) {
+        var videoPlayer = document.getElementById('modalVideoElement');
+        var coverScrubber = document.getElementById('coverFrameScrubber');
+        var coverTimeDisplay = document.getElementById('coverFrameTimeDisplay');
+        var coverCurrentBtn = document.getElementById('coverFrameCurrentBtn');
+        var setCoverBtn = document.getElementById('setCoverFrameBtn');
+        var setCoverSpinner = document.getElementById('setCoverFrameSpinner');
+        var coverFeedback = document.getElementById('coverFrameFeedback');
+
         videoModal.addEventListener('show.bs.modal', function(event) {
             var button = event.relatedTarget;
-            var videoUrl = button.getAttribute('data-video-url');
-            var clipId = button.getAttribute('data-clip-id');
+            currentPreviewVideoUrl = button.getAttribute('data-video-url');
+            currentPreviewClipId = button.getAttribute('data-clip-id');
             var clipTitle = button.getAttribute('data-clip-title') || 'Short Preview';
 
             var titleEl = document.getElementById('videoPlayerModalLabel');
             var clipTitleEl = document.getElementById('modalClipTitle');
-            var videoPlayer = document.getElementById('modalVideoElement');
 
-            if (titleEl) titleEl.textContent = 'Previewing Clip ' + clipId;
+            if (titleEl) titleEl.textContent = 'Previewing Clip ' + currentPreviewClipId;
             if (clipTitleEl) clipTitleEl.textContent = clipTitle;
+            if (coverScrubber) {
+                coverScrubber.value = 0;
+                coverScrubber.max = 60;
+            }
+            if (coverTimeDisplay) coverTimeDisplay.textContent = '0.00s';
+            if (coverFeedback) {
+                coverFeedback.className = 'small mt-1 text-center d-none';
+                coverFeedback.textContent = '';
+            }
             if (videoPlayer) {
-                videoPlayer.src = videoUrl;
+                videoPlayer.src = currentPreviewVideoUrl;
                 videoPlayer.load();
                 videoPlayer.play().catch(function(err) {
                     console.log('Autoplay prevented:', err);
                 });
             }
         });
+
+        if (videoPlayer && coverScrubber && coverTimeDisplay) {
+            videoPlayer.addEventListener('loadedmetadata', function() {
+                if (videoPlayer.duration && !isNaN(videoPlayer.duration)) {
+                    coverScrubber.max = videoPlayer.duration;
+                }
+            });
+
+            coverScrubber.addEventListener('input', function() {
+                var val = parseFloat(coverScrubber.value) || 0;
+                coverTimeDisplay.textContent = val.toFixed(2) + 's';
+                videoPlayer.currentTime = val;
+            });
+
+            if (coverCurrentBtn) {
+                coverCurrentBtn.addEventListener('click', function() {
+                    var cur = videoPlayer.currentTime || 0;
+                    coverScrubber.value = cur;
+                    coverTimeDisplay.textContent = cur.toFixed(2) + 's';
+                });
+            }
+
+            if (setCoverBtn) {
+                setCoverBtn.addEventListener('click', async function() {
+                    if (!currentPreviewClipId) return;
+                    var timestamp = parseFloat(coverScrubber.value) || 0;
+                    setCoverBtn.disabled = true;
+                    if (setCoverSpinner) setCoverSpinner.classList.remove('d-none');
+                    if (coverFeedback) {
+                        coverFeedback.className = 'small mt-1 text-center text-info';
+                        coverFeedback.textContent = 'Injecting cover frame at ' + timestamp.toFixed(2) + 's...';
+                    }
+
+                    try {
+                        var resp = await fetch('/api/clips/' + encodeURIComponent(currentPreviewClipId) + '/cover-frame', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ timestamp_sec: timestamp })
+                        });
+                        var resJson = await resp.json();
+                        if (resp.ok && resJson.status === 'success') {
+                            if (coverFeedback) {
+                                coverFeedback.className = 'small mt-1 text-center text-success fw-bold';
+                                coverFeedback.textContent = 'Cover frame injected successfully! Reloading...';
+                            }
+                            // Refresh player preview
+                            setTimeout(function() {
+                                if (videoPlayer && currentPreviewVideoUrl) {
+                                    videoPlayer.src = currentPreviewVideoUrl.split('?')[0] + '?t=' + Date.now();
+                                    videoPlayer.load();
+                                    videoPlayer.play().catch(function() {});
+                                }
+                            }, 500);
+                        } else {
+                            throw new Error(resJson.detail || 'Cover frame injection failed');
+                        }
+                    } catch (err) {
+                        if (coverFeedback) {
+                            coverFeedback.className = 'small mt-1 text-center text-danger';
+                            coverFeedback.textContent = 'Error: ' + err.message;
+                        }
+                    } finally {
+                        setCoverBtn.disabled = false;
+                        if (setCoverSpinner) setCoverSpinner.classList.add('d-none');
+                    }
+                });
+            }
+        }
 
         videoModal.addEventListener('hide.bs.modal', function() {
             var videoPlayer = document.getElementById('modalVideoElement');
@@ -967,16 +1451,52 @@
     }
 
     // Caption Style Switcher Modal & Non-Destructive Re-render Handlers
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-open-style');
+        if (!btn) return;
+        var clipId = btn.dataset.clipId;
+        var rawStyle = btn.dataset.captionStyle;
+        openStyleModal(clipId, rawStyle);
+    });
+
     window.openStyleModal = function(clipId, currentStyle) {
+        if (typeof clipId === 'object' && clipId !== null) {
+            var el = clipId;
+            clipId = el.dataset.clipId;
+            currentStyle = el.dataset.captionStyle;
+        }
+        var stylePreset = 'hormozi';
+        if (currentStyle && typeof currentStyle === 'string') {
+            try {
+                var parsed = JSON.parse(currentStyle);
+                stylePreset = parsed.template_id || parsed.id || parsed.name || 'hormozi';
+            } catch(e) {
+                stylePreset = currentStyle;
+            }
+        }
+        // Normalize aliases
+        if (stylePreset === 'neon') stylePreset = 'cyberpunk';
+        if (stylePreset === 'high_contrast_box') stylePreset = 'high_contrast';
+
         document.getElementById('styleModalClipId').value = clipId;
-        var radio = document.querySelector('input[name="style_preset_choice"][value="' + currentStyle + '"]');
+
+        // Reset overlay fields on open to prevent cross-clip contamination
+        var hookInput = document.getElementById('styleHookOverlayText');
+        if (hookInput) hookInput.value = '';
+        var ctaInput = document.getElementById('styleCtaOverlayText');
+        if (ctaInput) ctaInput.value = '';
+        var wmInput = document.getElementById('styleWatermarkText');
+        if (wmInput) wmInput.value = '';
+
+        var radio = document.querySelector('input[name="style_preset_choice"][value="' + stylePreset + '"]');
         if (radio) {
             radio.checked = true;
         } else {
-            var defaultRadio = document.getElementById('style_hormozi');
+            var defaultRadio = document.getElementById('style_hormozi') || document.querySelector('input[name="style_preset_choice"]');
             if (defaultRadio) defaultRadio.checked = true;
         }
-        var modal = new bootstrap.Modal(document.getElementById('captionStyleModal'));
+        var modalEl = document.getElementById('captionStyleModal');
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
     };
 
@@ -993,19 +1513,39 @@
 
         var fd = new FormData();
         fd.append('template_id', styleName);
+        fd.append('force_re_render', 'true');
+
         var hookInput = document.getElementById('styleHookOverlayText');
         var hookText = hookInput ? hookInput.value.trim() : '';
         if (hookText) {
             fd.append('hook_overlay_text', hookText);
         }
+
+        var ctaInput = document.getElementById('styleCtaOverlayText');
+        var ctaText = ctaInput ? ctaInput.value.trim() : '';
+        if (ctaText) {
+            fd.append('cta_overlay_text', ctaText);
+        }
+
+        var wmInput = document.getElementById('styleWatermarkText');
+        var wmText = wmInput ? wmInput.value.trim() : '';
+        if (wmText) {
+            fd.append('watermark_text', wmText);
+        }
+
+        var wmAnchor = document.getElementById('styleWatermarkAnchor');
+        if (wmAnchor && wmAnchor.value) {
+            fd.append('watermark_anchor', wmAnchor.value);
+        }
+
         fd.append('csrf_token', csrfToken);
 
         fetch('/queue/' + clipId + '/re-render-style', {
-
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken,
-                'HX-Request': 'true'
+                'HX-Request': 'true',
+                'Accept': 'application/json'
             },
             body: fd
         })
@@ -1018,8 +1558,15 @@
             var modalInstance = bootstrap.Modal.getInstance(modalEl);
             if (modalInstance) modalInstance.hide();
             window.showToast('Style re-rendered to "' + styleName + '" in ' + (data.render_time_sec || 3) + 's!', 'success');
-            var playBtn = document.querySelector('button[data-video-url*="' + clipId + '"]');
-            if (playBtn) playBtn.dataset.videoUrl = '/api/video/' + clipId + '?t=' + Date.now();
+            var playBtns = document.querySelectorAll('button[data-video-url*="' + clipId + '"]');
+            playBtns.forEach(function(playBtn) {
+                playBtn.dataset.videoUrl = '/api/video/' + clipId + '?t=' + Date.now();
+            });
+            // Update caption style attribute on buttons
+            var styleBtns = document.querySelectorAll('.btn-open-style[data-clip-id="' + clipId + '"]');
+            styleBtns.forEach(function(sb) {
+                sb.dataset.captionStyle = styleName;
+            });
         })
         .catch(function(err) {
             window.showToast('Re-render error: ' + err.message, 'danger');
@@ -1056,6 +1603,9 @@
                 col.style.transform = 'scale(0.95)';
                 setTimeout(function() { col.remove(); }, 350);
             }
+        }
+    });
+
     // Keyboard Shortcuts & Fast Triage
     var focusedCardIndex = -1;
     function updateFocusedCard() {
@@ -1142,7 +1692,26 @@
                 
                 <input type="hidden" id="styleModalClipId" value="">
                 
-                <div class="list-group gap-2 mb-2">
+                <div class="list-group gap-2 mb-2" id="stylePresetOptionsList" style="max-height: 280px; overflow-y: auto;">
+                    {% if caption_templates %}
+                    {% for tmpl in caption_templates %}
+                    <label class="list-group-item list-group-item-action bg-black text-light border-secondary d-flex justify-content-between align-items-center p-3 rounded" style="cursor:pointer;">
+                        <div class="d-flex align-items-center gap-3">
+                            <input class="form-check-input flex-shrink-0 m-0" type="radio" name="style_preset_choice" id="style_{{ tmpl.template_id or tmpl.id }}" value="{{ tmpl.template_id or tmpl.id }}" {% if (tmpl.template_id or tmpl.id) == 'hormozi' or loop.first %}checked{% endif %}>
+                            <div>
+                                <strong class="d-block {% if (tmpl.template_id or tmpl.id) == 'hormozi' %}text-warning{% elif (tmpl.template_id or tmpl.id) == 'neon' or (tmpl.template_id or tmpl.id) == 'cyberpunk' %}text-info{% else %}text-light{% endif %}">
+                                    {% if (tmpl.template_id or tmpl.id) == 'hormozi' %}⚡ {% elif (tmpl.template_id or tmpl.id) == 'mrbeast' %}💥 {% elif (tmpl.template_id or tmpl.id) == 'neon' or (tmpl.template_id or tmpl.id) == 'cyberpunk' %}🌆 {% elif (tmpl.template_id or tmpl.id) == 'minimalist' %}✨ {% elif (tmpl.template_id or tmpl.id) == 'high_contrast_box' or (tmpl.template_id or tmpl.id) == 'high_contrast' %}⬛ {% else %}🎨 {% endif %}
+                                    {{ tmpl.name }}
+                                </strong>
+                                <small class="text-muted">{{ tmpl.description }}</small>
+                            </div>
+                        </div>
+                        <span class="badge {% if (tmpl.template_id or tmpl.id) == 'hormozi' %}bg-warning text-dark{% elif tmpl.is_builtin is defined and not tmpl.is_builtin %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                            {{ 'Custom' if (tmpl.is_builtin is defined and not tmpl.is_builtin) else ('Default' if (tmpl.template_id or tmpl.id) == 'hormozi' else 'Preset') }}
+                        </span>
+                    </label>
+                    {% endfor %}
+                    {% else %}
                     <label class="list-group-item list-group-item-action bg-black text-light border-secondary d-flex justify-content-between align-items-center p-3 rounded" style="cursor:pointer;">
                         <div class="d-flex align-items-center gap-3">
                             <input class="form-check-input flex-shrink-0 m-0" type="radio" name="style_preset_choice" id="style_hormozi" value="hormozi" checked>
@@ -1193,12 +1762,36 @@
                         </div>
                         <span class="badge bg-dark border border-secondary">Crisp</span>
                     </label>
+                    {% endif %}
                 </div>
 
                 <div class="mt-3 pt-2 border-top border-secondary">
                     <label class="form-label small text-info fw-bold mb-1">🎯 Visual Hook Overlay Banner (First 3s)</label>
                     <input type="text" id="styleHookOverlayText" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="e.g. Wait For It... or Stop Scrolling!">
                     <small class="text-muted" style="font-size: 0.72rem;">Optional opening text banner burned into the top center for 0-3s to boost initial viewer retention.</small>
+                </div>
+
+                <div class="mt-2">
+                    <label class="form-label small text-warning fw-bold mb-1">📢 Footer Call-To-Action (Last 3.5s)</label>
+                    <input type="text" id="styleCtaOverlayText" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="e.g. Subscribe For Part 2 or Follow For More!">
+                    <small class="text-muted" style="font-size: 0.72rem;">Optional closing CTA pill burned into bottom center during the finale.</small>
+                </div>
+
+                <div class="mt-2 row g-2">
+                    <div class="col-7">
+                        <label class="form-label small text-light fw-bold mb-1">🏷️ Brand Watermark Text</label>
+                        <input type="text" id="styleWatermarkText" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="e.g. @MyChannel">
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label small text-light fw-bold mb-1">📍 Position</label>
+                        <select id="styleWatermarkAnchor" class="form-select form-select-sm bg-black text-light border-secondary">
+                            <option value="top_right" selected>Top Right</option>
+                            <option value="top_left">Top Left</option>
+                            <option value="bottom_right">Bottom Right</option>
+                            <option value="bottom_left">Bottom Left</option>
+                            <option value="center">Center</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer border-top border-secondary">
@@ -1321,41 +1914,140 @@
     </div>
 </div>
 
-<!-- Schedule Publication Modal -->
+<!-- Full YouTube Publishing & Scheduling Studio Modal -->
 <div class="modal fade" id="schedulePublishModal" tabindex="-1" aria-labelledby="schedulePublishModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 450px;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content bg-dark text-light border border-secondary shadow-lg">
-            <div class="modal-header border-bottom border-secondary">
-                <h5 class="modal-title text-info d-flex align-items-center gap-2" id="schedulePublishModalLabel">
-                    <span>📅</span> <span>Schedule Publication</span>
+            <div class="modal-header border-bottom border-secondary bg-black py-2 px-3">
+                <h5 class="modal-title text-info d-flex align-items-center gap-2 fs-6" id="schedulePublishModalLabel">
+                    <span>🚀</span> <span>YouTube Publishing & Scheduling Studio</span>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="schedulePublishForm" method="post" action="" onsubmit="submitSchedulePublish(event)">
+            <form id="schedulePublishForm" method="post" action="" onsubmit="submitPublishStudio(event)">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" id="scheduleClipId" value="">
-                <div class="modal-body">
-                    <p class="small text-muted mb-3">Set an automated drip-feed publication time for this Short to YouTube.</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted small fw-semibold">Target Date & Time (Local)</label>
-                        <input type="datetime-local" class="form-control bg-black text-light border-secondary font-monospace" id="scheduleDateTimeInput" name="scheduled_at" required>
+                <input type="hidden" id="publishClipId" value="">
+                
+                <div class="modal-body p-3" id="publishModalBody">
+                    <!-- Loading Skeleton -->
+                    <div id="publishLoadingSkeleton" class="text-center py-4">
+                        <div class="spinner-border text-info mb-2" role="status"></div>
+                        <div class="text-muted small">Synthesizing SEO metadata, titles, tags & channel defaults...</div>
                     </div>
 
-                    <div class="mb-2">
-                        <small class="text-muted d-block mb-1">Quick Presets:</small>
-                        <div class="d-flex flex-wrap gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="setSchedulePreset('1h')">+1 Hour</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="setSchedulePreset('tomorrow_9am')">Tomorrow 9:00 AM</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="setSchedulePreset('tomorrow_5pm')">Tomorrow 5:00 PM</button>
-                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" onclick="setSchedulePreset('prime')">⚡ Prime Time Weekend</button>
+                    <!-- Main Form Fields -->
+                    <div id="publishFormContent" class="d-none">
+                        <!-- Top Row: Target Channel & Mode -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">Target YouTube Channel</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="publishChannelSelect" name="channel_id">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">Publishing Mode</label>
+                                <div class="btn-group btn-group-sm w-100" role="group">
+                                    <input type="radio" class="btn-check" name="publish_mode" id="modeSchedule" value="schedule" checked onchange="togglePublishMode(this.value)">
+                                    <label class="btn btn-outline-info" for="modeSchedule">📅 Scheduled Drip-Feed</label>
+                                    <input type="radio" class="btn-check" name="publish_mode" id="modeInstant" value="instant" onchange="togglePublishMode(this.value)">
+                                    <label class="btn btn-outline-warning" for="modeInstant">⚡ Instant Publish</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Date & Presets Box -->
+                        <div id="scheduleTimeSection" class="p-2 mb-3 rounded border border-secondary bg-black">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-info small fw-semibold mb-0">📅 Target Release Time (Local)</label>
+                                <span id="publishPeakBadge" class="badge bg-success-subtle text-success border border-success" style="font-size:0.7rem;">
+                                    ⚡ AI Recommended Peak Hour
+                                </span>
+                            </div>
+                            <input type="datetime-local" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace mb-2" id="scheduleDateTimeInput" name="scheduled_at">
+                            
+                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                <small class="text-muted" style="font-size:0.72rem;">Quick Presets:</small>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.72rem;" onclick="setSchedulePreset('1h')">+1 Hour</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.72rem;" onclick="setSchedulePreset('tomorrow_9am')">Tomorrow 9:00 AM</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.72rem;" onclick="setSchedulePreset('tomorrow_5pm')">Tomorrow 5:00 PM</button>
+                                <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.72rem;" onclick="setSchedulePreset('prime')">⚡ Prime Time Weekend</button>
+                            </div>
+                        </div>
+
+                        <!-- AI SEO CTR Title Archetypes -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-muted small fw-semibold mb-0">🎯 High-CTR Title (Max 100 chars)</label>
+                                <span id="titleCharCounter" class="text-muted small font-monospace" style="font-size:0.72rem;">0 / 100</span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 mb-2">
+                                <button type="button" id="titlePillCuriosity" class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size:0.72rem;" onclick="applyTitleArchetype('curiosity_gap')">
+                                    💡 Curiosity Gap
+                                </button>
+                                <button type="button" id="titlePillShock" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.72rem;" onclick="applyTitleArchetype('shock_factor')">
+                                    😱 Shock Factor
+                                </button>
+                                <button type="button" id="titlePillQuestion" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.72rem;" onclick="applyTitleArchetype('question')">
+                                    ❓ Direct Question
+                                </button>
+                            </div>
+                            <input type="text" class="form-control form-control-sm bg-black text-light border-secondary" id="publishTitleInput" name="title" maxlength="100" required oninput="updateTitleCharCount()">
+                        </div>
+
+                        <!-- Structured Description -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-semibold mb-1">📝 Algorithmic Description (Hook + Credit + Hashtags)</label>
+                            <textarea class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="publishDescriptionInput" name="description" rows="4" style="font-size:0.8rem;" required></textarea>
+                            <div class="text-muted small mt-1" style="font-size:0.7rem;">
+                                💡 Contains deduplication token <code>[c:&lt;clip_id&gt;]</code> to protect against duplicate uploads.
+                            </div>
+                        </div>
+
+                        <!-- Viral Tags & Keywords -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-semibold mb-1">🏷️ Viral Hashtags & SEO Tags</label>
+                            <input type="text" class="form-control form-control-sm bg-black text-light border-secondary" id="publishTagsInput" name="tags" placeholder="e.g. #Shorts, #Viral, #Trending">
+                            <div id="publishTagsBadges" class="d-flex flex-wrap gap-1 mt-1"></div>
+                        </div>
+
+                        <!-- Category, COPPA & Privacy Row -->
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Category</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="publishCategorySelect" name="category_id">
+                                    <option value="24">Entertainment (24)</option>
+                                    <option value="22" selected>People & Blogs (22)</option>
+                                    <option value="20">Gaming (20)</option>
+                                    <option value="23">Comedy (23)</option>
+                                    <option value="27">Education (27)</option>
+                                    <option value="26">Howto & Style (26)</option>
+                                    <option value="28">Science & Technology (28)</option>
+                                    <option value="1">Film & Animation (1)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Privacy Status</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="publishPrivacySelect" name="privacy_status">
+                                    <option value="public" selected>Public (Instant)</option>
+                                    <option value="private">Private (Pre-release)</option>
+                                    <option value="unlisted">Unlisted</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-center pt-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="publishMadeForKids" name="made_for_kids">
+                                    <label class="form-check-label text-light small" for="publishMadeForKids">COPPA: Made for Kids</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-top border-secondary d-flex justify-content-between">
+                
+                <div class="modal-footer border-top border-secondary d-flex justify-content-between py-2 px-3">
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-sm btn-info fw-bold" id="confirmScheduleBtn">
-                        📅 Schedule Publication
+                    <button type="submit" class="btn btn-sm btn-info fw-bold" id="confirmPublishBtn" disabled>
+                        🚀 Publish to YouTube
                     </button>
                 </div>
             </form>
@@ -1364,16 +2056,169 @@
 </div>
 
 <script>
+var currentPublishPackage = null;
+
 function openScheduleModal(clipId) {
-    document.getElementById('scheduleClipId').value = clipId;
+    document.getElementById('publishClipId').value = clipId;
+    var skeleton = document.getElementById('publishLoadingSkeleton');
+    var content = document.getElementById('publishFormContent');
+    var confirmBtn = document.getElementById('confirmPublishBtn');
+
+    if (skeleton) skeleton.classList.remove('d-none');
+    if (content) content.classList.add('d-none');
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    var modal = new bootstrap.Modal(document.getElementById('schedulePublishModal'));
+    modal.show();
+
+    fetch('/api/clips/' + encodeURIComponent(clipId) + '/publishing-package')
+        .then(function(r) { return r.json(); })
+        .then(function(pkg) {
+            currentPublishPackage = pkg;
+            populatePublishModal(pkg);
+            if (skeleton) skeleton.classList.add('d-none');
+            if (content) content.classList.remove('d-none');
+            if (confirmBtn) confirmBtn.disabled = false;
+        })
+        .catch(function(err) {
+            if (skeleton) skeleton.innerHTML = '<div class="text-danger">Failed to load publishing package: ' + err.message + '</div>';
+        });
+}
+
+function populatePublishModal(pkg) {
+    // Channel select
+    var chanSelect = document.getElementById('publishChannelSelect');
+    if (chanSelect && pkg.channels) {
+        chanSelect.innerHTML = '';
+        pkg.channels.forEach(function(ch) {
+            var opt = document.createElement('option');
+            opt.value = ch.id;
+            opt.textContent = ch.name + ' (' + (ch.youtube_channel_id || 'ID') + ')';
+            if (ch.id === pkg.selected_channel_id) opt.selected = true;
+            chanSelect.appendChild(opt);
+        });
+        if (pkg.channels.length === 0) {
+            var opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Default System Channel';
+            chanSelect.appendChild(opt);
+        }
+    }
+
+    // Default title & archetypes
+    var titleInput = document.getElementById('publishTitleInput');
+    if (titleInput) {
+        titleInput.value = pkg.current_title || (pkg.titles ? pkg.titles.curiosity_gap : '') || 'Viral Short #Shorts';
+        updateTitleCharCount();
+    }
+
+    // Archetype pills tooltips/titles
+    if (pkg.titles) {
+        var pCur = document.getElementById('titlePillCuriosity');
+        var pShk = document.getElementById('titlePillShock');
+        var pQst = document.getElementById('titlePillQuestion');
+        if (pCur) pCur.title = pkg.titles.curiosity_gap || '';
+        if (pShk) pShk.title = pkg.titles.shock_factor || '';
+        if (pQst) pQst.title = pkg.titles.question || '';
+    }
+
+    // Description
+    var descInput = document.getElementById('publishDescriptionInput');
+    if (descInput) descInput.value = pkg.description || '';
+
+    // Tags
+    var tagsInput = document.getElementById('publishTagsInput');
+    if (tagsInput) {
+        tagsInput.value = pkg.tags_string || (pkg.tags ? pkg.tags.join(' ') : '');
+        renderPublishTagBadges(pkg.tags || []);
+    }
+
+    // Category
+    var catSelect = document.getElementById('publishCategorySelect');
+    if (catSelect && pkg.category_id) catSelect.value = String(pkg.category_id);
+
+    // Made for kids
+    var kidsCb = document.getElementById('publishMadeForKids');
+    if (kidsCb) kidsCb.checked = Boolean(pkg.made_for_kids);
+
+    // Privacy
+    var privSelect = document.getElementById('publishPrivacySelect');
+    if (privSelect && pkg.privacy_status) privSelect.value = pkg.privacy_status;
+
+    // Scheduled at
+    var dtInput = document.getElementById('scheduleDateTimeInput');
+    if (dtInput) {
+        dtInput.value = pkg.recommended_publish_at_local || getNowPlusOneHour();
+    }
+
+    // Initial mode: default to schedule
+    document.getElementById('modeSchedule').checked = true;
+    togglePublishMode('schedule');
+}
+
+function getNowPlusOneHour() {
     var now = new Date();
     now.setHours(now.getHours() + 1);
     now.setMinutes(0);
     var pad = function(n) { return (n < 10 ? '0' : '') + n; };
-    var defaultVal = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
-    document.getElementById('scheduleDateTimeInput').value = defaultVal;
-    var modal = new bootstrap.Modal(document.getElementById('schedulePublishModal'));
-    modal.show();
+    return now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+}
+
+function togglePublishMode(mode) {
+    var schedSection = document.getElementById('scheduleTimeSection');
+    var confirmBtn = document.getElementById('confirmPublishBtn');
+    var privSelect = document.getElementById('publishPrivacySelect');
+
+    if (mode === 'schedule') {
+        if (schedSection) schedSection.classList.remove('d-none');
+        if (confirmBtn) {
+            confirmBtn.className = 'btn btn-sm btn-info fw-bold';
+            confirmBtn.innerHTML = '📅 Schedule Publication';
+        }
+        if (privSelect) privSelect.value = 'private'; // YouTube scheduling requirement
+    } else {
+        if (schedSection) schedSection.classList.add('d-none');
+        if (confirmBtn) {
+            confirmBtn.className = 'btn btn-sm btn-warning text-dark fw-bold';
+            confirmBtn.innerHTML = '⚡ Publish Now';
+        }
+        if (privSelect) privSelect.value = 'public';
+    }
+}
+
+function applyTitleArchetype(archetype) {
+    if (!currentPublishPackage || !currentPublishPackage.titles) return;
+    var chosen = currentPublishPackage.titles[archetype];
+    if (chosen) {
+        var titleInput = document.getElementById('publishTitleInput');
+        if (titleInput) {
+            titleInput.value = chosen;
+            updateTitleCharCount();
+        }
+    }
+}
+
+function updateTitleCharCount() {
+    var titleInput = document.getElementById('publishTitleInput');
+    var counter = document.getElementById('titleCharCounter');
+    if (titleInput && counter) {
+        var len = titleInput.value.length;
+        counter.textContent = len + ' / 100';
+        counter.className = len > 95 ? 'text-warning small font-monospace' : 'text-muted small font-monospace';
+    }
+}
+
+function renderPublishTagBadges(tags) {
+    var container = document.getElementById('publishTagsBadges');
+    if (!container) return;
+    container.innerHTML = '';
+    tags.slice(0, 10).forEach(function(t) {
+        var span = document.createElement('span');
+        span.className = 'badge bg-dark border border-secondary text-info';
+        span.style.fontSize = '0.7rem';
+        span.textContent = t.startsWith('#') ? t : '#' + t;
+        container.appendChild(span);
+    });
 }
 
 function setSchedulePreset(preset) {
@@ -1398,42 +2243,69 @@ function setSchedulePreset(preset) {
     document.getElementById('scheduleDateTimeInput').value = val;
 }
 
-function submitSchedulePublish(e) {
+function submitPublishStudio(e) {
     e.preventDefault();
-    var clipId = document.getElementById('scheduleClipId').value;
+    var clipId = document.getElementById('publishClipId').value;
+    if (!clipId) return;
+
+    var mode = document.querySelector('input[name="publish_mode"]:checked').value;
     var scheduledAt = document.getElementById('scheduleDateTimeInput').value;
-    if (!clipId || !scheduledAt) return;
+    var channelId = document.getElementById('publishChannelSelect').value;
+    var title = document.getElementById('publishTitleInput').value;
+    var description = document.getElementById('publishDescriptionInput').value;
+    var tags = document.getElementById('publishTagsInput').value;
+    var categoryId = document.getElementById('publishCategorySelect').value;
+    var privacyStatus = document.getElementById('publishPrivacySelect').value;
+    var madeForKids = document.getElementById('publishMadeForKids').checked;
 
     var tokenMeta = document.querySelector('meta[name="csrf-token"]');
     var csrfToken = tokenMeta ? tokenMeta.content : '';
 
-    var fd = new FormData();
-    fd.append('scheduled_at', scheduledAt);
-    fd.append('csrf_token', csrfToken);
-
-    var btn = document.getElementById('confirmScheduleBtn');
+    var btn = document.getElementById('confirmPublishBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Scheduling...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
 
-    fetch('/queue/' + clipId + '/schedule', {
+    var payload = {
+        publish_mode: mode,
+        scheduled_at: mode === 'schedule' ? scheduledAt : null,
+        channel_id: channelId,
+        title: title,
+        description: description,
+        tags: tags,
+        category_id: categoryId,
+        privacy_status: privacyStatus,
+        made_for_kids: madeForKids
+    };
+
+    fetch('/api/clips/' + encodeURIComponent(clipId) + '/publish', {
         method: 'POST',
-        headers: { 'X-CSRF-Token': csrfToken, 'HX-Request': 'true' },
-        body: fd
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify(payload)
     })
     .then(function(r) {
-        if (!r.ok) throw new Error('Failed with status ' + r.status);
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || ('HTTP ' + r.status)); });
+        return r.json();
+    })
+    .then(function(res) {
         var modalEl = document.getElementById('schedulePublishModal');
         var modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
-        window.showToast('Clip ' + clipId.substring(0, 8) + ' scheduled for ' + scheduledAt.replace('T', ' ') + '!', 'success');
+
+        var msg = mode === 'schedule'
+            ? 'Clip scheduled for ' + (scheduledAt ? scheduledAt.replace('T', ' ') : 'queue') + '!'
+            : 'Clip published to YouTube successfully!';
+        window.showToast(msg, 'success');
         document.body.dispatchEvent(new CustomEvent('clipApproved', { detail: clipId }));
     })
     .catch(function(err) {
-        window.showToast('Schedule error: ' + err.message, 'danger');
+        window.showToast('Publishing failed: ' + err.message, 'danger');
     })
     .finally(function() {
         btn.disabled = false;
-        btn.innerHTML = '📅 Schedule Publication';
+        togglePublishMode(mode);
     });
 }
 
@@ -1470,7 +2342,7 @@ function selectCardVariation(clipId, title, angle, hookOverlay) {
 
 
 function openClipFolder(clipId) {
-    fetch('/api/clip/' + clipId + '/open-folder', {
+    fetch('/api/clips/' + clipId + '/open-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     })
@@ -1479,10 +2351,12 @@ function openClipFolder(clipId) {
         if (data.status === 'success') {
             window.showToast('Opened folder: ' + data.folder, 'success');
         } else if (data.status === 'fallback') {
-            navigator.clipboard.writeText(data.path);
+            if (data.path && navigator.clipboard) {
+                navigator.clipboard.writeText(data.path);
+            }
             window.showToast('Copied path to clipboard: ' + data.path, 'info');
         } else {
-            window.showToast('Could not open folder: ' + data.message, 'danger');
+            window.showToast('Could not open folder: ' + (data.message || 'Unknown error'), 'danger');
         }
     })
     .catch(function(err) {
@@ -1650,6 +2524,7 @@ function submitClipRecoveryAction(action, fixType) {
             e.preventDefault();
         }
     });
+</script>
 
 <!-- Sub-Frame Precision Clip Trimmer Modal -->
 <div class="modal fade" id="clipTrimmerModal" tabindex="-1" aria-labelledby="clipTrimmerModalLabel" aria-hidden="true">
@@ -1828,6 +2703,562 @@ function submitClipRecoveryAction(action, fixType) {
             }
             updateFocusedCard();
         }, 400);
+    });
+
+    // ── Master-Detail Publishing Studio Controller ──
+    var currentStudioClipId = "{{ selected_clip_id or '' }}";
+    var studioAutosaveTimer = null;
+    var currentDraftVersion = 1;
+    var activeMismatchId = null;
+
+    function openPublishingStudio(clipId, initialTitle) {
+        currentStudioClipId = clipId;
+        var studioCol = document.getElementById("publishingStudioColumn");
+        var clipsCol = document.getElementById("queueClipsColumn");
+        var toggleBtn = document.getElementById("studioToggleBtn");
+
+        if (studioCol) {
+            studioCol.classList.remove("d-none");
+            studioCol.classList.add("d-block", "studio-open");
+        }
+        if (clipsCol) {
+            clipsCol.className = "col-xl-7 col-lg-6";
+        }
+        if (toggleBtn) {
+            toggleBtn.className = "btn btn-sm btn-primary";
+        }
+
+        // Sync URL query params without reloading
+        var url = new URL(window.location);
+        url.searchParams.set("studio", "open");
+        url.searchParams.set("clip", clipId);
+        window.history.replaceState({}, "", url);
+
+        var badge = document.getElementById("studioClipIdBadge");
+        if (badge) badge.textContent = "Clip " + clipId.substring(0, 8);
+
+        var openFolderBtn = document.getElementById("studioOpenFolderBtn");
+        if (openFolderBtn) openFolderBtn.disabled = false;
+        var pubBtn = document.getElementById("studioPublishBtn");
+        if (pubBtn) pubBtn.disabled = false;
+        var schedBtn = document.getElementById("studioScheduleBtn");
+        if (schedBtn) schedBtn.disabled = false;
+
+        // Video Player Preview
+        var video = document.getElementById("studioPreviewVideo");
+        var placeholder = document.getElementById("studioVideoPlaceholder");
+        if (video) {
+            video.src = "/api/video/" + clipId;
+            video.classList.remove("d-none");
+            video.load();
+        }
+        if (placeholder) placeholder.classList.add("d-none");
+
+        // Fetch draft metadata from backend
+        fetch("/api/clips/" + clipId + "/publish-draft")
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+            if (data) {
+                currentDraftVersion = data.draft_version || 1;
+                if (data.title) document.getElementById("studioTitleInput").value = data.title;
+                else if (initialTitle) document.getElementById("studioTitleInput").value = initialTitle;
+                if (data.description) document.getElementById("studioDescriptionInput").value = data.description;
+                if (data.tags) {
+                    var t = Array.isArray(data.tags) ? data.tags.join(", ") : data.tags;
+                    document.getElementById("studioTagsInput").value = t;
+                }
+                if (data.privacy_status) {
+                    document.getElementById("studioPrivacySelect").value = data.privacy_status;
+                    onStudioPrivacyChange(data.privacy_status);
+                }
+                if (data.category_id) document.getElementById("studioCategorySelect").value = data.category_id;
+                if (typeof data.made_for_kids === "boolean") document.getElementById("studioMadeForKids").checked = data.made_for_kids;
+            } else if (initialTitle) {
+                document.getElementById("studioTitleInput").value = initialTitle;
+            }
+            updateStudioTitleCount();
+        })
+        .catch(function() {
+            if (initialTitle) document.getElementById("studioTitleInput").value = initialTitle;
+            updateStudioTitleCount();
+        });
+    }
+
+    function closePublishingStudio() {
+        var studioCol = document.getElementById("publishingStudioColumn");
+        var clipsCol = document.getElementById("queueClipsColumn");
+        var toggleBtn = document.getElementById("studioToggleBtn");
+
+        if (studioCol) {
+            studioCol.classList.remove("d-block", "studio-open");
+            studioCol.classList.add("d-none");
+        }
+        if (clipsCol) {
+            clipsCol.className = "col-12";
+        }
+        if (toggleBtn) {
+            toggleBtn.className = "btn btn-sm btn-outline-primary";
+        }
+
+        var video = document.getElementById("studioPreviewVideo");
+        if (video) {
+            video.pause();
+            video.src = "";
+            video.classList.add("d-none");
+        }
+        var placeholder = document.getElementById("studioVideoPlaceholder");
+        if (placeholder) placeholder.classList.remove("d-none");
+
+        var url = new URL(window.location);
+        url.searchParams.delete("studio");
+        url.searchParams.delete("clip");
+        window.history.replaceState({}, "", url);
+    }
+
+    function togglePublishingStudio() {
+        var studioCol = document.getElementById("publishingStudioColumn");
+        if (studioCol && studioCol.classList.contains("studio-open")) {
+            closePublishingStudio();
+        } else {
+            if (currentStudioClipId) {
+                openPublishingStudio(currentStudioClipId);
+            } else {
+                var firstCard = document.querySelector(".btn-open-studio");
+                if (firstCard) {
+                    firstCard.click();
+                } else {
+                    var clipsCol = document.getElementById("queueClipsColumn");
+                    var toggleBtn = document.getElementById("studioToggleBtn");
+                    if (studioCol) {
+                        studioCol.classList.remove("d-none");
+                        studioCol.classList.add("d-block", "studio-open");
+                    }
+                    if (clipsCol) clipsCol.className = "col-xl-7 col-lg-6";
+                    if (toggleBtn) toggleBtn.className = "btn btn-sm btn-primary";
+                    var url = new URL(window.location);
+                    url.searchParams.set("studio", "open");
+                    window.history.replaceState({}, "", url);
+                }
+            }
+        }
+    }
+
+    function onStudioChannelChange(channelId) {
+        var url = new URL(window.location);
+        url.searchParams.set("channel_id", channelId);
+        if (currentStudioClipId) url.searchParams.set("clip", currentStudioClipId);
+        url.searchParams.set("studio", "open");
+        window.location.href = url.toString();
+    }
+
+    function onStudioPrivacyChange(val) {
+        var schedGroup = document.getElementById("studioSchedulePickerGroup");
+        if (schedGroup) {
+            if (val === "scheduled") {
+                schedGroup.classList.remove("d-none");
+            } else {
+                schedGroup.classList.add("d-none");
+            }
+        }
+        onStudioFieldChange();
+    }
+
+    function updateStudioTitleCount() {
+        var input = document.getElementById("studioTitleInput");
+        var counter = document.getElementById("studioTitleCounter");
+        if (input && counter) {
+            counter.textContent = input.value.length + "/100";
+        }
+    }
+
+    function applyStudioAiAngle(angle) {
+        var input = document.getElementById("studioTitleInput");
+        if (!input) return;
+        var current = input.value.trim();
+        if (!current) current = "Shocking Revelation Revealed";
+
+        if (angle === "curiosity") {
+            input.value = "The Hidden Truth About " + current;
+        } else if (angle === "stakes") {
+            input.value = "Why This Changes Everything: " + current;
+        } else if (angle === "question") {
+            input.value = "Did Anyone Else Notice This in " + current + "?";
+        } else if (angle === "punchy") {
+            input.value = current.toUpperCase() + " (Unreal)";
+        }
+        input.value = input.value.substring(0, 100);
+        updateStudioTitleCount();
+        onStudioFieldChange();
+    }
+
+    function appendStudioPreset(presetText) {
+        var desc = document.getElementById("studioDescriptionInput");
+        if (!desc) return;
+        desc.value = (desc.value ? desc.value + "\n\n" : "") + presetText;
+        onStudioFieldChange();
+    }
+
+    function onStudioFieldChange() {
+        updateStudioTitleCount();
+        if (!currentStudioClipId) return;
+
+        var statusEl = document.getElementById("studioAutosaveStatus");
+        if (statusEl) statusEl.textContent = "Saving...";
+
+        if (studioAutosaveTimer) clearTimeout(studioAutosaveTimer);
+        studioAutosaveTimer = setTimeout(saveStudioDraft, 500);
+    }
+
+    function saveStudioDraft() {
+        if (!currentStudioClipId) return;
+        var statusEl = document.getElementById("studioAutosaveStatus");
+        var title = document.getElementById("studioTitleInput").value;
+        var description = document.getElementById("studioDescriptionInput").value;
+        var tags = document.getElementById("studioTagsInput").value;
+        var privacy = document.getElementById("studioPrivacySelect").value;
+        var category = document.getElementById("studioCategorySelect").value;
+        var kids = document.getElementById("studioMadeForKids").checked;
+
+        fetch("/api/clips/" + currentStudioClipId + "/publish-draft", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                tags: tags,
+                privacy_status: privacy,
+                category_id: category,
+                made_for_kids: kids,
+                draft_version: currentDraftVersion
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.draft_version) currentDraftVersion = data.draft_version;
+            if (statusEl) {
+                var timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                statusEl.textContent = "Saved at " + timeStr;
+            }
+        })
+        .catch(function(err) {
+            if (statusEl) statusEl.textContent = "Save error";
+        });
+    }
+
+    function executeStudioPublish() {
+        if (!currentStudioClipId) return;
+        var btn = document.getElementById("studioPublishBtn");
+        var feedback = document.getElementById("studioPublishFeedback");
+        var channelSelect = document.getElementById("studioChannelSelect");
+        var channelId = channelSelect ? channelSelect.value : null;
+        var dryRun = document.getElementById("studioDryRunToggle").checked;
+        var privacy = document.getElementById("studioPrivacySelect").value;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Publishing...';
+        if (feedback) feedback.classList.add("d-none");
+
+        fetch("/api/clips/" + currentStudioClipId + "/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                channel_id: channelId,
+                dry_run: dryRun,
+                privacy_status: privacy
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🚀</span> <span>Publish to YouTube</span>';
+            if (data.status === "error" || data.status === "PAUSED_NEEDS_ATTENTION" || data.status === "FAILED") {
+                window.showToast("Publish Error: " + (data.message || data.last_error || "Publish failed"), "danger");
+                if (feedback) {
+                    feedback.className = "small mt-1 text-center text-danger";
+                    feedback.textContent = data.message || "Publish failed";
+                    feedback.classList.remove("d-none");
+                }
+            } else {
+                window.showToast("Short submitted to YouTube successfully!", "success");
+                if (feedback) {
+                    feedback.className = "small mt-1 text-center text-success";
+                    feedback.textContent = "Published: " + (data.youtube_video_id || "Success");
+                    feedback.classList.remove("d-none");
+                }
+            }
+            refreshPublishJobs();
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🚀</span> <span>Publish to YouTube</span>';
+            window.showToast("Publish error: " + err.message, "danger");
+        });
+    }
+
+    function executeStudioSchedule() {
+        if (!currentStudioClipId) return;
+        var schedInput = document.getElementById("studioScheduledAtInput");
+        if (!schedInput || !schedInput.value) {
+            window.showToast("Please select a future release date & time", "warning");
+            document.getElementById("studioPrivacySelect").value = "scheduled";
+            onStudioPrivacyChange("scheduled");
+            if (schedInput) schedInput.focus();
+            return;
+        }
+
+        var channelSelect = document.getElementById("studioChannelSelect");
+        var channelId = channelSelect ? channelSelect.value : null;
+        var isoTime = new Date(schedInput.value).toISOString();
+
+        fetch("/api/clips/" + currentStudioClipId + "/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                scheduled_at: isoTime,
+                channel_id: channelId
+            })
+        })
+        .then(function(r) {
+            if (!r.ok) return r.json().then(function(j) { throw new Error(j.detail || "Schedule failed"); });
+            return r.json();
+        })
+        .then(function(data) {
+            window.showToast("Short scheduled successfully for " + data.scheduled_publish_at, "success");
+            refreshPublishJobs();
+        })
+        .catch(function(err) {
+            window.showToast("Scheduling error: " + err.message, "danger");
+        });
+    }
+
+    function openStudioFolder() {
+        if (!currentStudioClipId) return;
+        fetch("/api/clips/" + currentStudioClipId + "/open-folder", {
+            method: "POST"
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                window.showToast("Opened in Explorer (" + data.method_used + ")", "success");
+            } else {
+                window.showToast("Folder open failed: " + (data.error || "Unknown"), "warning");
+            }
+        })
+        .catch(function(err) {
+            window.showToast("Folder open error: " + err.message, "danger");
+        });
+    }
+
+    function handleExternalVideoIngest(e) {
+        e.preventDefault();
+        var fileInput = document.getElementById("externalVideoFile");
+        var titleInput = document.getElementById("externalVideoTitle");
+        var channelSelect = document.getElementById("externalVideoChannel");
+        var progress = document.getElementById("externalIngestProgress");
+        var submitBtn = document.getElementById("externalIngestSubmitBtn");
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            window.showToast("Please choose an MP4 video file", "warning");
+            return;
+        }
+
+        var fd = new FormData();
+        fd.append("file", fileInput.files[0]);
+        if (titleInput.value) fd.append("title", titleInput.value);
+        if (channelSelect.value) fd.append("channel_id", channelSelect.value);
+
+        progress.classList.remove("d-none");
+        submitBtn.disabled = true;
+
+        fetch("/api/queue/ingest", {
+            method: "POST",
+            body: fd
+        })
+        .then(function(r) {
+            if (!r.ok) return r.json().then(function(j) { throw new Error(j.detail || "Ingest failed"); });
+            return r.json();
+        })
+        .then(function(data) {
+            progress.classList.add("d-none");
+            submitBtn.disabled = false;
+            var modalEl = document.getElementById("externalVideoIngestModal");
+            var modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+            window.showToast("External video ingested successfully!", "success");
+            openPublishingStudio(data.clip_id, data.title);
+        })
+        .catch(function(err) {
+            progress.classList.add("d-none");
+            submitBtn.disabled = false;
+            window.showToast("Ingest error: " + err.message, "danger");
+        });
+    }
+
+    function checkPendingMismatches() {
+        fetch("/api/channels/mismatches/pending")
+        .then(function(r) { return r.json(); })
+        .then(function(mismatches) {
+            if (mismatches && mismatches.length > 0) {
+                var m = mismatches[0];
+                activeMismatchId = m.id;
+                document.getElementById("mismatchExpectedName").textContent = m.intended_channel_name || m.intended_channel_id;
+                document.getElementById("mismatchExpectedId").textContent = m.intended_channel_id;
+                document.getElementById("mismatchActualName").textContent = m.authorized_title || m.authorized_handle || m.authorized_channel_id;
+                document.getElementById("mismatchActualId").textContent = m.authorized_channel_id;
+
+                var modalEl = document.getElementById("oauthMismatchModal");
+                var modal = new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        })
+        .catch(function(e) { console.error("Error checking mismatches:", e); });
+    }
+
+    function resolveMismatchAction(action) {
+        if (!activeMismatchId) return;
+        fetch("/api/channels/connect/resolve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                mismatch_id: activeMismatchId,
+                action: action
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var modalEl = document.getElementById("oauthMismatchModal");
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            window.showToast("Mismatch resolved: " + (data.message || action), "success");
+            setTimeout(function() { window.location.reload(); }, 1000);
+        })
+        .catch(function(err) {
+            window.showToast("Resolve error: " + err.message, "danger");
+        });
+    }
+
+    function connectStudioChannel() {
+        var channelId = document.getElementById("studioChannelSelect").value;
+        fetch("/api/channels/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channel_id: channelId })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.authorization_url) {
+                window.location.href = data.authorization_url;
+            } else {
+                window.showToast("Could not generate authorization URL", "warning");
+            }
+        })
+        .catch(function(err) {
+            window.showToast("OAuth error: " + err.message, "danger");
+        });
+    }
+
+    function verifyStudioChannel() {
+        var channelId = document.getElementById("studioChannelSelect").value;
+        var resEl = document.getElementById("studioVerifyResult");
+        if (resEl) {
+            resEl.textContent = "Verifying credentials...";
+            resEl.classList.remove("d-none");
+        }
+        fetch("/api/channels/" + channelId + "/verify", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (resEl) {
+                if (data.ok) {
+                    resEl.className = "small mt-1 text-success";
+                    resEl.textContent = "✓ Verified: " + (data.actual_title || data.actual_channel_id);
+                } else {
+                    resEl.className = "small mt-1 text-danger";
+                    resEl.textContent = "✗ Verification failed: " + (data.error || "Needs Auth");
+                }
+            }
+        })
+        .catch(function(err) {
+            if (resEl) {
+                resEl.className = "small mt-1 text-danger";
+                resEl.textContent = "Verify error: " + err.message;
+            }
+        });
+    }
+
+    function disconnectStudioChannel() {
+        if (!confirm("Are you sure you want to disconnect this channel's YouTube OAuth token?")) return;
+        var channelId = document.getElementById("studioChannelSelect").value;
+        fetch("/api/channels/" + channelId + "/disconnect", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            window.showToast("Channel disconnected successfully", "info");
+            setTimeout(function() { window.location.reload(); }, 1000);
+        })
+        .catch(function(err) {
+            window.showToast("Disconnect error: " + err.message, "danger");
+        });
+    }
+
+    function refreshPublishJobs() {
+        fetch("/api/publish/jobs?limit=20")
+        .then(function(r) { return r.json(); })
+        .then(function(jobs) {
+            var tbody = document.getElementById("studioJobsTableBody");
+            if (!tbody) return;
+            if (!jobs || jobs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-2">No publishing jobs in outbox.</td></tr>';
+                return;
+            }
+            var html = '';
+            jobs.forEach(function(job) {
+                var stClass = "bg-secondary";
+                if (job.status === "PUBLISHED") stClass = "bg-success";
+                else if (job.status === "UPLOADING") stClass = "bg-info";
+                else if (job.status === "SCHEDULED") stClass = "bg-primary";
+                else if (job.status === "PAUSED_NEEDS_ATTENTION") stClass = "bg-warning text-dark";
+                else if (job.status === "FAILED") stClass = "bg-danger";
+
+                var actionHtml = '';
+                if (job.watch_url) {
+                    actionHtml = '<a href="' + job.watch_url + '" target="_blank" class="text-info text-decoration-none">📺 Watch</a>';
+                } else if (job.status === "FAILED" || job.status === "PAUSED_NEEDS_ATTENTION") {
+                    actionHtml = '<button type="button" class="btn btn-xs btn-outline-warning py-0 px-1" onclick="retryPublishJob(\'' + job.id + '\')" style="font-size:0.65rem;">↻ Retry</button>';
+                }
+
+                html += '<tr>' +
+                    '<td class="text-truncate" style="max-width: 130px;" title="' + (job.title || '') + '">' + (job.title || job.clip_id.substring(0, 8)) + '</td>' +
+                    '<td><span class="badge ' + stClass + '" style="font-size:0.65rem;">' + job.status + '</span></td>' +
+                    '<td class="text-end">' + actionHtml + '</td>' +
+                    '</tr>';
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(function(e) { console.error("Error refreshing jobs:", e); });
+    }
+
+    function retryPublishJob(jobId) {
+        fetch("/api/publish/jobs/" + jobId + "/retry", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            window.showToast("Job retry triggered: " + (data.status || "processing"), "info");
+            refreshPublishJobs();
+        })
+        .catch(function(err) {
+            window.showToast("Retry error: " + err.message, "danger");
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("studio") === "open" || params.get("clip")) {
+            var clipId = params.get("clip") || "{{ selected_clip_id or '' }}";
+            if (clipId) {
+                openPublishingStudio(clipId);
+            } else {
+                togglePublishingStudio();
+            }
+        }
+        checkPendingMismatches();
     });
 </script>
 {% endblock %}

@@ -37,7 +37,7 @@ class YouTubePlatformAdapter(BasePlatformPublisher):
         return "youtube"
 
     def health_check(self) -> Tuple[bool, str]:
-        can_pub, remaining, reason = self.yt_publisher.quota_tracker.can_publish()
+        can_pub, remaining, reason = self.yt_publisher.quota_tracker.can_publish(db=self.db)
         if not can_pub:
             return False, f"YouTube quota unavailable: {reason}"
         return True, f"YouTube quota healthy ({remaining} units remaining)."

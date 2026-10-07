@@ -1,17 +1,149 @@
 """
-Transcription engine wrapping faster-whisper with automatic GPU/CPU auto-detection
+Transcription engine wrapping faster-whisper with automatic GPU/CPU auto-detection,
+Silero VAD speech pre-filtering/masking, Whisper hallucination shields,
 and word-level timestamp alignment.
 """
 
 import logging
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Any, List, Optional, Tuple
 import torch
+
 from shorts_engine.config.settings import settings
 from shorts_engine.services.transcription.formatter import WordSegment, FormattedTranscript
 from shorts_engine.services.transcription.aligner import ForcedAligner
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
+
+
+class SileroVADFilter:
+    """
+    Voice Activity Detection (VAD) audio pre-filter and masking engine based on Silero VAD.
+    Identifies active speech intervals and eliminates or masks non-speech audio segments
+    prior to Whisper decoding.
+    """
+
+    def __init__(
+        self,
+        threshold: float = 0.5,
+        min_silence_duration_ms: int = 400,
+        speech_pad_ms: int = 200,
+    ):
+        self.threshold = threshold
+        self.min_silence_duration_ms = min_silence_duration_ms
+        self.speech_pad_ms = speech_pad_ms
+
+    def detect_speech_segments(
+        self,
+        audio_path: Path,
+        min_silence_duration_ms: Optional[int] = None,
+        threshold: Optional[float] = None,
+    ) -> List[Tuple[float, float]]:
+        """
+        Detects start and end timestamps (in seconds) of active speech segments.
+        Uses faster-whisper / Silero VAD model if available, falling back to FFmpeg silencedetect.
+        """
+        if not audio_path.exists():
+            return []
+
+        eff_min_silence = min_silence_duration_ms or self.min_silence_duration_ms
+        eff_threshold = threshold or self.threshold
+
+        # Try faster_whisper Silero VAD engine
+        try:
+            from faster_whisper.vad import get_vad_model, get_speech_timestamps, VadOptions
+            import numpy as np
+
+            _ = get_vad_model()
+            vad_opts = VadOptions(
+                threshold=eff_threshold,
+                min_silence_duration_ms=eff_min_silence,
+                speech_pad_ms=self.speech_pad_ms,
+            )
+            cmd = [
+                "ffmpeg", "-v", "quiet",
+                "-i", str(audio_path),
+                "-f", "s16le",
+                "-ac", "1",
+                "-ar", "16000",
+                "-",
+            ]
+            proc = SubprocessWatchdog.run(cmd, timeout_sec=30.0, check=False)
+            if proc.returncode == 0 and proc.stdout:
+                raw_bytes = proc.stdout.encode("latin1") if isinstance(proc.stdout, str) else proc.stdout
+                audio_np = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                timestamps = get_speech_timestamps(audio_np, vad_opts)
+                segments = [(ts["start"] / 16000.0, ts["end"] / 16000.0) for ts in timestamps]
+                if segments:
+                    return segments
+        except Exception as e:
+            logger.debug("Silero direct model extraction fallback: %s", e)
+
+        # Fallback to FFmpeg silencedetect
+        try:
+            silence_sec = eff_min_silence / 1000.0
+            cmd = [
+                "ffmpeg", "-v", "info",
+                "-i", str(audio_path),
+                "-af", f"silencedetect=noise=-35dB:d={silence_sec:.2f}",
+                "-f", "null",
+                "-",
+            ]
+            res = SubprocessWatchdog.run(cmd, timeout_sec=30.0, check=False)
+            output = res.stderr
+            silence_starts = [float(m) for m in re.findall(r"silence_start:\s*([0-9.]+)", output)]
+            silence_ends = [float(m) for m in re.findall(r"silence_end:\s*([0-9.]+)", output)]
+
+            speech_segments = []
+            curr_pos = 0.0
+            for s_start, s_end in zip(silence_starts, silence_ends):
+                if s_start > curr_pos + 0.1:
+                    speech_segments.append((round(curr_pos, 3), round(s_start, 3)))
+                curr_pos = s_end
+            if silence_starts and curr_pos < silence_starts[-1]:
+                speech_segments.append((round(curr_pos, 3), 9999.0))
+            if speech_segments:
+                return speech_segments
+        except Exception as e:
+            logger.debug("FFmpeg silencedetect fallback failed: %s", e)
+
+        return [(0.0, 99999.0)]
+
+    def mask_non_speech_audio(
+        self,
+        audio_path: Path,
+        output_path: Path,
+        speech_segments: Optional[List[Tuple[float, float]]] = None,
+    ) -> Path:
+        """
+        Creates a masked audio file where all non-speech audio segments (e.g. background music,
+        room noise during silence) are attenuated or muted prior to Whisper decoding.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        segments = speech_segments or self.detect_speech_segments(audio_path)
+        if not segments or (len(segments) == 1 and segments[0][1] >= 9999.0):
+            cmd = ["ffmpeg", "-y", "-i", str(audio_path), "-c:a", "pcm_s16le", str(output_path)]
+            SubprocessWatchdog.run(cmd, timeout_sec=30.0, check=False)
+            return output_path
+
+        enable_expr = "+".join(f"between(t,{st:.3f},{en:.3f})" for st, en in segments)
+        vol_filter = f"volume=enable='{enable_expr}':volume=1:eval=frame,volume=enable='not({enable_expr})':volume=0:eval=frame"
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(audio_path),
+            "-af", vol_filter,
+            "-c:a", "pcm_s16le",
+            str(output_path),
+        ]
+        proc = SubprocessWatchdog.run(cmd, timeout_sec=60.0, check=False)
+        if proc.returncode != 0:
+            cmd_fb = ["ffmpeg", "-y", "-i", str(audio_path), "-c:a", "pcm_s16le", str(output_path)]
+            SubprocessWatchdog.run(cmd_fb, timeout_sec=30.0, check=False)
+
+        return output_path
 
 
 class TranscriptionService:
@@ -42,6 +174,7 @@ class TranscriptionService:
         )
         self._model = None
         self.aligner = ForcedAligner(device=self.device)
+        self.vad_filter = SileroVADFilter()
 
     @property
     def model(self):
@@ -58,6 +191,35 @@ class TranscriptionService:
                 logger.error("Failed to load faster-whisper model: %s", str(e))
                 raise RuntimeError(f"Could not load faster-whisper model: {e}")
         return self._model
+
+    @staticmethod
+    def get_hallucination_shield_params() -> Dict[str, Any]:
+        """
+        Whisper Hallucination Shield decoding parameters to guard against infinite loops,
+        repetition spirals, and ghost transcriptions during music or silence:
+        - vad_filter: True (Silero VAD pre-filter)
+        - vad_parameters: min_silence_duration_ms=400, threshold=0.5, speech_pad_ms=200
+        - compression_ratio_threshold: 2.4 (drops runaway repetitive loops)
+        - no_speech_threshold: 0.6 (rejects ghost text on silent intervals)
+        - temperature: (0.0, 0.2, 0.4, 0.6, 0.8, 1.0) (temperature fallback schedule)
+        - repetition_penalty: 1.2
+        - no_repeat_ngram_size: 3
+        - condition_on_previous_text: False
+        """
+        return {
+            "vad_filter": True,
+            "vad_parameters": dict(
+                min_silence_duration_ms=400,
+                threshold=0.5,
+                speech_pad_ms=200,
+            ),
+            "compression_ratio_threshold": 2.4,
+            "no_speech_threshold": 0.6,
+            "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+            "repetition_penalty": 1.2,
+            "no_repeat_ngram_size": 3,
+            "condition_on_previous_text": False,
+        }
 
     def _transcribe_with_groq(self, audio_path: Path, language: Optional[str] = None) -> Optional[FormattedTranscript]:
         """
@@ -125,9 +287,17 @@ class TranscriptionService:
             logger.warning("Groq Whisper failed: %s. Falling back to local whisper.", e)
             return None
 
-    def transcribe(self, audio_path: Path, language: Optional[str] = None, video_id: Optional[str] = None) -> FormattedTranscript:
+    def transcribe(
+        self,
+        audio_path: Path,
+        language: Optional[str] = None,
+        video_id: Optional[str] = None,
+        apply_vad_mask: bool = False,
+    ) -> FormattedTranscript:
         """
         Transcribes the given audio file and produces word-level timestamped segments.
+        Applies Silero VAD speech pre-filtering and Whisper hallucination shields
+        (compression_ratio_threshold=2.4, no_speech_threshold=0.6, temperature schedule).
         Applies forced alignment to ensure +/-50ms precision.
         """
         if not audio_path.exists():
@@ -163,13 +333,19 @@ class TranscriptionService:
                     )
                 return groq_res
 
-        logger.info("Transcribing %s...", audio_path.name)
+        eff_audio_path = audio_path
+        if apply_vad_mask:
+            masked_path = audio_path.with_name(f"{audio_path.stem}_vad_masked.wav")
+            eff_audio_path = self.vad_filter.mask_non_speech_audio(audio_path, masked_path)
+
+        logger.info("Transcribing %s with Silero VAD filter & Hallucination Shields...", audio_path.name)
+        shield_params = self.get_hallucination_shield_params()
+
         segments, info = self.model.transcribe(
-            str(audio_path),
+            str(eff_audio_path),
             language=language,
             word_timestamps=True,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=400),
+            **shield_params,
         )
 
         total_dur = getattr(info, "duration", 0.0) or 1.0

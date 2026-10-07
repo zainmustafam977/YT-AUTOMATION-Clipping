@@ -6,23 +6,22 @@ and atomic video re-rendering without re-downloading or re-transcribing long-for
 """
 
 import json
-import uuid
-import shutil
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.models import Clip, ClipCandidate, SourceVideo
+from shorts_engine.db.models import Clip
 from shorts_engine.services.storage.path_manager import PathManager
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
 from shorts_engine.services.captioning.templates import get_caption_template, parse_custom_template
 from shorts_engine.services.reframing.cropper import VideoReframer
 from shorts_engine.services.rendering.compositor import VideoCompositor
+from shorts_engine.services.rendering.hwaccel import HardwareEncoderProber
+from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
-from shorts_engine.services.quality_gate.render_inspector import RenderInspector
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +119,34 @@ class ClipTrimmerService:
         self.reframer = VideoReframer()
         self.compositor = VideoCompositor()
         self.ass_generator = ASSSubtitleGenerator()
+        self.hwaccel = HardwareEncoderProber.get_instance()
+
+    def extract_subclip_with_lipsync(
+        self,
+        source_path: Path,
+        start_sec: float,
+        end_sec: float,
+        output_path: Path,
+    ) -> Path:
+        """
+        Extracts a sub-frame precise audio/video segment with negative timestamp elimination
+        and audio sync (-avoid_negative_ts make_zero -async 1) to eliminate 150-400ms lip-sync drift.
+        """
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        duration_sec = max(0.1, end_sec - start_sec)
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{start_sec:.3f}",
+            "-i", str(source_path),
+            "-t", f"{duration_sec:.3f}",
+            "-avoid_negative_ts", "make_zero",
+            "-async", "1",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac", "-b:a", "320k",
+            str(output_path),
+        ]
+        SubprocessWatchdog.run(cmd, timeout_sec=max(60.0, duration_sec * 4.0), check=True)
+        return output_path
 
     def trim_clip(
         self,
@@ -128,6 +155,7 @@ class ClipTrimmerService:
         end_sec: float,
         snap_words: bool = True,
         caption_style_preset: Optional[str] = None,
+        aspect_ratio_mode: Optional[str] = "auto",
     ) -> Dict[str, Any]:
         """
         Trims and atomically re-renders a Short video.
@@ -165,7 +193,6 @@ class ClipTrimmerService:
             eff_start, eff_end = snap_to_word_boundary(words, eff_start, eff_end)
 
         duration = eff_end - eff_start
-        min_allowed = getattr(settings, "TARGET_DURATION_MIN_SEC", 15)
         max_allowed = getattr(settings, "MAX_EXTENDED_DURATION_SEC", 180) if getattr(settings, "EXTENDED_SHORTS_ALLOWED", True) else getattr(settings, "TARGET_DURATION_MAX_SEC", 58)
 
         if duration < 10.0:
@@ -244,6 +271,7 @@ class ClipTrimmerService:
             output_filename=rel_output_name,
             normalize_audio=True,
             hook_overlay_text=hook_overlay_text,
+            aspect_ratio_mode=aspect_ratio_mode,
         )
 
         # Validate rendered video

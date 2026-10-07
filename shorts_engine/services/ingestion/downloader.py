@@ -8,12 +8,17 @@ import gc
 import time
 import random
 import logging
-import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import yt_dlp
 from shorts_engine.config.settings import settings
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+from shorts_engine.services.ingestion.local_loader import (
+    generate_preview_proxy,
+    is_preview_proxy_needed,
+)
+from shorts_engine.services.ingestion.oauth_flow import YouTubeDeviceOAuth
+from shorts_engine.services.ingestion.proxy_manager import ProxyManager
 
 logger = logging.getLogger(__name__)
 
@@ -48,24 +53,24 @@ class IngestionService:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.max_retries = max_retries
         try:
-            self.purge_stale_fragments(max_age_hours=2.0)
+            self.purge_stale_fragments(max_age_hours=2.0, output_dir=self.output_dir)
             self.purge_stale_temp_files(max_age_hours=24.0)
         except Exception as e:
             logger.debug("Initial stale fragment purge skipped: %s", e)
 
     @staticmethod
-    def purge_stale_temp_files(max_age_hours: float = 24.0) -> int:
+    def purge_stale_temp_files(max_age_hours: float = 24.0, temp_dir: Optional[Path] = None) -> int:
         """
-        Scans settings.TEMP_DIR for orphaned *.ass and temporary files older than max_age_hours
+        Scans settings.TEMP_DIR for orphaned *.ass, *.wav, and temporary files older than max_age_hours
         and deletes them to prevent uncontrolled disk accumulation.
         """
         purged = 0
         now = time.time()
         max_age_sec = max_age_hours * 3600.0
-        temp_dir = settings.TEMP_DIR
-        if temp_dir.exists():
-            for pattern in ("*.ass", "*.tmp", "*.temp*", "temp_*"):
-                for f in temp_dir.glob(pattern):
+        target_dir = Path(temp_dir) if temp_dir else settings.TEMP_DIR
+        if target_dir.exists():
+            for pattern in ("*.ass", "*.tmp", "*.temp*", "temp_*", "*.wav"):
+                for f in target_dir.glob(pattern):
                     try:
                         if f.is_file() and (now - f.stat().st_mtime) >= max_age_sec:
                             f.unlink(missing_ok=True)
@@ -73,29 +78,47 @@ class IngestionService:
                     except Exception as e:
                         logger.debug("Could not purge temp file %s: %s", f, e)
         if purged > 0:
-            logger.info("Purged %d stale temp files from %s", purged, temp_dir)
+            logger.info("Purged %d stale temp files from %s", purged, target_dir)
         return purged
 
-    def purge_stale_fragments(self, max_age_hours: float = 2.0) -> int:
+    @staticmethod
+    def _purge_stale_fragments_core(max_age_hours: float = 2.0, output_dir: Optional[Path] = None) -> int:
         """
-        Scans output_dir for orphaned *.part* and *.temp* download files older than max_age_hours
+        Scans output_dir (defaults to settings.STORAGE_DIR / 'downloads') for orphaned
+        *.part* and *.temp* download files older than max_age_hours
         and deletes them to prevent YouTube CDN token expiry / HTTP 416 range errors.
         Returns the number of purged files.
         """
         purged = 0
         now = time.time()
         max_age_sec = max_age_hours * 3600.0
-        for pattern in ("*.part*", "*.temp*", "*.ytdl"):
-            for f in self.output_dir.glob(pattern):
-                try:
-                    if f.is_file() and (now - f.stat().st_mtime) >= max_age_sec:
-                        f.unlink(missing_ok=True)
-                        purged += 1
-                except Exception as e:
-                    logger.debug("Could not purge stale fragment %s: %s", f, e)
+        target_dir = Path(output_dir) if output_dir else settings.STORAGE_DIR / "downloads"
+        if target_dir.exists():
+            for pattern in ("*.part*", "*.temp*", "*.ytdl"):
+                for f in target_dir.glob(pattern):
+                    try:
+                        if f.is_file() and (now - f.stat().st_mtime) >= max_age_sec:
+                            f.unlink(missing_ok=True)
+                            purged += 1
+                    except Exception as e:
+                        logger.debug("Could not purge stale fragment %s: %s", f, e)
         if purged > 0:
-            logger.info("Purged %d stale download fragments from %s", purged, self.output_dir)
+            logger.info("Purged %d stale download fragments from %s", purged, target_dir)
         return purged
+
+    class _PurgeFragmentsDescriptor:
+        def __call__(self, max_age_hours: float = 2.0, output_dir: Optional[Path] = None) -> int:
+            return IngestionService._purge_stale_fragments_core(max_age_hours=max_age_hours, output_dir=output_dir)
+
+        def __get__(self, instance, owner=None):
+            if instance is not None:
+                def bound_method(max_age_hours: float = 2.0, output_dir: Optional[Path] = None) -> int:
+                    target = Path(output_dir) if output_dir else getattr(instance, "output_dir", None)
+                    return IngestionService._purge_stale_fragments_core(max_age_hours=max_age_hours, output_dir=target)
+                return bound_method
+            return self
+
+    purge_stale_fragments = _PurgeFragmentsDescriptor()
 
     def get_video_url(self, video_id_or_url: str) -> str:
         if video_id_or_url.startswith("http://") or video_id_or_url.startswith("https://"):
@@ -129,6 +152,27 @@ class IngestionService:
             artifacts_to_cleanup=[audio_path],
         )
         if result.exit_code != 0:
+            if "does not contain any stream" in result.stderr.lower():
+                dur = max(1, self.probe_duration_sec(video_path))
+                logger.warning("Video %s contains no audio stream; generating %ds silent audio track", video_path.name, dur)
+                silent_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-f", "lavfi",
+                    "-i", "anullsrc=r=16000:cl=mono",
+                    "-t", str(dur),
+                    "-acodec", "pcm_s16le",
+                    str(audio_path),
+                ]
+                silent_res = SubprocessWatchdog.run(
+                    silent_cmd,
+                    timeout_sec=30.0,
+                    check=False,
+                    artifacts_to_cleanup=[audio_path],
+                )
+                if silent_res.exit_code == 0 and audio_path.exists():
+                    return audio_path
+
             logger.error("FFmpeg audio extraction failed: %s", result.stderr)
             raise RuntimeError(f"FFmpeg audio extraction failed: {result.stderr}")
         return audio_path
@@ -154,7 +198,6 @@ class IngestionService:
         """
         url = self.get_video_url(video_id_or_url)
         video_id = self.extract_video_id(video_id_or_url)
-        target_video = self.output_dir / f"{video_id}.mp4"
         target_audio = self.output_dir / f"{video_id}_audio.wav"
 
         # Resolve cached video using PathManager two-tier resolution
@@ -223,14 +266,23 @@ class IngestionService:
             ["android_creator", "web_creator"],
         ]
 
-        cookie_path = self.get_cookie_path()
-
         last_err = None
         force_fresh_start = False
 
         for attempt in range(1, self.max_retries + 1):
             strategy_idx = (attempt - 1) % len(client_strategies)
             chosen_clients = client_strategies[strategy_idx]
+
+            auth_ctx = self.get_active_auth_context()
+            cookie_path = auth_ctx.get("cookie_path") or self.get_cookie_path()
+
+            # Dynamic proxy routing
+            active_proxy = None
+            try:
+                active_proxy = ProxyManager.get_next_proxy()
+            except RuntimeError as proxy_err:
+                logger.error("ProxyManager rejected download under strict mode: %s", proxy_err)
+                raise
 
             ydl_opts = {
                 "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
@@ -243,19 +295,25 @@ class IngestionService:
                 "progress_hooks": [_progress_hook],
                 "windowsfilenames": True,
             }
+            if auth_ctx.get("auth_type") == "oauth" and auth_ctx.get("access_token"):
+                ydl_opts["http_headers"] = {"Authorization": f"Bearer {auth_ctx['access_token']}"}
             if cookie_path:
                 ydl_opts["cookiefile"] = cookie_path
+            if active_proxy:
+                ydl_opts["proxy"] = active_proxy
             if force_fresh_start:
                 ydl_opts["continuedl"] = False
                 ydl_opts["nopart"] = True
 
             try:
                 logger.info(
-                    "Downloading %s (attempt %d/%d, client_strategy=%s)...",
+                    "Downloading %s (attempt %d/%d, client_strategy=%s, auth_tier=%s, proxy=%s)...",
                     url,
                     attempt,
                     self.max_retries,
                     chosen_clients,
+                    auth_ctx.get("tier", 0),
+                    active_proxy or "direct",
                 )
                 job_progress_tracker.update_progress(
                     video_id=video_id,
@@ -321,6 +379,13 @@ class IngestionService:
                     # Clean up temp fragments
                     shutil.rmtree(temp_fragments_dir, ignore_errors=True)
 
+                    # Generate lightweight preview proxy if source codec/container is incompatible with browsers (Enhancement 4)
+                    if is_preview_proxy_needed(dest_video_path, codec=info.get("vcodec")):
+                        try:
+                            generate_preview_proxy(dest_video_path)
+                        except Exception as proxy_err:
+                            logger.debug("Preview proxy generation skipped: %s", proxy_err)
+
                     job_progress_tracker.update_progress(
                         video_id=video_id,
                         stage="DOWNLOADING",
@@ -362,7 +427,13 @@ class IngestionService:
                     logger.info("Windows file handle lock on fragment for %s. GC run, waiting %.1fs for handle release...", video_id, lock_wait)
                     time.sleep(lock_wait)
 
-                # 3. YouTube bot detection alert & mitigation
+                # 3. YouTube HTTP 429 rate limit & proxy rotation
+                if "429" in err_msg or "Too Many Requests" in err_msg:
+                    logger.warning("YouTube HTTP 429 rate limit detected for %s on proxy %s. Degrading node and cycling...", video_id, active_proxy)
+                    ProxyManager.handle_429_rate_limit(active_proxy)
+                    force_fresh_start = True
+
+                # 4. YouTube bot detection alert & mitigation
                 if "confirm you’re not a bot" in err_msg or "Sign in to confirm" in err_msg:
                     logger.warning("YouTube anti-bot challenge detected for %s. Cycling player client and jittering wait...", video_id)
                     force_fresh_start = True
@@ -373,9 +444,51 @@ class IngestionService:
 
         raise RuntimeError(f"Failed to download video {video_id} after {self.max_retries} attempts: {last_err}")
 
+    def get_active_auth_context(self) -> Dict[str, Any]:
+        """
+        Evaluates triple-tier authentication hierarchy in priority order:
+        Tier 1: OAuth2 Device Token
+        Tier 2: Session Harvester Cookies
+        Tier 3: Manual Cookies Vault
+        """
+        # Tier 1: Device OAuth2
+        if getattr(settings, "INGESTION_ENABLE_OAUTH", True):
+            try:
+                token = YouTubeDeviceOAuth.get_valid_access_token()
+                if token:
+                    return {
+                        "tier": 1,
+                        "auth_type": "oauth",
+                        "access_token": token,
+                    }
+            except Exception as e:
+                logger.debug("Tier 1 OAuth token check error: %s", e)
+
+        # Tier 2: Harvester Cookies
+        harvester_path = getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None) or (settings.STORAGE_DIR / "harvester_cookies.txt")
+        if harvester_path and Path(harvester_path).exists() and Path(harvester_path).stat().st_size > 0:
+            return {
+                "tier": 2,
+                "auth_type": "cookies",
+                "cookie_path": str(Path(harvester_path).resolve()),
+            }
+
+        # Tier 3: Manual Cookies Vault
+        manual_path = getattr(settings, "YOUTUBE_COOKIES_PATH", None) or (settings.STORAGE_DIR / "cookies.txt")
+        if manual_path and Path(manual_path).exists() and Path(manual_path).stat().st_size > 0:
+            return {
+                "tier": 3,
+                "auth_type": "cookies",
+                "cookie_path": str(Path(manual_path).resolve()),
+            }
+
+        return {"tier": 0, "auth_type": "none"}
+
     def get_cookie_path(self) -> Optional[str]:
-        """Automatically discovers YouTube bot-bypass cookies across settings and standard paths."""
+        """Automatically discovers YouTube bot-bypass cookies across settings, harvester, and standard paths."""
         candidate_cookies = [
+            getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None),
+            getattr(settings, "YOUTUBE_COOKIES_PATH", None),
             getattr(settings, "YOUTUBE_COOKIE_PATH", None),
             os.getenv("YOUTUBE_COOKIE_PATH"),
             settings.STORAGE_DIR / "cookies.txt",
@@ -387,15 +500,41 @@ class IngestionService:
         return None
 
     def get_metadata(self, video_id_or_url: str) -> Dict[str, Any]:
-        """Extracts metadata without downloading media, attaching anti-bot cookies and extractor options."""
+        """Extracts metadata without downloading media, attaching anti-bot cookies, OAuth, and extractor options."""
         url = self.get_video_url(video_id_or_url)
         opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
         }
-        cookie_path = self.get_cookie_path()
+        auth_ctx = self.get_active_auth_context()
+        if auth_ctx.get("auth_type") == "oauth" and auth_ctx.get("access_token"):
+            opts["http_headers"] = {"Authorization": f"Bearer {auth_ctx['access_token']}"}
+
+        cookie_path = auth_ctx.get("cookie_path") or self.get_cookie_path()
         if cookie_path:
             opts["cookiefile"] = cookie_path
+
+        try:
+            active_proxy = ProxyManager.get_next_proxy()
+            if active_proxy:
+                opts["proxy"] = active_proxy
+        except Exception:
+            pass
+
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=False)
+
+
+# Module-level convenience aliases for housekeeping and proxy preview
+purge_stale_temp_files = IngestionService.purge_stale_temp_files
+purge_stale_fragments = IngestionService.purge_stale_fragments
+
+__all__ = [
+    "IngestionService",
+    "VideoDownloadResult",
+    "purge_stale_temp_files",
+    "purge_stale_fragments",
+    "generate_preview_proxy",
+    "is_preview_proxy_needed",
+]

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Response
 from sqlalchemy import func
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, SourceVideo, SourceVideoStatus
+from shorts_engine.db.models import Clip, SourceVideo
 from shorts_engine.dashboard.routes.health import BOOT_TIME
 
 router = APIRouter(tags=["Metrics & Telemetry"])

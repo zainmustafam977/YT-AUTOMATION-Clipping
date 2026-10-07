@@ -75,11 +75,38 @@ def ensure_schema_upgrades(target_engine=None):
         inspector = inspect(eng)
         table_names = inspector.get_table_names()
 
+        if "channels" in table_names:
+            cols = [c["name"] for c in inspector.get_columns("channels")]
+            if "upload_defaults_json" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE channels ADD COLUMN upload_defaults_json TEXT"))
+                    conn.commit()
+            if "title" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE channels ADD COLUMN title VARCHAR(255)"))
+                    conn.commit()
+            if "handle" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE channels ADD COLUMN handle VARCHAR(255)"))
+                    conn.commit()
+            if "avatar_url" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE channels ADD COLUMN avatar_url VARCHAR(1024)"))
+                    conn.commit()
+            if "last_verified_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE channels ADD COLUMN last_verified_at DATETIME"))
+                    conn.commit()
+
         if "source_videos" in table_names:
             cols = [c["name"] for c in inspector.get_columns("source_videos")]
             if "runtime_overrides_json" not in cols:
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE source_videos ADD COLUMN runtime_overrides_json TEXT"))
+                    conn.commit()
+            if "is_sensitive" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE source_videos ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
                     conn.commit()
 
             # Pre-flight duplicate check before creating unique index (PLAN-P1-09)
@@ -126,10 +153,87 @@ def ensure_schema_upgrades(target_engine=None):
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clips ADD COLUMN variations_json TEXT"))
                     conn.commit()
+            if "is_sensitive" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
+                    conn.commit()
+            if "draft_title" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_title VARCHAR(100)"))
+                    conn.commit()
+            if "draft_description" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_description TEXT"))
+                    conn.commit()
+            if "draft_tags" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_tags TEXT"))
+                    conn.commit()
+            if "draft_category_id" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_category_id VARCHAR(16)"))
+                    conn.commit()
+            if "draft_privacy_status" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_privacy_status VARCHAR(16)"))
+                    conn.commit()
+            if "draft_made_for_kids" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_made_for_kids BOOLEAN"))
+                    conn.commit()
+            if "draft_target_channel_id" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_target_channel_id VARCHAR(64)"))
+                    conn.commit()
+            if "draft_scheduled_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_scheduled_at DATETIME"))
+                    conn.commit()
+            if "draft_version" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_version INTEGER DEFAULT 1 NOT NULL"))
+                    conn.commit()
+            if "source" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN source VARCHAR(32) DEFAULT 'pipeline' NOT NULL"))
+                    conn.commit()
 
         if "platform_publish_logs" not in table_names:
             from shorts_engine.db.models import PlatformPublishLog
             PlatformPublishLog.__table__.create(eng, checkfirst=True)
+
+        if "api_keys" not in table_names:
+            from shorts_engine.db.models import ApiKey
+            ApiKey.__table__.create(eng, checkfirst=True)
+
+        if "caption_presets" not in table_names:
+            from shorts_engine.db.models import CaptionPreset
+            CaptionPreset.__table__.create(eng, checkfirst=True)
+
+        if "channel_credentials" not in table_names:
+            from shorts_engine.db.models import ChannelCredential
+            ChannelCredential.__table__.create(eng, checkfirst=True)
+
+        if "oauth_states" not in table_names:
+            from shorts_engine.db.models import OAuthState
+            OAuthState.__table__.create(eng, checkfirst=True)
+
+        if "pending_oauth_mismatches" not in table_names:
+            from shorts_engine.db.models import PendingOAuthMismatch
+            PendingOAuthMismatch.__table__.create(eng, checkfirst=True)
+
+        if "publish_jobs" not in table_names:
+            from shorts_engine.db.models import PublishJob
+            PublishJob.__table__.create(eng, checkfirst=True)
+
+        if "quota_ledger" not in table_names:
+            from shorts_engine.db.models import QuotaLedger
+            QuotaLedger.__table__.create(eng, checkfirst=True)
+
+        if "audit_log" not in table_names:
+            from shorts_engine.db.models import AuditLog
+            AuditLog.__table__.create(eng, checkfirst=True)
+
     except Exception as e:
         logger.error("Database schema upgrade failed: %s", e, exc_info=True)
         raise RuntimeError(f"Schema upgrade failed: {e}") from e
@@ -162,7 +266,7 @@ def apply_m3_01_triggers(target_engine=None):
     DECLARE
         tbl text;
     BEGIN
-        FOR tbl IN SELECT unnest(ARRAY['channels', 'source_videos', 'clips', 'users'])
+        FOR tbl IN SELECT unnest(ARRAY['channels', 'source_videos', 'clips', 'users', 'api_keys', 'caption_presets'])
         LOOP
             EXECUTE format('DROP TRIGGER IF EXISTS m3_01_%I_update ON %I;', tbl, tbl);
             EXECUTE format('CREATE TRIGGER m3_01_%I_update BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION m3_01_update_timestamp();', tbl, tbl);

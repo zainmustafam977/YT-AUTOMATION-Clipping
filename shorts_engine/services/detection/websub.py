@@ -18,8 +18,7 @@ import logging
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Optional, List, Tuple
 
 from shorts_engine.config.settings import settings

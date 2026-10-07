@@ -9,7 +9,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from shorts_engine.config.settings import settings

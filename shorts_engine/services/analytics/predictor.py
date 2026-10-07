@@ -5,9 +5,8 @@ and predicts virality using a closed-loop model trained on actual YouTube analyt
 """
 
 import re
-import math
 import logging
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
 import numpy as np
@@ -18,7 +17,7 @@ except ImportError:
     Ridge = None
     SKLEARN_AVAILABLE = False
 
-from shorts_engine.db.models import Clip, ClipCandidate, ClipStatus
+from shorts_engine.db.models import Clip
 
 logger = logging.getLogger(__name__)
 

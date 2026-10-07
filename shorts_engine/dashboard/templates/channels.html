@@ -2,7 +2,18 @@
 {% block title %}Channels{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
-    <h4 class="text-light m-0">Channel Manager</h4>
+    <div class="d-flex align-items-center gap-3">
+        <h4 class="text-light m-0">Channel Manager</h4>
+        <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1" data-bs-toggle="offcanvas" data-bs-target="#channelGuideDrawer" aria-controls="channelGuideDrawer">
+            <i class="bi bi-book-half"></i> <span>📘 Channel Setup Guide</span>
+        </button>
+        <a href="/api/channels/export" class="btn btn-sm btn-outline-success d-flex align-items-center gap-1" title="Export channels to JSON backup" download="channels_backup.json">
+            <i class="bi bi-download"></i> <span>📥 Export Channels</span>
+        </a>
+        <button type="button" class="btn btn-sm btn-outline-warning d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#restoreChannelsModal" title="Restore channels from backup JSON">
+            <i class="bi bi-upload"></i> <span>📤 Restore Channels</span>
+        </button>
+    </div>
     {% if not websub_public %}
     <span class="badge bg-warning text-dark">RSS Poller Active (Every {{ rss_interval }}m)</span>
     {% else %}
@@ -97,6 +108,10 @@
                 <button type="button" class="btn btn-sm btn-outline-success text-nowrap py-1 px-2 fw-semibold" style="font-size: 0.75rem;" title="Browse public uploads & 1-click ingest"
                         onclick="openChannelVideosDrawer('{{ ch.id }}', '{{ ch.name }}')">
                     📺 Videos
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info text-nowrap py-1 px-2 fw-semibold" style="font-size: 0.75rem;" title="Configure YouTube Upload & SEO Defaults"
+                        onclick="openChannelSetupModal('{{ ch.id }}', '{{ ch.name }}')">
+                    ⚙️ Setup
                 </button>
                 <form method="post" action="/channels/{{ ch.id }}/toggle-watch" class="m-0"
                       hx-post="/channels/{{ ch.id }}/toggle-watch" hx-swap="outerHTML">
@@ -232,6 +247,112 @@
     </div>
 </div>
 
+<!-- Offcanvas Drawer for Complete Channel Setup & Configuration Guide -->
+<div class="offcanvas offcanvas-end bg-dark text-light border-secondary shadow-lg" tabindex="-1" id="channelGuideDrawer" style="width: 580px;" aria-labelledby="channelGuideDrawerLabel">
+    <div class="offcanvas-header border-bottom border-secondary bg-black">
+        <h5 class="offcanvas-title text-info d-flex align-items-center gap-2" id="channelGuideDrawerLabel">
+            <span>📘</span> <span>Complete YouTube Channel Setup Guide</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-3">
+        <p class="text-muted small mb-3">
+            Follow this master checklist to link your YouTube channel, authorize automated publishing via Google Cloud OAuth, and configure algorithmic upload settings for maximum virality and search visibility.
+        </p>
+
+        <!-- Step 1: Channel ID -->
+        <div class="card bg-black border-secondary-subtle mb-3">
+            <div class="card-header bg-dark-subtle d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold text-light small"><span class="badge bg-primary me-2">Step 1</span>Locate Your YouTube Channel ID</span>
+                <a href="https://studio.youtube.com/channel/settings/advanced" target="_blank" class="btn btn-xs btn-outline-info py-0 px-2" style="font-size:0.72rem;">Open Studio ↗</a>
+            </div>
+            <div class="card-body p-3 small text-muted">
+                <p class="mb-2">
+                    YouTube requires the raw 24-character Channel ID starting with <code>UC</code> (e.g., <code>UC_x5XG1OV2P6uZZ5FSM9Ttw</code>). Custom handles (like <code>@MrBeast</code>) or vanity URLs are not accepted by the YouTube Data API.
+                </p>
+                <ol class="ps-3 mb-2">
+                    <li>Log in to <a href="https://studio.youtube.com" target="_blank" class="text-info">YouTube Studio</a>.</li>
+                    <li>Click <strong>Settings</strong> (left gear icon) &gt; <strong>Channel</strong> &gt; <strong>Advanced settings</strong>.</li>
+                    <li>Scroll down and click <strong>Manage YouTube account</strong> or look for <strong>Channel ID</strong>.</li>
+                    <li>Copy the value that begins with <code>UC...</code>.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Step 2: Google Cloud OAuth 2.0 -->
+        <div class="card bg-black border-secondary-subtle mb-3">
+            <div class="card-header bg-dark-subtle d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold text-light small"><span class="badge bg-primary me-2">Step 2</span>Google Cloud OAuth 2.0 Credentials</span>
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="btn btn-xs btn-outline-info py-0 px-2" style="font-size:0.72rem;">GCP Console ↗</a>
+            </div>
+            <div class="card-body p-3 small text-muted">
+                <p class="mb-2">
+                    Automated publishing requires an authorized OAuth 2.0 refresh token with upload scopes:
+                </p>
+                <ol class="ps-3 mb-2">
+                    <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" class="text-info">Google Cloud Console</a> and create or select a project.</li>
+                    <li>Navigate to <strong>APIs &amp; Services</strong> &gt; <strong>Library</strong> and enable <strong>YouTube Data API v3</strong>.</li>
+                    <li>Go to <strong>OAuth consent screen</strong>, select <strong>External</strong>, and add your YouTube Google account as a <strong>Test user</strong>.</li>
+                    <li>Go to <strong>Credentials</strong> &gt; <strong>Create Credentials</strong> &gt; <strong>OAuth client ID</strong> (Type: <em>Desktop app</em> or <em>Web application</em>).</li>
+                    <li>Required Scope: <code class="text-info">https://www.googleapis.com/auth/youtube.upload</code>.</li>
+                    <li>Place your downloaded <code>client_secrets.json</code> into the <code>storage/</code> folder or paste your refreshed OAuth token JSON directly in the Channel Setup modal.</li>
+                </ol>
+                <div class="alert alert-dark border-secondary p-2 mb-0" style="font-size: 0.72rem;">
+                    <i class="bi bi-shield-lock text-success me-1"></i>
+                    <strong>At-Rest Encryption:</strong> All tokens are transparently encrypted with Fernet symmetric cryptography in <code>storage/shorts.db</code>.
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Categorization & COPPA -->
+        <div class="card bg-black border-secondary-subtle mb-3">
+            <div class="card-header bg-dark-subtle d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold text-light small"><span class="badge bg-primary me-2">Step 3</span>Category &amp; COPPA Compliance</span>
+                <span class="badge bg-secondary-subtle text-info border border-info" style="font-size:0.68rem;">Critical Setting</span>
+            </div>
+            <div class="card-body p-3 small text-muted">
+                <ul class="ps-3 mb-2">
+                    <li><strong>Category ID:</strong> The YouTube Shorts algorithmic feed strongly indexes your video category. Recommended:
+                        <ul class="ps-3 mt-1">
+                            <li><code>22</code>: People &amp; Blogs (Universal reach, highest general recommendation)</li>
+                            <li><code>24</code>: Entertainment (High virality, narrative hooks)</li>
+                            <li><code>20</code>: Gaming (Gaming clips, walkthroughs, moments)</li>
+                            <li><code>27</code>: Education (Tutorials, mind-blown facts, tech explanations)</li>
+                        </ul>
+                    </li>
+                    <li><strong>COPPA (Made for Kids):</strong> Keep this <strong>UNCHECKED</strong> unless your content is solely directed at young children. Marking a video as "Made for Kids" disables viewer comments, end screens, and notification bells, significantly reducing viral engagement.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Step 4: SEO & Timing -->
+        <div class="card bg-black border-secondary-subtle mb-3">
+            <div class="card-header bg-dark-subtle d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold text-light small"><span class="badge bg-primary me-2">Step 4</span>SEO Tags &amp; Peak Upload Timing</span>
+                <span class="badge bg-success-subtle text-success border border-success" style="font-size:0.68rem;">Algorithm Boost</span>
+            </div>
+            <div class="card-body p-3 small text-muted">
+                <ul class="ps-3 mb-2">
+                    <li><strong>Default Tags:</strong> Enter 3–5 broad viral hashtags such as <code>#Shorts, #Viral, #Trending, #FYP</code>. The autonomous SEO engine automatically appends 15 niche-specific high-volume tags during clip synthesis.</li>
+                    <li><strong>Peak Publish Hour (UTC):</strong> Convert your audience's local peak traffic hours to UTC. For example:
+                        <ul class="ps-3 mt-1">
+                            <li>18:00 UTC = 2:00 PM EST / 11:00 AM PST (North America peak)</li>
+                            <li>13:00 UTC = 6:30 PM IST / 6:00 PM PKT (South Asia peak)</li>
+                        </ul>
+                    </li>
+                    <li><strong>Drip-Feed Quota:</strong> YouTube Data API v3 enforces a default limit of 10,000 quota units/day. Video uploads consume 1,600 units each (~6 uploads/day max per project). Keep daily quota set to 4–5 to avoid quota exhaustion.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="text-center pt-2">
+            <button type="button" class="btn btn-info w-100 fw-bold" data-bs-dismiss="offcanvas">
+                ✓ Got It! Close Guide &amp; Configure Channels
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     var activeDrawerChannelId = null;
     var cachedChannelVideos = [];
@@ -287,13 +408,26 @@
                 '</button>';
             }
 
-            var thumbUrl = '/api/thumbnails/' + v.video_id;
+            var thumbUrl = v.thumbnail_url || ('/api/thumbnails/' + v.video_id);
+            var durationBadge = v.duration_formatted ? 
+                '<span class="position-absolute bottom-0 end-0 m-1 px-1 bg-black bg-opacity-75 rounded text-light font-monospace fw-bold" style="font-size:0.65rem; border:1px solid rgba(255,255,255,0.2);">' + v.duration_formatted + '</span>' : '';
+            var relTimeStr = v.published_relative ? ' <span class="badge bg-secondary-subtle text-info border border-secondary" style="font-size:0.65rem;">' + v.published_relative + '</span>' : '';
+            var viewsStr = v.views_formatted ? ' • <span class="text-light fw-semibold">👁️ ' + v.views_formatted + '</span>' : '';
+            var ytLink = v.youtube_url || ('https://www.youtube.com/watch?v=' + v.video_id);
+
             html += '<div class="card bg-black border-secondary p-2 shadow-sm">' +
                 '<div class="d-flex gap-2">' +
-                    '<img src="' + thumbUrl + '" width="112" height="63" class="rounded object-fit-cover border border-secondary flex-shrink-0" alt="Thumb" onerror="this.onerror=null; this.src=\'/api/thumbnails/' + v.video_id + '\';">' +
+                    '<div class="position-relative flex-shrink-0" style="width:112px; height:63px;">' +
+                        '<img src="' + thumbUrl + '" width="112" height="63" class="rounded object-fit-cover border border-secondary w-100 h-100" alt="Thumb" onerror="this.onerror=null; this.src=\'/api/thumbnails/' + v.video_id + '\';">' +
+                        durationBadge +
+                    '</div>' +
                     '<div class="overflow-hidden flex-grow-1">' +
-                        '<div class="fw-semibold text-light text-truncate small" title="' + v.title + '">' + v.title + '</div>' +
-                        '<div class="text-muted small mt-1" style="font-size:0.72rem;">📅 ' + v.published_at + ' • <code>' + v.video_id + '</code></div>' +
+                        '<a href="' + ytLink + '" target="_blank" rel="noopener noreferrer" class="text-light text-decoration-none fw-semibold text-truncate small d-inline-block w-100" title="' + v.title + '">' +
+                            v.title + ' <span class="text-muted" style="font-size:0.7rem;">↗</span>' +
+                        '</a>' +
+                        '<div class="text-muted small mt-1" style="font-size:0.72rem;">' +
+                            '📅 ' + v.published_at + relTimeStr + viewsStr + ' • <code>' + v.video_id + '</code>' +
+                        '</div>' +
                         ingestAction +
                     '</div>' +
                 '</div>' +
@@ -368,5 +502,297 @@
             window.showToast('Error: ' + err.message, 'danger');
         });
     };
+
+    window.openChannelSetupModal = function(channelId, channelName) {
+        var modalTitle = document.getElementById('setupModalChannelName');
+        var form = document.getElementById('channelSetupForm');
+        var skeleton = document.getElementById('setupLoadingSkeleton');
+        var content = document.getElementById('setupFormContent');
+
+        if (modalTitle) modalTitle.textContent = channelName;
+        if (form) form.action = '/channels/' + encodeURIComponent(channelId) + '/setup';
+        if (skeleton) skeleton.classList.remove('d-none');
+        if (content) content.classList.add('d-none');
+
+        var modal = new bootstrap.Modal(document.getElementById('channelSetupModal'));
+        modal.show();
+
+        fetch('/api/channels/' + encodeURIComponent(channelId) + '/setup')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var def = data.upload_defaults || {};
+                var priv = document.getElementById('setup_privacy_status'); if (priv) priv.value = def.privacy_status || 'unlisted';
+                var kids = document.getElementById('setup_made_for_kids'); if (kids) kids.checked = Boolean(def.made_for_kids);
+                var autoP = document.getElementById('setup_auto_publish'); if (autoP) autoP.checked = Boolean(def.auto_publish);
+                var cat = document.getElementById('setup_category_id'); if (cat) cat.value = String(def.category_id || '22');
+                var tags = document.getElementById('setup_default_tags'); if (tags) tags.value = Array.isArray(def.default_tags) ? def.default_tags.join(', ') : (def.default_tags || '#Shorts, #Viral');
+                var lang = document.getElementById('setup_default_language'); if (lang) lang.value = def.default_language || 'en';
+                var lic = document.getElementById('setup_license'); if (lic) lic.value = def.license || 'youtube';
+                var quota = document.getElementById('setup_daily_upload_quota'); if (quota) quota.value = def.daily_upload_quota || 4;
+                var hour = document.getElementById('setup_preferred_publish_hour_utc'); if (hour) hour.value = def.preferred_publish_hour_utc !== undefined ? def.preferred_publish_hour_utc : 18;
+                var targetCh = document.getElementById('setup_publish_target_channel_id'); if (targetCh) targetCh.value = data.publish_target_channel_id || '';
+                var oauthStatus = document.getElementById('setupOAuthStatus');
+                if (oauthStatus) {
+                    oauthStatus.textContent = data.has_oauth_token ? '✓ Encrypted OAuth Token Configured' : '⚠️ No OAuth Token Configured (Using Default App Credentials)';
+                    oauthStatus.className = data.has_oauth_token ? 'badge bg-success-subtle text-success border border-success' : 'badge bg-warning-subtle text-warning border border-warning';
+                }
+
+                if (skeleton) skeleton.classList.add('d-none');
+                if (content) content.classList.remove('d-none');
+            })
+            .catch(function(err) {
+                if (skeleton) skeleton.innerHTML = '<div class="text-danger small">Failed to load channel defaults: ' + err.message + '</div>';
+            });
+    };
+
+    window.jumpToSetupField = function(fieldId) {
+        var field = document.getElementById(fieldId);
+        if (!field) return;
+        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        field.focus();
+        var origStyle = field.style.boxShadow;
+        var origBorder = field.style.borderColor;
+        field.style.borderColor = '#0dcaf0';
+        field.style.boxShadow = '0 0 12px rgba(13, 202, 240, 0.8)';
+        setTimeout(function() {
+            field.style.boxShadow = origStyle;
+            field.style.borderColor = origBorder;
+        }, 2000);
+    };
 </script>
+
+<!-- Channel Setup & Upload Defaults Modal -->
+<div class="modal fade" id="channelSetupModal" tabindex="-1" aria-labelledby="channelSetupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark text-light border border-secondary shadow-lg">
+            <div class="modal-header border-bottom border-secondary bg-black py-2 px-3">
+                <h5 class="modal-title text-info d-flex align-items-center gap-2 fs-6" id="channelSetupModalLabel">
+                    <span>⚙️</span> <span>Channel Setup & Upload Defaults: <strong id="setupModalChannelName" class="text-light"></strong></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="channelSetupForm" method="post" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                
+                <div class="modal-body p-3">
+                    <div id="setupLoadingSkeleton" class="text-center py-4">
+                        <div class="spinner-border text-info mb-2" role="status"></div>
+                        <div class="text-muted small">Loading channel configuration...</div>
+                    </div>
+
+                    <div id="setupFormContent" class="d-none">
+                        <!-- Collapsible Embedded Setup Guide with Jump Links -->
+                        <div class="accordion mb-3" id="setupGuideAccordion">
+                            <div class="accordion-item bg-black border-info-subtle rounded overflow-hidden">
+                                <h2 class="accordion-header" id="headingSetupGuide">
+                                    <button class="accordion-button collapsed bg-dark-subtle text-info py-2 px-3 fw-semibold small d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSetupGuide" aria-expanded="false" aria-controls="collapseSetupGuide" style="box-shadow: none;">
+                                        <span class="d-flex align-items-center gap-2">
+                                            <i class="bi bi-compass"></i>
+                                            <span>Quick Setup Guide &amp; Interactive Field Jumps</span>
+                                        </span>
+                                        <span class="badge bg-info-subtle text-info border border-info font-monospace ms-auto me-2" style="font-size:0.68rem;">Click to View Guide</span>
+                                    </button>
+                                </h2>
+                                <div id="collapseSetupGuide" class="accordion-collapse collapse" aria-labelledby="headingSetupGuide" data-bs-parent="#setupGuideAccordion">
+                                    <div class="accordion-body bg-black text-light p-3 border-top border-secondary-subtle" style="font-size: 0.8rem;">
+                                        <p class="text-muted small mb-2">
+                                            Configure your channel defaults below for automated publishing. Click any jump link to quickly scroll to and highlight that input:
+                                        </p>
+                                        <div class="d-flex flex-wrap gap-2 mb-3">
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_privacy_status')">
+                                                🎯 Privacy Status
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_category_id')">
+                                                📂 YouTube Category
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_made_for_kids')">
+                                                👶 COPPA Settings
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_auto_publish')">
+                                                ⚡ Autonomous Mode
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_default_tags')">
+                                                🏷️ Viral Tags Cloud
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_daily_upload_quota')">
+                                                📊 Daily Quota
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_preferred_publish_hour_utc')">
+                                                ⏰ Peak Publish Hour
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_publish_target_channel_id')">
+                                                🆔 Target Channel ID
+                                            </button>
+                                            <button type="button" class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem;" onclick="jumpToSetupField('setup_oauth_token_json')">
+                                                🔐 OAuth Token JSON
+                                            </button>
+                                        </div>
+                                        <div class="alert alert-dark border-secondary p-2 mb-0 small text-muted">
+                                            <i class="bi bi-lightbulb text-warning me-1"></i>
+                                            <strong>Best Practices:</strong> Use Category <code>22 (People &amp; Blogs)</code> or <code>24 (Entertainment)</code>, leave Made for Kids <strong>unchecked</strong> (preserves comments and algorithmic push), and set Peak Publish Hour to <strong>18:00 UTC</strong> (North America prime time).
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Top Banner -->
+                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded bg-black border border-secondary">
+                            <div>
+                                <span class="fw-bold text-light small">Channel OAuth Security Status:</span>
+                                <div class="text-muted" style="font-size:0.75rem;">OAuth credentials and refresh tokens are encrypted at rest with Fernet cryptography.</div>
+                            </div>
+                            <span id="setupOAuthStatus" class="badge bg-secondary">Checking...</span>
+                        </div>
+
+                        <!-- Row 1: Visibility & Mode -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Default Privacy Status</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="setup_privacy_status" name="privacy_status">
+                                    <option value="unlisted">Unlisted (Safe Default)</option>
+                                    <option value="public">Public (Immediate Live)</option>
+                                    <option value="private">Private (Pre-release)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">YouTube Category</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="setup_category_id" name="category_id">
+                                    <option value="24">Entertainment (24)</option>
+                                    <option value="22" selected>People & Blogs (22)</option>
+                                    <option value="20">Gaming (20)</option>
+                                    <option value="23">Comedy (23)</option>
+                                    <option value="27">Education (27)</option>
+                                    <option value="26">Howto & Style (26)</option>
+                                    <option value="28">Science & Technology (28)</option>
+                                    <option value="1">Film & Animation (1)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Video License</label>
+                                <select class="form-select form-select-sm bg-black text-light border-secondary" id="setup_license" name="license">
+                                    <option value="youtube">Standard YouTube License</option>
+                                    <option value="creativeCommon">Creative Commons - Attribution</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Row 2: Toggles -->
+                        <div class="row g-2 mb-3 p-2 rounded bg-black border border-secondary">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="setup_auto_publish" name="auto_publish" value="true">
+                                    <label class="form-check-label text-light small fw-semibold" for="setup_auto_publish">
+                                        ⚡ Fully Autonomous Auto-Publish
+                                    </label>
+                                    <div class="text-muted" style="font-size:0.7rem;">If enabled, newly generated Shorts skip operator review and are scheduled automatically.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="setup_made_for_kids" name="made_for_kids" value="true">
+                                    <label class="form-check-label text-light small fw-semibold" for="setup_made_for_kids">
+                                        👶 COPPA: Made for Kids
+                                    </label>
+                                    <div class="text-muted" style="font-size:0.7rem;">Leave unchecked for standard Shorts audiences (comments & analytics enabled).</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 3: Tags & SEO Defaults -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-semibold mb-1">Default Tags / Hashtags (Comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm bg-black text-light border-secondary" id="setup_default_tags" name="default_tags" placeholder="#Shorts, #Viral, #Trending, #FYP">
+                            <div class="text-muted small mt-1" style="font-size:0.7rem;">These tags are automatically combined with AI-synthesized trend tags upon clip generation.</div>
+                        </div>
+
+                        <!-- Row 4: Quota & Drip-Feed Schedule Timing -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Daily Upload Quota</label>
+                                <input type="number" min="1" max="50" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="setup_daily_upload_quota" name="daily_upload_quota" value="4">
+                                <div class="text-muted" style="font-size:0.7rem;">Maximum Shorts to publish per day.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Preferred Peak Hour (UTC)</label>
+                                <input type="number" min="0" max="23" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="setup_preferred_publish_hour_utc" name="preferred_publish_hour_utc" value="18">
+                                <div class="text-muted" style="font-size:0.7rem;">Peak engagement slot (e.g. 18 = 6:00 PM UTC).</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-semibold mb-1">Default Language</label>
+                                <input type="text" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="setup_default_language" name="default_language" value="en" placeholder="en">
+                                <div class="text-muted" style="font-size:0.7rem;">BCP-47 language tag (e.g. en, es, hi).</div>
+                            </div>
+                        </div>
+
+                        <!-- Row 5: Target Upload Channel Override & Custom OAuth -->
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">Target YouTube Channel ID (Optional Override)</label>
+                                <input type="text" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="setup_publish_target_channel_id" name="publish_target_channel_id" placeholder="Leave blank to use default YouTube client">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold mb-1">Channel OAuth Token JSON (Optional Encrypted Update)</label>
+                                <textarea class="form-control form-control-sm bg-black text-light border-secondary font-monospace" id="setup_oauth_token_json" name="oauth_token_json" rows="1" placeholder="Paste refreshed OAuth JSON token here..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-top border-secondary d-flex justify-content-between py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-info fw-bold">
+                        💾 Save Channel Upload Defaults
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Restore Channels Backup -->
+<div class="modal fade" id="restoreChannelsModal" tabindex="-1" aria-labelledby="restoreChannelsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-warning-subtle shadow-lg">
+            <div class="modal-header border-bottom border-secondary py-2 px-3">
+                <h6 class="modal-title fw-bold text-warning" id="restoreChannelsModalLabel">
+                    <i class="bi bi-upload me-2"></i>Restore Channels from Backup
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="/channels/import" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="modal-body p-3">
+                    <p class="text-muted small mb-3">
+                        Upload a previously exported <code>channels_backup.json</code> file or paste the JSON content directly.
+                        The engine automatically reconciles channels with zero database collisions.
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Choose Backup File (.json)</label>
+                        <input type="file" name="backup_file" class="form-control form-control-sm bg-black text-light border-secondary" accept=".json,application/json">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light small fw-semibold">Or Paste JSON Data</label>
+                        <textarea name="backup_json" class="form-control form-control-sm bg-black text-light border-secondary font-monospace" rows="4" placeholder='{"version": 1, "channels": [...]}'></textarea>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="update_existing" id="updateExistingChannels" checked>
+                        <label class="form-check-label text-light small" for="updateExistingChannels">
+                            Update existing channels if already registered
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary d-flex justify-content-between py-2 px-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-warning fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i>Restore Channels
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

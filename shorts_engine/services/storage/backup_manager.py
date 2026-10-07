@@ -11,8 +11,6 @@ Provides non-blocking, online hot database backups for production:
 ==============================================================================
 """
 
-import os
-import sys
 import time
 import gzip
 import shutil

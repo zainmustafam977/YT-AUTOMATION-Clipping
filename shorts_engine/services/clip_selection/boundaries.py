@@ -4,9 +4,9 @@ and word boundaries to guarantee cuts never slice words or breath pauses.
 """
 
 import logging
-from typing import List, Tuple, Set
+from typing import Tuple, Set
 from shorts_engine.config.settings import settings
-from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
+from shorts_engine.services.transcription.formatter import FormattedTranscript
 
 logger = logging.getLogger(__name__)
 

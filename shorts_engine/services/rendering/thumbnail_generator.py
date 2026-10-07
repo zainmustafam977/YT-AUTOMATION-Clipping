@@ -6,7 +6,6 @@ safely positioned outside YouTube Shorts UI dead-zones (100% offline, 0ms API co
 """
 
 import os
-import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, List

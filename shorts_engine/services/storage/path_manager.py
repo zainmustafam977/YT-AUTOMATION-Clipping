@@ -3,10 +3,8 @@ Deterministic, hierarchical storage path management and backward-compatible asse
 Enforces Windows MAX_PATH budgeting, safe slugification, atomic writes, and handle-safe unlinking.
 """
 
-import os
 import re
 import time
-import shutil
 import logging
 import unicodedata
 from pathlib import Path
@@ -280,3 +278,20 @@ class PathManager:
         except Exception as e:
             logger.debug("Prune empty dirs stopped at %s: %s", start_dir, e)
         return pruned
+
+    @classmethod
+    def get_preview_proxy_path(cls, source_path: Union[str, Path]) -> Path:
+        """
+        Returns the deterministic file path for a lightweight 720p H.264 preview proxy video (Enhancement 4).
+        """
+        return get_preview_proxy_path(source_path)
+
+
+def get_preview_proxy_path(source_path: Union[str, Path]) -> Path:
+    """
+    Returns the deterministic file path for a lightweight 720p H.264 preview proxy video (Enhancement 4).
+    Placed alongside the source video with '_proxy_preview.mp4' suffix.
+    """
+    p = Path(source_path)
+    return p.parent / f"{p.stem}_proxy_preview.mp4"
+

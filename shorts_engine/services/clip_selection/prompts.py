@@ -30,6 +30,57 @@ class CandidateSegmentSchema(BaseModel):
         default=None,
         description="2-3 visual search keywords for relevant stock B-roll cutaway footage (e.g. ['coding keyboard', 'data matrix'])"
     )
+    curiosity_gap_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=10.0,
+        description="Curiosity gap score (0-10): How strongly the hook creates an irresistible information void",
+    )
+    narrative_climax_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=10.0,
+        description="Narrative climax score (0-10): Payoff and punchline impact, intensity, or revelation",
+    )
+    standalone_coherence_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=10.0,
+        description="Standalone coherence score (0-10): Clarity and self-contained comprehension without context",
+    )
+    loopability_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=10.0,
+        description="Loopability score (0-10): Seamless audio/thematic transition from final sentence back to hook",
+    )
+
+
+def compute_composite_virality_score(
+    curiosity_gap: float,
+    narrative_climax: float,
+    standalone_coherence: float,
+    loopability: float,
+    acoustic_boost: float = 0.0,
+) -> float:
+    """
+    Computes weighted composite virality score:
+    - Curiosity Gap: 35%
+    - Narrative Climax: 25%
+    - Standalone Coherence: 25%
+    - Loopability: 15%
+    With optional acoustic energy boost (up to 10% normalized).
+    Returns normalized float in range 0.0 to 1.0.
+    """
+    base = (
+        0.35 * float(curiosity_gap)
+        + 0.25 * float(narrative_climax)
+        + 0.25 * float(standalone_coherence)
+        + 0.15 * float(loopability)
+    ) / 10.0
+    if acoustic_boost > 0.0:
+        base = base * 0.90 + (min(10.0, float(acoustic_boost)) / 10.0) * 0.10
+    return round(min(1.0, max(0.0, base)), 2)
 
 
 

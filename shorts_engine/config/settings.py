@@ -34,6 +34,7 @@ class PipelineSettings(BaseSettings):
     RAW_DIR: Path = ROOT_DIR / "storage" / "downloads"
     SFX_DIR: Path = ROOT_DIR / "assets" / "sfx_library"
     MODELS_DIR: Path = ROOT_DIR / "storage" / "models"
+    FONTS_DIR: Path = ROOT_DIR / "assets" / "fonts"
 
     # Database
     DATABASE_URL: str = Field(default="sqlite:///./storage/shorts_automation.db")
@@ -256,7 +257,38 @@ class PipelineSettings(BaseSettings):
         le=300,
         description="High-pass filter cutoff frequency to eliminate room rumble",
     )
+    VOCAL_PRESENCE_FREQ_HZ: int = Field(
+        default=3000,
+        ge=1000,
+        le=8000,
+        description="Vocal presence shelf/peaking filter frequency in Hz",
+    )
+    VOCAL_PRESENCE_GAIN_DB: float = Field(
+        default=2.5,
+        ge=0.0,
+        le=12.0,
+        description="Vocal presence shelf/peaking filter boost in dB",
+    )
+    LOUDNESS_TWO_PASS: bool = Field(
+        default=True,
+        description="Enable ITU-R BS.1770-4 two-pass loudness normalization",
+    )
+    HARDWARE_ACCELERATION_ENABLED: bool = Field(
+        default=True,
+        description="Enable automatic hardware acceleration (NVENC, QSV, AMF) for video rendering",
+    )
+    HARDWARE_ENCODER_OVERRIDE: Optional[str] = Field(
+        default=None,
+        description="Explicit encoder override: h264_nvenc, h264_qsv, h264_amf, libx264",
+    )
     MUSIC_LIBRARY_DIR: Path = Path("assets/music")
+
+    # Monitoring & Alerting
+    SLACK_WEBHOOK_URL: Optional[str] = Field(default=None, description="Incoming Slack Webhook URL")
+    DISCORD_WEBHOOK_URL: Optional[str] = Field(default=None, description="Discord Webhook URL")
+    TELEGRAM_BOT_TOKEN: Optional[str] = Field(default=None, description="Telegram Bot Token")
+    TELEGRAM_CHAT_ID: Optional[str] = Field(default=None, description="Telegram Chat ID")
+    SENTRY_DSN: Optional[str] = Field(default=None, description="Sentry DSN for error telemetry")
 
     # Publishing & Quotas
     DRY_RUN_PUBLISHING: bool = Field(default=True, description="When true, simulates upload without calling YouTube API")
@@ -335,15 +367,62 @@ class PipelineSettings(BaseSettings):
     DASHBOARD_HOST: str = "127.0.0.1"
     DASHBOARD_PORT: int = 8080
     DASHBOARD_SECRET_KEY: str = Field(default="change-me-in-prod", description="Session signing key")
-    DASHBOARD_USERNAME: str = Field(default="admin", description="HTTP Basic Auth username")
-    DASHBOARD_PASSWORD: str = Field(default="change-me", description="HTTP Basic Auth password")
+    DASHBOARD_USERNAME: str = Field(default="admin", description="Operator dashboard username")
+    DASHBOARD_PASSWORD: str = Field(default="AdminPass12345!", description="Operator dashboard password")
 
-    # Alerting & Notifications
-    SLACK_WEBHOOK_URL: Optional[str] = None
-    DISCORD_WEBHOOK_URL: Optional[str] = None
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    TELEGRAM_CHAT_ID: Optional[str] = None
-    SENTRY_DSN: Optional[str] = None
+    # Video Ingestion & Triple-Tier Authentication (Pillars 1-4)
+    YOUTUBE_OAUTH_TOKEN_PATH: Path = Field(
+        default=Path(__file__).resolve().parent.parent.parent / "storage" / "youtube_oauth.json",
+        description="Path to AES-256-GCM encrypted OAuth2 token vault file",
+    )
+    YOUTUBE_OAUTH_CLIENT_ID: Optional[str] = Field(
+        default=None,
+        description="Google OAuth2 Client ID for RFC-8628 device flow",
+    )
+    YOUTUBE_OAUTH_CLIENT_SECRET: Optional[str] = Field(
+        default=None,
+        description="Google OAuth2 Client Secret for RFC-8628 device flow",
+    )
+    INGESTION_ENABLE_OAUTH: bool = Field(
+        default=True,
+        description="Enable OAuth2 device token authentication tier for YouTube ingestion",
+    )
+    YOUTUBE_HARVESTER_COOKIES_PATH: Path = Field(
+        default=Path(__file__).resolve().parent.parent.parent / "storage" / "harvester_cookies.txt",
+        description="Path to fresh Netscape cookies exported by background session harvester",
+    )
+    YOUTUBE_COOKIES_PATH: Path = Field(
+        default=Path(__file__).resolve().parent.parent.parent / "storage" / "cookies.txt",
+        description="Path to manual fallback Netscape cookies vault file",
+    )
+    INGESTION_PROXY_POOL: List[str] = Field(
+        default_factory=list,
+        description="Pool of HTTP/HTTPS/SOCKS5 proxy URLs for round-robin rotation",
+    )
+    INGESTION_PROXY_STRICT_MODE: bool = Field(
+        default=False,
+        description="If True, rejects downloads when no proxy is available. If False, allows direct fallback.",
+    )
+    INGESTION_RESIDENTIAL_API_KEY: Optional[str] = Field(
+        default=None,
+        description="API key for commercial residential proxy provider (Webshare/Bright Data)",
+    )
+    INGESTION_POLICY_MODE: str = Field(
+        default="two_tier",
+        description="Content policy triage mode: 'two_tier', 'strict_gate', or 'auto_skip'",
+    )
+    HOTFOLDER_DIR: Path = Field(
+        default=Path(__file__).resolve().parent.parent.parent / "storage" / "hotfolder",
+        description="Hotfolder directory monitored for automated video drops",
+    )
+    HOTFOLDER_ENABLED: bool = Field(
+        default=True,
+        description="Enable automated background hotfolder watcher",
+    )
+    HOTFOLDER_POLL_INTERVAL_SECONDS: float = Field(
+        default=5.0,
+        description="Hotfolder poll interval in seconds",
+    )
 
 
     @model_validator(mode="after")
@@ -423,6 +502,8 @@ class PipelineSettings(BaseSettings):
             self.STORAGE_DIR / "thumbnails",
             self.STORAGE_DIR / "logs",
             self.STORAGE_DIR / "config",
+            self.HOTFOLDER_DIR,
+            self.HOTFOLDER_DIR / "processed",
         ]:
             directory.mkdir(parents=True, exist_ok=True)
         return self
@@ -557,7 +638,39 @@ class PipelineSettings(BaseSettings):
             setattr(self, key_attr, clean)
         return True
 
+    def get_proxy_pool(self) -> List[str]:
+        """Returns clean list of unique configured proxies."""
+        proxies: List[str] = []
+        for p in (self.INGESTION_PROXY_POOL or []):
+            if isinstance(p, str):
+                for line in p.replace("\r", "\n").split("\n"):
+                    clean = line.strip()
+                    if clean and clean not in proxies:
+                        proxies.append(clean)
+        return proxies
+
+    def add_proxy(self, proxy_url: str) -> bool:
+        """Adds a new proxy to INGESTION_PROXY_POOL."""
+        clean = proxy_url.strip()
+        if not clean or clean in self.INGESTION_PROXY_POOL:
+            return False
+        self.INGESTION_PROXY_POOL.append(clean)
+        return True
+
+    def remove_proxy(self, proxy_url: str) -> bool:
+        """Removes a proxy from INGESTION_PROXY_POOL."""
+        clean = proxy_url.strip()
+        if clean in self.INGESTION_PROXY_POOL:
+            self.INGESTION_PROXY_POOL.remove(clean)
+            return True
+        return False
+
 
 
 # Global singleton settings instance
 settings = PipelineSettings()
+try:
+    settings.FONTS_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+

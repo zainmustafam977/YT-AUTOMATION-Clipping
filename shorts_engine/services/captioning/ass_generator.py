@@ -3,10 +3,25 @@ Karaoke-style ASS Subtitle Generator: creates styled, word-synchronized vertical
 optimized for mobile screens and compliant with YouTube Shorts safe-zone guidelines.
 """
 
+import re
+import sys
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from shorts_engine.config.settings import settings
 from shorts_engine.services.transcription.formatter import WordSegment
+
+DEFAULT_EMOJI_FONT = "Segoe UI Emoji" if sys.platform == "win32" else "Noto Color Emoji"
+
+EMOJI_PATTERN = re.compile(
+    r"("
+    r"[\U0001F1E6-\U0001F1FF]{2}"  # Regional Indicator pairs (flags)
+    r"|"
+    r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\u25A0-\u25FF\u2B00-\u2BFF]"
+    r"[\uFE00-\uFE0F]?"            # Optional Variation Selector
+    r"(?:\u200D[\U0001F300-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\u25A0-\u25FF\u2B00-\u2BFF][\uFE00-\uFE0F]?)*"  # ZWJ combinations
+    r")",
+    flags=re.UNICODE,
+)
 
 
 def format_ass_timestamp(seconds: float) -> str:
@@ -33,6 +48,10 @@ class ASSSubtitleGenerator:
         outline_width: float = 4.0,
         shadow_depth: float = 2.0,
         margin_vertical: int = settings.CAPTION_MARGIN_VERTICAL,
+        scale_pop: bool = False,
+        active_scale: int = 115,
+        emoji_fallback: bool = True,
+        emoji_font: Optional[str] = None,
     ):
         self.font_name = font_name
         self.font_size = font_size
@@ -42,6 +61,29 @@ class ASSSubtitleGenerator:
         self.outline_width = outline_width
         self.shadow_depth = shadow_depth
         self.margin_vertical = margin_vertical
+        self.scale_pop = scale_pop
+        self.active_scale = active_scale
+        self.emoji_fallback = emoji_fallback
+        self.emoji_font = emoji_font or DEFAULT_EMOJI_FONT
+
+    def _format_word_emojis(self, text: str, font_name: str) -> str:
+        """Wraps emoji sequences in Segoe UI Emoji font tags for Windows ASS rendering."""
+        if not self.emoji_fallback or not text:
+            return text
+        if not EMOJI_PATTERN.search(text):
+            return text
+        parts = []
+        last_end = 0
+        for match in EMOJI_PATTERN.finditer(text):
+            start, end = match.span()
+            if start > last_end:
+                parts.append(text[last_end:start])
+            emoji_char = match.group(0)
+            parts.append(f"{{\\fn{self.emoji_font}}}{emoji_char}{{\\fn{font_name}}}")
+            last_end = end
+        if last_end < len(text):
+            parts.append(text[last_end:])
+        return "".join(parts) if parts else text
 
     def generate_ass(
         self,
@@ -77,9 +119,14 @@ class ASSSubtitleGenerator:
         outline_color = self.outline_color
         outline_width = self.outline_width
         shadow_depth = self.shadow_depth
+        shadow_color = "&H80000000"
+        background_box = False
+        box_color = "&H80000000"
         margin_vert = self.margin_vertical
         words_per_line = max_words_per_line
         case_transform = "none"
+        scale_pop = self.scale_pop
+        active_scale = self.active_scale
 
         if style_overrides:
             font_name = style_overrides.get("font_name", font_name)
@@ -89,9 +136,16 @@ class ASSSubtitleGenerator:
             outline_color = style_overrides.get("outline_color", outline_color)
             outline_width = float(style_overrides.get("outline_width", outline_width))
             shadow_depth = float(style_overrides.get("shadow_depth", shadow_depth))
+            shadow_color = style_overrides.get("shadow_color", shadow_color)
+            background_box = bool(style_overrides.get("background_box", background_box))
+            box_color = style_overrides.get("box_color", box_color)
             margin_vert = int(style_overrides.get("margin_vertical", margin_vert))
             words_per_line = int(style_overrides.get("max_words_per_line", words_per_line))
             case_transform = style_overrides.get("case_transform", case_transform)
+            if "scale_pop" in style_overrides:
+                scale_pop = bool(style_overrides["scale_pop"])
+            if "active_scale" in style_overrides:
+                active_scale = int(style_overrides["active_scale"])
 
         content = []
         content.append(self._generate_header(
@@ -101,6 +155,9 @@ class ASSSubtitleGenerator:
             outline_color=outline_color,
             outline=outline_width,
             shadow=shadow_depth,
+            shadow_color=shadow_color,
+            background_box=background_box,
+            box_color=box_color,
             margin_vertical=margin_vert,
         ))
         content.append("[Events]")
@@ -113,18 +170,21 @@ class ASSSubtitleGenerator:
         ]
 
         for chunk in chunks:
-            chunk_start_sec = max(0.0, chunk[0].start - seg_start_sec)
-            chunk_end_sec = max(chunk_start_sec + 0.5, chunk[-1].end - seg_start_sec)
-
             # For each word in chunk, emit a dialogue slice highlighting the active word
             for active_idx, active_word in enumerate(chunk):
                 w_start = max(0.0, active_word.start - seg_start_sec)
                 w_end = max(w_start + 0.05, active_word.end - seg_start_sec)
+                # Bridge minor inter-word pauses within the chunk up to 400ms to eliminate subtitle flickering
+                if active_idx < len(chunk) - 1:
+                    next_w_start = max(w_start, chunk[active_idx + 1].start - seg_start_sec)
+                    if next_w_start > w_end and (next_w_start - w_end) <= 0.4:
+                        w_end = next_w_start
 
                 # Format words with active word highlighted
                 line_parts = []
                 for idx, w in enumerate(chunk):
-                    word_clean = w.word.replace("\\", "")
+                    # Sanitize backslashes and ASS override block delimiters to prevent tag swallowing
+                    word_clean = w.word.replace("\\", "").replace("{", "(").replace("}", ")")
                     if case_transform == "uppercase":
                         word_clean = word_clean.upper()
                     elif case_transform == "lowercase":
@@ -132,10 +192,15 @@ class ASSSubtitleGenerator:
                     elif case_transform == "capitalize":
                         word_clean = word_clean.capitalize()
 
+                    word_formatted = self._format_word_emojis(word_clean, font_name)
+
                     if idx == active_idx:
-                        line_parts.append(f"{{\\c{highlight_color}&}}{word_clean}{{\\c{primary_color}&}}")
+                        if scale_pop:
+                            line_parts.append(f"{{\\fscx{active_scale}\\fscy{active_scale}\\c{highlight_color}&}}{word_formatted}{{\\fscx100\\fscy100\\c{primary_color}&}}")
+                        else:
+                            line_parts.append(f"{{\\c{highlight_color}&}}{word_formatted}{{\\c{primary_color}&}}")
                     else:
-                        line_parts.append(word_clean)
+                        line_parts.append(word_formatted)
 
                 dialogue_text = " ".join(line_parts)
                 start_ts = format_ass_timestamp(w_start)
@@ -156,6 +221,9 @@ class ASSSubtitleGenerator:
         outline_color: Optional[str] = None,
         outline: Optional[float] = None,
         shadow: Optional[float] = None,
+        shadow_color: Optional[str] = None,
+        background_box: bool = False,
+        box_color: Optional[str] = None,
         margin_vertical: Optional[int] = None,
     ) -> str:
         fn = font_name or self.font_name
@@ -165,6 +233,10 @@ class ASSSubtitleGenerator:
         ol = outline if outline is not None else self.outline_width
         sh = shadow if shadow is not None else self.shadow_depth
         mv = margin_vertical if margin_vertical is not None else self.margin_vertical
+
+        border_style = 3 if background_box else 1
+        back_colour = (box_color if background_box and box_color else (shadow_color or "&H80000000"))
+
         return f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {settings.TARGET_WIDTH}
@@ -174,5 +246,5 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: ShortsStyle,{fn},{fs},{pc},&H000000FF,{oc},&H80000000,-1,0,0,0,100,100,0,0,1,{ol},{sh},2,40,40,{mv},1
+Style: ShortsStyle,{fn},{fs},{pc},&H000000FF,{oc},{back_colour},-1,0,0,0,100,100,0,0,{border_style},{ol},{sh},2,40,40,{mv},1
 """

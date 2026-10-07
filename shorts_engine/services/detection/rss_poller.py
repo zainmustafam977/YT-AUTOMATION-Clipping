@@ -8,7 +8,6 @@ Uses only stdlib (urllib.request + xml.etree.ElementTree) — no feedparser depe
 
 import logging
 import threading
-import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -24,13 +23,27 @@ logger = logging.getLogger(__name__)
 YOUTUBE_FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 ATOM_NS = "http://www.w3.org/2005/Atom"
 YT_NS = "http://www.youtube.com/xml/schemas/2015"
+MEDIA_NS = "http://search.yahoo.com/mrss/"
 
 
 class FeedEntry(tuple):
-    """Backwards-compatible 2-tuple (video_id, published_at) with title attribute."""
-    def __new__(cls, video_id: str, published_at: datetime, title: str = ""):
+    """Backwards-compatible 2-tuple (video_id, published_at) with rich metadata attributes."""
+    def __new__(
+        cls,
+        video_id: str,
+        published_at: Optional[datetime] = None,
+        title: str = "",
+        duration_sec: Optional[float] = None,
+        view_count: Optional[int] = None,
+        description: str = "",
+        thumbnail_url: str = "",
+    ):
         instance = super().__new__(cls, (video_id, published_at))
         instance.title = title
+        instance.duration_sec = duration_sec
+        instance.view_count = view_count
+        instance.description = description
+        instance.thumbnail_url = thumbnail_url or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
         return instance
 
 
@@ -53,7 +66,15 @@ class RSSPoller:
         try:
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "ShortsEngine/1.0 (RSS Fallback Poller)"},
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/128.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
             )
             with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
                 xml_body = resp.read()
@@ -88,7 +109,36 @@ class RSSPoller:
                 published_at = datetime.fromisoformat(pub_text)
             except ValueError:
                 published_at = datetime.now(tz=timezone.utc)
-            entries.append(FeedEntry(video_id, published_at, title=title))
+
+            desc = ""
+            thumb_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            view_count: Optional[int] = None
+
+            media_grp = entry.find(f"{{{MEDIA_NS}}}group")
+            if media_grp is not None:
+                d_elem = media_grp.find(f"{{{MEDIA_NS}}}description")
+                if d_elem is not None and d_elem.text:
+                    desc = d_elem.text.strip()
+                t_elem = media_grp.find(f"{{{MEDIA_NS}}}thumbnail")
+                if t_elem is not None and t_elem.get("url"):
+                    thumb_url = t_elem.get("url")
+                comm_elem = media_grp.find(f"{{{MEDIA_NS}}}community")
+                if comm_elem is not None:
+                    stats_elem = comm_elem.find(f"{{{MEDIA_NS}}}statistics")
+                    if stats_elem is not None and stats_elem.get("views"):
+                        try:
+                            view_count = int(stats_elem.get("views"))
+                        except ValueError:
+                            pass
+
+            entries.append(FeedEntry(
+                video_id,
+                published_at,
+                title=title,
+                view_count=view_count,
+                description=desc,
+                thumbnail_url=thumb_url,
+            ))
 
         # Sort newest-first
         entries.sort(key=lambda x: x[1], reverse=True)

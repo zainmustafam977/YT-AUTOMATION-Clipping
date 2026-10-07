@@ -246,6 +246,8 @@
         }
 
         initLogSSE();
+        window.addEventListener("beforeunload", stopLogSSE);
+        window.addEventListener("pagehide", stopLogSSE);
     });
 </script>
 {% endblock %}

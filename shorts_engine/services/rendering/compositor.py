@@ -3,16 +3,16 @@ Rendering Service: FFmpeg compositor that crops to 9:16 portrait, burns in karao
 normalizes audio to EBU R128 standards, ducks background audio, and validates the final MP4.
 """
 
-import os
 import json
 import logging
-import subprocess
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from shorts_engine.config.settings import settings
 from shorts_engine.services.reframing.cropper import CropPlan
 from shorts_engine.services.audio.mastering import AudioMasteringEngine
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+from shorts_engine.services.rendering.hwaccel import HardwareEncoderProber
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,67 @@ def get_default_fontfile() -> Optional[str]:
             return escape_ffmpeg_filter_path(c)
     return None
 
+
+def get_ass_filter_string(subtitle_ass_path: Path, fonts_dir: Optional[Path] = None) -> str:
+    """
+    Builds the FFmpeg ass subtitle filter parameter string with optional fontsdir configuration (Enhancement 6).
+    """
+    escaped_sub = escape_ffmpeg_filter_path(subtitle_ass_path)
+    f_dir = fonts_dir or getattr(settings, "FONTS_DIR", settings.ROOT_DIR / "assets" / "fonts")
+    if f_dir and Path(f_dir).exists():
+        escaped_fonts = escape_ffmpeg_filter_path(Path(f_dir))
+        return f"ass='{escaped_sub}':fontsdir='{escaped_fonts}'"
+    return f"ass='{escaped_sub}'"
+
+
+
+def compute_watermark_position(
+    anchor: str,
+    margin_x: int = 30,
+    margin_y: int = 40,
+    is_drawtext: bool = False,
+) -> Tuple[str, str]:
+    """
+    Computes FFmpeg (x, y) coordinates for the 9-point grid watermark matrix.
+    Supports:
+      - 'top_left' / 'tl'
+      - 'top_center' / 'tc'
+      - 'top_right' / 'tr'
+      - 'center_left' / 'cl'
+      - 'center' / 'cc' / 'middle'
+      - 'center_right' / 'cr'
+      - 'bottom_left' / 'bl'
+      - 'bottom_center' / 'bc'
+      - 'bottom_right' / 'br'
+    """
+    a = (anchor or "top_right").lower().replace("-", "_").strip()
+    mx = int(margin_x)
+    my = int(margin_y)
+    if is_drawtext:
+        W, H, w, h = "w", "h", "text_w", "text_h"
+    else:
+        W, H, w, h = "W", "H", "w", "h"
+
+    if a in ("top_left", "tl"):
+        return str(mx), str(my)
+    elif a in ("top_center", "tc", "top"):
+        return f"({W}-{w})/2", str(my)
+    elif a in ("top_right", "tr"):
+        return f"{W}-{w}-{mx}", str(my)
+    elif a in ("center_left", "cl", "left"):
+        return str(mx), f"({H}-{h})/2"
+    elif a in ("center", "cc", "middle"):
+        return f"({W}-{w})/2", f"({H}-{h})/2"
+    elif a in ("center_right", "cr", "right"):
+        return f"{W}-{w}-{mx}", f"({H}-{h})/2"
+    elif a in ("bottom_left", "bl"):
+        return str(mx), f"{H}-{h}-{my}"
+    elif a in ("bottom_center", "bc", "bottom"):
+        return f"({W}-{w})/2", f"{H}-{h}-{my}"
+    elif a in ("bottom_right", "br"):
+        return f"{W}-{w}-{mx}", f"{H}-{h}-{my}"
+    else:
+        return f"{W}-{w}-{mx}", str(my)
 
 
 class RenderValidationResult:
@@ -114,36 +175,210 @@ def get_best_video_encoder() -> Tuple[str, List[str]]:
     if _CACHED_ENCODER is not None:
         return _CACHED_ENCODER
 
-    crf = str(getattr(settings, "VIDEO_ENCODING_CRF", 18))
-    preset = str(getattr(settings, "VIDEO_ENCODING_PRESET", "medium"))
-
-    try:
-        proc = SubprocessWatchdog.run(["ffmpeg", "-encoders"], timeout_sec=5.0, check=False)
-        encoders_out = proc.stdout.lower()
-        if "h264_nvenc" in encoders_out and _test_hardware_encoder("h264_nvenc"):
-            logger.info("Hardware acceleration validated: using NVIDIA h264_nvenc at CQ %s.", crf)
-            _CACHED_ENCODER = ("h264_nvenc", ["-preset", "p6", "-cq", crf, "-rc", "vbr", "-spatial-aq", "1"])
-            return _CACHED_ENCODER
-        elif "h264_qsv" in encoders_out and _test_hardware_encoder("h264_qsv"):
-            logger.info("Hardware acceleration validated: using Intel h264_qsv at quality %s.", crf)
-            _CACHED_ENCODER = ("h264_qsv", ["-preset", "medium", "-global_quality", crf])
-            return _CACHED_ENCODER
-        elif "h264_amf" in encoders_out and _test_hardware_encoder("h264_amf"):
-            logger.info("Hardware acceleration validated: using AMD h264_amf at QP %s.", crf)
-            _CACHED_ENCODER = ("h264_amf", ["-quality", "quality", "-rc", "cqp", "-qp_p", crf])
-            return _CACHED_ENCODER
-    except Exception as e:
-        logger.warning("Could not probe FFmpeg hardware encoders: %s", e)
-
-    logger.info("Using software video encoder: libx264 at CRF %s (preset: %s).", crf, preset)
-    _CACHED_ENCODER = ("libx264", ["-preset", preset, "-crf", crf, "-profile:v", "high", "-level", "4.2"])
+    prober = HardwareEncoderProber.get_instance()
+    _CACHED_ENCODER = prober.get_optimal_encoder()
     return _CACHED_ENCODER
+
+
+def probe_aspect_ratio(video_path: Path) -> Tuple[int, int, str]:
+    """
+    Probes video dimensions via ffprobe and categorizes aspect ratio:
+    - '16:9': Widescreen landscape (width / height >= 1.4)
+    - '9:16': Vertical portrait (width / height <= 0.7)
+    - '1:1': Square (0.85 <= width / height <= 1.15)
+    - '4:3': Standard fullscreen / SD (1.15 < width / height < 1.4)
+    Returns (width, height, aspect_ratio_type).
+    """
+    if not video_path or not Path(video_path).exists() or Path(video_path).stat().st_size == 0:
+        return settings.TARGET_WIDTH, settings.TARGET_HEIGHT, "16:9"
+
+    cmd = [
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        str(video_path),
+    ]
+    try:
+        res = SubprocessWatchdog.run(cmd, timeout_sec=10.0, check=False)
+        if res.returncode == 0 and res.stdout:
+            data = json.loads(res.stdout)
+            for s in data.get("streams", []):
+                if s.get("codec_type") == "video":
+                    w = int(s.get("width", 0))
+                    h = int(s.get("height", 0))
+                    if w > 0 and h > 0:
+                        ratio = w / h
+                        if ratio >= 1.4:
+                            return w, h, "16:9"
+                        elif ratio <= 0.7:
+                            return w, h, "9:16"
+                        elif 0.85 <= ratio <= 1.15:
+                            return w, h, "1:1"
+                        elif 1.15 < ratio < 1.4:
+                            return w, h, "4:3"
+                        else:
+                            return w, h, "16:9"
+    except Exception as e:
+        logger.debug("Failed to probe aspect ratio for %s: %s", video_path, e)
+
+    return settings.TARGET_WIDTH, settings.TARGET_HEIGHT, "16:9"
 
 
 class VideoCompositor:
     def __init__(self, output_dir: Optional[Path] = None):
         self.output_dir = output_dir or settings.OUTPUT_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def build_aspect_ratio_filter(
+        self,
+        source_path: Path,
+        crop_plan: Optional[CropPlan] = None,
+        aspect_ratio_mode: Optional[str] = "auto",
+        scale_algo: Optional[str] = None,
+    ) -> Tuple[str, bool]:
+        """
+        Builds the video filter string for multi-aspect ratio rendering.
+        Returns:
+            (filter_str, is_complex_split)
+        Pipelines:
+          - 16:9 widescreen: Face/active-speaker tracked vertical crop (or centered crop if no face).
+          - 9:16 vertical: Direct passthrough with padding/scaling as needed.
+          - 1:1 square or 4:3 standard: Smart Gaussian-blurred background mirror.
+        """
+        algo = scale_algo or getattr(settings, "VIDEO_SCALE_ALGORITHM", "lanczos")
+        mode = (aspect_ratio_mode or "auto").lower()
+
+        if mode == "auto":
+            _, _, detected_mode = probe_aspect_ratio(source_path)
+            mode = detected_mode
+
+        if mode in ("1:1", "4:3", "blurred_mirror", "mirror"):
+            # Smart Gaussian-blurred background mirror
+            filter_str = (
+                "split [main][bg]; "
+                f"[bg] scale=1080:1920:force_original_aspect_ratio=increase:flags={algo},crop=1080:1920,gblur=sigma=25 [blurred]; "
+                f"[main] scale=1080:-2:flags={algo} [fg]; "
+                "[blurred][fg] overlay=(W-w)/2:(H-h)/2,setsar=1"
+            )
+            return filter_str, True
+
+        elif mode in ("9:16", "vertical", "passthrough"):
+            # Direct vertical passthrough with scaling and center padding
+            filter_str = (
+                f"scale=1080:1920:force_original_aspect_ratio=decrease:flags={algo},"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1"
+            )
+            return filter_str, False
+
+        else:
+            # 16:9 widescreen or default: active crop plan
+            if crop_plan is not None:
+                return crop_plan.to_ffmpeg_filter(scale_algo=algo), False
+            else:
+                return (
+                    f"crop=min(iw\\,ih*9/16):ih:(iw-ow)/2:0,scale=1080:1920:flags={algo},setsar=1",
+                    False,
+                )
+
+    def _build_filter_complex(
+        self,
+        base_filter: str,
+        broll_idx: Optional[int] = None,
+        broll_start_sec: float = 1.0,
+        broll_duration_sec: float = 2.5,
+        watermark_img_idx: Optional[int] = None,
+        watermark_scale: float = 0.18,
+        watermark_fade: str = "none",
+        watermark_fade_sec: float = 1.0,
+        watermark_opacity: float = 0.85,
+        duration_sec: float = 30.0,
+        watermark_anchor: str = "top_right",
+        watermark_margin_x: int = 30,
+        watermark_margin_y: int = 40,
+        dt_wm: Optional[str] = None,
+        has_subs: bool = False,
+        subtitle_ass_path: Optional[Path] = None,
+        dt_hook: Optional[str] = None,
+        dt_cta: Optional[str] = None,
+        cover_img_idx: Optional[int] = None,
+        music_idx: Optional[int] = None,
+        normalize_audio: bool = True,
+        audio_filter_arg: str = "anull",
+        mastering_engine: Optional[AudioMasteringEngine] = None,
+        fonts_dir: Optional[Path] = None,
+    ) -> str:
+        """
+        Builds the unified filter_complex parameter string for zero generational loss.
+        Includes fontsdir for the ASS subtitle filter (Enhancement 6) and cover frame overlay (Enhancement 7).
+        """
+        fc_parts = []
+        fc_parts.append(f"[0:v]{base_filter}[base]")
+        current_v = "[base]"
+
+        if cover_img_idx is not None:
+            fc_parts.append(
+                f"[{cover_img_idx}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[cov_scaled]"
+            )
+            fc_parts.append(f"{current_v}[cov_scaled]overlay=0:0:enable='between(t,0,0.033)'[v_covered]")
+            current_v = "[v_covered]"
+
+        if broll_idx is not None:
+            fc_parts.append(f"[{broll_idx}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[broll_scaled]")
+            broll_end = broll_start_sec + broll_duration_sec
+            fc_parts.append(f"{current_v}[broll_scaled]overlay=0:0:enable='between(t,{broll_start_sec:g},{broll_end:g})'[overlaid]")
+            current_v = "[overlaid]"
+
+        if watermark_img_idx is not None:
+            raw_w = max(40, round(1080 * watermark_scale))
+            wm_w = raw_w if raw_w % 2 == 0 else raw_w + 1
+            wm_flt = [f"scale={wm_w}:-2", "format=rgba"]
+            fade_dur = min(watermark_fade_sec, duration_sec / 2.0)
+            if watermark_fade == "fade_in":
+                wm_flt.append(f"fade=t=in:st=0:d={fade_dur:.2f}:alpha=1")
+            elif watermark_fade == "fade_out":
+                st = max(0.0, duration_sec - fade_dur)
+                wm_flt.append(f"fade=t=out:st={st:.2f}:d={fade_dur:.2f}:alpha=1")
+            elif watermark_fade == "fade_in_out":
+                st = max(0.0, duration_sec - fade_dur)
+                wm_flt.append(f"fade=t=in:st=0:d={fade_dur:.2f}:alpha=1,fade=t=out:st={st:.2f}:d={fade_dur:.2f}:alpha=1")
+            wm_flt.append(f"colorchannelmixer=aa={watermark_opacity}")
+            wm_filter_str = ",".join(wm_flt)
+            fc_parts.append(f"[{watermark_img_idx}:v]{wm_filter_str}[wm_scaled]")
+            x_pos, y_pos = compute_watermark_position(watermark_anchor, watermark_margin_x, watermark_margin_y, is_drawtext=False)
+            fc_parts.append(f"{current_v}[wm_scaled]overlay={x_pos}:{y_pos}:format=auto[v_wm_img]")
+            current_v = "[v_wm_img]"
+
+        if dt_wm:
+            fc_parts.append(f"{current_v}{dt_wm}[v_wm_txt]")
+            current_v = "[v_wm_txt]"
+
+        if has_subs and subtitle_ass_path:
+            ass_filter = get_ass_filter_string(subtitle_ass_path, fonts_dir=fonts_dir)
+            fc_parts.append(f"{current_v}{ass_filter}[v_sub]")
+            current_v = "[v_sub]"
+
+        if dt_hook:
+            fc_parts.append(f"{current_v}{dt_hook}[v_hook]")
+            current_v = "[v_hook]"
+
+        if dt_cta:
+            fc_parts.append(f"{current_v}{dt_cta}[v_cta]")
+            current_v = "[v_cta]"
+
+        fc_parts.append(f"{current_v}null[v_out]")
+
+        if music_idx is not None and normalize_audio and mastering_engine:
+            ducking_fc = mastering_engine.build_sidechain_ducking_filter_graph(
+                speech_input_label="0:a",
+                music_input_label=f"{music_idx}:a",
+                output_label="a_out",
+            )
+            fc_parts.append(ducking_fc)
+        else:
+            fc_parts.append(f"[0:a]{audio_filter_arg}[a_out]")
+
+        return ";".join(fc_parts)
 
     def render_short(
         self,
@@ -164,20 +399,47 @@ class VideoCompositor:
         broll_start_sec: float = 1.0,
         broll_duration_sec: float = 2.5,
         music_track_path: Optional[Path] = None,
+        force_re_render: bool = False,
+        watermark_image_path: Optional[Path] = None,
+        watermark_text: Optional[str] = None,
+        watermark_anchor: str = "top_right",
+        watermark_opacity: float = 0.85,
+        watermark_scale: float = 0.18,
+        watermark_margin_x: int = 30,
+        watermark_margin_y: int = 40,
+        watermark_fade: str = "none",
+        watermark_fade_sec: float = 1.0,
+        cta_overlay_text: Optional[str] = None,
+        cta_duration_sec: float = 3.5,
+        hook_duration_sec: float = 3.0,
+        aspect_ratio_mode: Optional[str] = "auto",
+        cover_frame_sec: Optional[float] = None,
+        cover_frame_image_path: Optional[Path] = None,
+        fonts_dir: Optional[Path] = None,
     ) -> Path:
         """
         Renders a finished 9:16 portrait Short video using FFmpeg.
         Supports per-video overrides for CRF, preset, scale algorithm, audio bitrate, FPS,
-        optional visual hook overlay during the opening 3 seconds, optional B-roll stock footage cutaways,
+        multi-aspect ratio adaptation (16:9 crop, 9:16 passthrough, 1:1/4:3 blurred mirror),
+        optional visual hook overlay, optional footer CTA overlay, dual-engine watermarking
+        (image + text handle with 9-point grid), optional B-roll stock footage cutaways,
+        sub-frame AV lip-sync (-avoid_negative_ts make_zero -async 1),
         and studio-grade audio mastering with speech-activated sidechain ducking over background music.
+        Compiled into a single FFmpeg pass with zero generational loss.
         """
         output_path = self.output_dir / output_filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_path.exists() and output_path.stat().st_size > 0:
+        if not force_re_render and output_path.exists() and output_path.stat().st_size > 0:
             val = self.validate_render(output_path)
             if val.is_valid:
                 logger.info("Valid rendered file already exists at %s, skipping FFmpeg re-render.", output_path)
                 return output_path
+        elif force_re_render and output_path.exists():
+            try:
+                output_path.unlink()
+                logger.info("Force re-render requested: unlinked existing artifact at %s", output_path)
+            except Exception as e:
+                logger.warning("Could not unlink existing render file: %s", e)
 
         if not Path(source_video_path).exists():
             raise FileNotFoundError(f"Master source video not found at: {source_video_path}")
@@ -185,103 +447,189 @@ class VideoCompositor:
         start_sec = max(0.0, start_ms / 1000.0)
         duration_sec = max(1.0, (end_ms - start_ms) / 1000.0)
 
-        # Build audio mastering filter chain (Studio Mastering: HPF 80Hz + Noise Gate + EBU R128)
+        # Build audio mastering filter chain (Studio Mastering: HPF 80Hz + 3kHz Presence + Noise Gate + EBU R128)
         mastering_engine = AudioMasteringEngine()
         if normalize_audio:
             hpf_hz = mastering_engine.hpf_cutoff_hz
+            presence_hz = getattr(mastering_engine, "vocal_presence_freq_hz", 3000)
+            presence_gain = getattr(mastering_engine, "vocal_presence_gain_db", 2.5)
             target_lufs = mastering_engine.target_lufs
             tp = mastering_engine.true_peak_dbfs
             audio_filter_arg = (
                 f"highpass=f={hpf_hz}:poles=2,"
+                f"equalizer=f={presence_hz}:t=q:w=1.0:g={presence_gain},"
                 "agate=range=-24dB:threshold=-36dB:attack=10:release=120,"
                 f"loudnorm=I={target_lufs}:TP={tp}:LRA=7"
             )
         else:
             audio_filter_arg = "anull"
 
-        hook_temp_file = None
+        temp_files: List[Path] = []
         has_broll = broll_video_path is not None and Path(broll_video_path).exists()
         has_music = music_track_path is not None and Path(music_track_path).exists()
+        has_watermark_image = watermark_image_path is not None and Path(watermark_image_path).exists()
+        if watermark_image_path is not None and not has_watermark_image:
+            logger.warning("Watermark image path does not exist on disk, skipping overlay: %s", watermark_image_path)
+        has_watermark_text = bool(watermark_text and watermark_text.strip())
+        has_subs = subtitle_ass_path is not None and Path(subtitle_ass_path).exists()
+        has_hook = bool(hook_overlay_text and hook_overlay_text.strip())
+        has_cta = bool(cta_overlay_text and cta_overlay_text.strip())
 
-        if has_broll or has_music:
-            # Multi-input filter_complex for B-roll overlays and/or background music ducking
-            fc_parts = []
-            fc_parts.append(f"[0:v]{crop_plan.to_ffmpeg_filter(scale_algo=scale_algo)}[base]")
-            current_v = "[base]"
+        font_file = get_default_fontfile()
+        font_opt = f"fontfile='{font_file}':" if font_file else ""
 
-            if hook_overlay_text and hook_overlay_text.strip():
-                try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="_hook.txt") as tf:
-                        tf.write(hook_overlay_text.strip())
-                        hook_temp_file = Path(tf.name)
-
-                    esc_txt_path = escape_ffmpeg_filter_path(hook_temp_file)
-                    font_file = get_default_fontfile()
-                    font_opt = f"fontfile='{font_file}':" if font_file else ""
-                    drawtext_filter = (
-                        f"drawtext={font_opt}textfile='{esc_txt_path}':expansion=none:"
-                        f"enable='between(t,0,3)':fontcolor=yellow:fontsize=52:"
-                        f"box=1:boxcolor=black@0.75:boxborderw=14:x=(w-text_w)/2:y=h*0.22"
-                    )
-                    fc_parts.append(f"{current_v}{drawtext_filter}[hooked]")
-                    current_v = "[hooked]"
-                except Exception as e:
-                    logger.warning("Failed to configure hook overlay textfile: %s", e)
-
-            # B-roll scaling and cropping to 1080:1920 canvas
-            if has_broll:
-                fc_parts.append("[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[broll_scaled]")
-                broll_end = broll_start_sec + broll_duration_sec
-                fc_parts.append(f"{current_v}[broll_scaled]overlay=0:0:enable='between(t,{broll_start_sec},{broll_end})'[overlaid]")
-                current_v = "[overlaid]"
-
-            if subtitle_ass_path and subtitle_ass_path.exists():
-                escaped_sub = escape_ffmpeg_filter_path(subtitle_ass_path)
-                fc_parts.append(f"{current_v}ass='{escaped_sub}'[v_out]")
-            else:
-                fc_parts.append(f"{current_v}null[v_out]")
-
-            if has_music and normalize_audio:
-                music_input_idx = 2 if has_broll else 1
-                ducking_fc = mastering_engine.build_sidechain_ducking_filter_graph(
-                    speech_input_label="0:a",
-                    music_input_label=f"{music_input_idx}:a",
-                    output_label="a_out",
+        # Prepare Hook Overlay drawtext filter
+        dt_hook = None
+        if has_hook:
+            try:
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="_hook.txt") as tf:
+                    tf.write(hook_overlay_text.strip())
+                    hk_path = Path(tf.name)
+                    temp_files.append(hk_path)
+                esc_hk = escape_ffmpeg_filter_path(hk_path)
+                dt_hook = (
+                    f"drawtext={font_opt}textfile='{esc_hk}':expansion=none:"
+                    f"enable='between(t,0,{hook_duration_sec:g})':fontcolor=yellow:fontsize=52:"
+                    f"box=1:boxcolor=black@0.75:boxborderw=14:x=(w-text_w)/2:y=h*0.12"
                 )
-                fc_parts.append(ducking_fc)
-            else:
-                fc_parts.append(f"[0:a]{audio_filter_arg}[a_out]")
+            except Exception as e:
+                logger.warning("Failed to configure hook overlay textfile: %s", e)
 
-            filter_complex_arg = ";".join(fc_parts)
+        # Prepare Footer CTA drawtext filter
+        dt_cta = None
+        if has_cta:
+            try:
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="_cta.txt") as tf:
+                    tf.write(cta_overlay_text.strip())
+                    cta_path = Path(tf.name)
+                    temp_files.append(cta_path)
+                esc_cta = escape_ffmpeg_filter_path(cta_path)
+                cta_st = max(0.0, duration_sec - cta_duration_sec)
+                dt_cta = (
+                    f"drawtext={font_opt}textfile='{esc_cta}':expansion=none:"
+                    f"enable='between(t,{cta_st:g},{duration_sec:g})':fontcolor=white:fontsize=42:"
+                    f"box=1:boxcolor=red@0.85:boxborderw=12:x=(w-text_w)/2:y=h-240"
+                )
+            except Exception as e:
+                logger.warning("Failed to configure CTA overlay textfile: %s", e)
+
+        # Prepare Text Watermark Handle drawtext filter
+        dt_wm = None
+        if has_watermark_text:
+            try:
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="_wm.txt") as tf:
+                    tf.write(watermark_text.strip())
+                    wm_path = Path(tf.name)
+                    temp_files.append(wm_path)
+                esc_wm = escape_ffmpeg_filter_path(wm_path)
+                wm_x, wm_y = compute_watermark_position(watermark_anchor, watermark_margin_x, watermark_margin_y, is_drawtext=True)
+                if watermark_fade == "fade_in":
+                    alpha_expr = f"min(1,t/{watermark_fade_sec:.2f})*{watermark_opacity}"
+                elif watermark_fade == "fade_out":
+                    alpha_expr = f"max(0,({duration_sec:.2f}-t)/{watermark_fade_sec:.2f})*{watermark_opacity}"
+                elif watermark_fade == "fade_in_out":
+                    alpha_expr = f"min(1,min(t/{watermark_fade_sec:.2f},max(0,({duration_sec:.2f}-t)/{watermark_fade_sec:.2f})))*{watermark_opacity}"
+                else:
+                    alpha_expr = f"{watermark_opacity}"
+                dt_wm = (
+                    f"drawtext={font_opt}textfile='{esc_wm}':expansion=none:fontsize=36:fontcolor=white:"
+                    f"box=1:boxcolor=black@0.6:boxborderw=8:x={wm_x}:y={wm_y}:alpha='{alpha_expr}'"
+                )
+            except Exception as e:
+                logger.warning("Failed to configure text watermark: %s", e)
+
+        # Determine aspect ratio filter
+        base_filter, is_complex_split = self.build_aspect_ratio_filter(
+            source_path=source_video_path,
+            crop_plan=crop_plan,
+            aspect_ratio_mode=aspect_ratio_mode,
+            scale_algo=scale_algo,
+        )
+
+        # Handle custom cover frame / thumbnail injection (Enhancement 7)
+        if cover_frame_sec is not None and not cover_frame_image_path:
+            try:
+                with tempfile.NamedTemporaryFile("w", delete=False, suffix="_cover.jpg") as tf:
+                    cov_tmp = Path(tf.name)
+                    temp_files.append(cov_tmp)
+                cov_ts = start_sec + float(cover_frame_sec)
+                cmd_cov = [
+                    "ffmpeg", "-y",
+                    "-ss", f"{cov_ts:.3f}",
+                    "-i", str(source_video_path),
+                    "-frames:v", "1",
+                    "-q:v", "2",
+                    str(cov_tmp),
+                ]
+                res_cov = SubprocessWatchdog.run(cmd_cov, timeout_sec=15.0, check=False)
+                if res_cov.returncode == 0 and cov_tmp.exists():
+                    cover_frame_image_path = cov_tmp
+            except Exception as e:
+                logger.warning("Failed to extract cover frame at %s: %s", cover_frame_sec, e)
+
+        has_cover = cover_frame_image_path is not None and Path(cover_frame_image_path).exists()
+        is_multi_input = has_broll or has_music or has_watermark_image or is_complex_split or has_cover
+        input_args = ["-ss", f"{start_sec:.3f}", "-i", str(source_video_path)]
+        next_idx = 1
+        cover_img_idx = None
+        if has_cover:
+            input_args.extend(["-i", str(cover_frame_image_path)])
+            cover_img_idx = next_idx
+            next_idx += 1
+        broll_idx = None
+        if has_broll:
+            input_args.extend(["-t", f"{duration_sec:.3f}", "-i", str(broll_video_path)])
+            broll_idx = next_idx
+            next_idx += 1
+        watermark_img_idx = None
+        if has_watermark_image:
+            input_args.extend(["-i", str(watermark_image_path)])
+            watermark_img_idx = next_idx
+            next_idx += 1
+        music_idx = None
+        if has_music:
+            input_args.extend(["-stream_loop", "-1", "-i", str(music_track_path)])
+            music_idx = next_idx
+            next_idx += 1
+
+        if is_multi_input:
+            filter_complex_arg = self._build_filter_complex(
+                base_filter=base_filter,
+                broll_idx=broll_idx,
+                broll_start_sec=broll_start_sec,
+                broll_duration_sec=broll_duration_sec,
+                watermark_img_idx=watermark_img_idx,
+                watermark_scale=watermark_scale,
+                watermark_fade=watermark_fade,
+                watermark_fade_sec=watermark_fade_sec,
+                watermark_opacity=watermark_opacity,
+                duration_sec=duration_sec,
+                watermark_anchor=watermark_anchor,
+                watermark_margin_x=watermark_margin_x,
+                watermark_margin_y=watermark_margin_y,
+                dt_wm=dt_wm,
+                has_subs=has_subs,
+                subtitle_ass_path=subtitle_ass_path,
+                dt_hook=dt_hook,
+                dt_cta=dt_cta,
+                cover_img_idx=cover_img_idx,
+                music_idx=music_idx,
+                normalize_audio=normalize_audio,
+                audio_filter_arg=audio_filter_arg,
+                mastering_engine=mastering_engine,
+                fonts_dir=fonts_dir,
+            )
         else:
-            # Build standard single-input video filter chain
-            v_filters = []
-            v_filters.append(crop_plan.to_ffmpeg_filter(scale_algo=scale_algo))
-
-            if hook_overlay_text and hook_overlay_text.strip():
-                try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="_hook.txt") as tf:
-                        tf.write(hook_overlay_text.strip())
-                        hook_temp_file = Path(tf.name)
-
-                    esc_txt_path = escape_ffmpeg_filter_path(hook_temp_file)
-                    font_file = get_default_fontfile()
-                    font_opt = f"fontfile='{font_file}':" if font_file else ""
-                    drawtext_filter = (
-                        f"drawtext={font_opt}textfile='{esc_txt_path}':expansion=none:"
-                        f"enable='between(t,0,3)':fontcolor=yellow:fontsize=52:"
-                        f"box=1:boxcolor=black@0.75:boxborderw=14:x=(w-text_w)/2:y=h*0.22"
-                    )
-                    v_filters.append(drawtext_filter)
-                except Exception as e:
-                    logger.warning("Failed to configure hook overlay textfile: %s", e)
-
-            if subtitle_ass_path and subtitle_ass_path.exists():
-                escaped_sub = escape_ffmpeg_filter_path(subtitle_ass_path)
-                v_filters.append(f"ass='{escaped_sub}'")
-
+            # Single-input filter chain
+            v_filters = [base_filter]
+            if dt_wm:
+                v_filters.append(dt_wm)
+            if has_subs and subtitle_ass_path:
+                v_filters.append(get_ass_filter_string(subtitle_ass_path, fonts_dir=fonts_dir))
+            if dt_hook:
+                v_filters.append(dt_hook)
+            if dt_cta:
+                v_filters.append(dt_cta)
             video_filter_arg = ",".join(v_filters)
 
         encoder_name, encoder_flags = get_best_video_encoder()
@@ -304,23 +652,17 @@ class VideoCompositor:
             elif "amf" in encoder_name:
                 active_flags = ["-quality", "quality", "-rc", "cqp", "-qp_p", eff_crf]
 
-        if has_broll or has_music:
+        if is_multi_input:
             cmd = [
                 "ffmpeg",
                 "-y",
-                "-ss", f"{start_sec:.3f}",
-                "-i", str(source_video_path),
-            ]
-            if has_broll:
-                cmd.extend(["-t", f"{duration_sec:.3f}", "-i", str(broll_video_path)])
-            if has_music:
-                cmd.extend(["-stream_loop", "-1", "-i", str(music_track_path)])
-
-            cmd.extend([
+                *input_args,
                 "-t", f"{duration_sec:.3f}",
                 "-filter_complex", filter_complex_arg,
                 "-map", "[v_out]",
                 "-map", "[a_out]",
+                "-avoid_negative_ts", "make_zero",
+                "-async", "1",
                 "-r", eff_fps,
                 "-c:v", encoder_name,
                 *active_flags,
@@ -330,7 +672,7 @@ class VideoCompositor:
                 "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart",
                 str(output_path),
-            ])
+            ]
         else:
             cmd = [
                 "ffmpeg",
@@ -340,6 +682,8 @@ class VideoCompositor:
                 "-t", f"{duration_sec:.3f}",
                 "-vf", video_filter_arg,
                 "-af", audio_filter_arg,
+                "-avoid_negative_ts", "make_zero",
+                "-async", "1",
                 "-r", eff_fps,
                 "-c:v", encoder_name,
                 *active_flags,
@@ -360,23 +704,17 @@ class VideoCompositor:
                     global _CACHED_ENCODER
                     _CACHED_ENCODER = ("libx264", ["-preset", fallback_preset, "-crf", fallback_crf, "-profile:v", "high", "-level", "4.2"])
                     logger.warning("Hardware encoder %s failed. Cached libx264 for future renders. Retrying with CPU libx264...", encoder_name)
-                    if has_broll or has_music:
+                    if is_multi_input:
                         cmd_fallback = [
                             "ffmpeg",
                             "-y",
-                            "-ss", f"{start_sec:.3f}",
-                            "-i", str(source_video_path),
-                        ]
-                        if has_broll:
-                            cmd_fallback.extend(["-t", f"{duration_sec:.3f}", "-i", str(broll_video_path)])
-                        if has_music:
-                            cmd_fallback.extend(["-stream_loop", "-1", "-i", str(music_track_path)])
-
-                        cmd_fallback.extend([
+                            *input_args,
                             "-t", f"{duration_sec:.3f}",
                             "-filter_complex", filter_complex_arg,
                             "-map", "[v_out]",
                             "-map", "[a_out]",
+                            "-avoid_negative_ts", "make_zero",
+                            "-async", "1",
                             "-r", eff_fps,
                             "-c:v", "libx264",
                             "-preset", fallback_preset,
@@ -389,7 +727,7 @@ class VideoCompositor:
                             "-pix_fmt", "yuv420p",
                             "-movflags", "+faststart",
                             str(output_path),
-                        ])
+                        ]
                     else:
                         cmd_fallback = [
                             "ffmpeg",
@@ -399,6 +737,8 @@ class VideoCompositor:
                             "-t", f"{duration_sec:.3f}",
                             "-vf", video_filter_arg,
                             "-af", audio_filter_arg,
+                            "-avoid_negative_ts", "make_zero",
+                            "-async", "1",
                             "-r", eff_fps,
                             "-c:v", "libx264",
                             "-preset", fallback_preset,
@@ -421,11 +761,12 @@ class VideoCompositor:
             logger.info("Render completed successfully: %s", output_path)
             return output_path
         finally:
-            if hook_temp_file and hook_temp_file.exists():
-                try:
-                    hook_temp_file.unlink()
-                except Exception:
-                    pass
+            for tf in temp_files:
+                if tf and tf.exists():
+                    try:
+                        tf.unlink()
+                    except Exception:
+                        pass
 
 
     def validate_render(self, video_path: Path) -> RenderValidationResult:
@@ -513,3 +854,47 @@ class VideoCompositor:
                 file_size_bytes=video_path.stat().st_size,
                 error=f"JSON parsing error: {e}",
             )
+
+    def render_clip(self, *args, **kwargs) -> Path:
+        """
+        Alias for render_short supporting custom cover frame and thumbnail injection (Enhancement 7).
+        """
+        return self.render_short(*args, **kwargs)
+
+    def inject_cover_frame(
+        self,
+        video_path: Path,
+        cover_image_path: Path,
+        output_path: Optional[Path] = None,
+    ) -> Path:
+        """
+        Injects a cover frame as frame 0 (first 0.033s) into an existing rendered MP4 video (Enhancement 7).
+        """
+        video_p = Path(video_path)
+        target_p = Path(output_path) if output_path else video_p.parent / f"{video_p.stem}_cover.mp4"
+        temp_out = target_p.parent / f"{target_p.stem}_tmp_cov.mp4"
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(video_p),
+            "-i", str(cover_image_path),
+            "-filter_complex",
+            "[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[cov];"
+            "[0:v][cov]overlay=0:0:enable='between(t,0,0.033)'[outv]",
+            "-map", "[outv]",
+            "-map", "0:a?",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-c:a", "copy",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(temp_out),
+        ]
+        res = SubprocessWatchdog.run(cmd, timeout_sec=60.0, check=False)
+        if res.returncode != 0 or not temp_out.exists():
+            if temp_out.exists():
+                temp_out.unlink(missing_ok=True)
+            raise RuntimeError(f"Failed to inject cover frame into video: {getattr(res, 'stderr', '')}")
+        from shorts_engine.utils.fs import atomic_replace
+        atomic_replace(temp_out, target_p)
+        return target_p
+

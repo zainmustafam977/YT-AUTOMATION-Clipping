@@ -5,7 +5,6 @@ response latency, and temporary cooldown states for each individual configured A
 Persists state to storage/api_key_usage.json.
 """
 
-import os
 import json
 import time
 import hashlib

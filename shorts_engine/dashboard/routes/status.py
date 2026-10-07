@@ -15,7 +15,6 @@ import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import subprocess
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse, Response
@@ -36,7 +35,6 @@ from shorts_engine.orchestration.runner import (
     PipelineRunner,
     get_video_lock,
     release_video_lock,
-    register_cancellation,
     clear_cancellation,
 )
 from shorts_engine.services.worker.runner import reconcile_stale_claims
@@ -252,19 +250,53 @@ def compute_pipeline_stages(
     return stages
 
 
-def build_recent_videos_payload(db: Session, limit: int = 25) -> List[Dict[str, Any]]:
+def build_recent_videos_payload(
+    db: Session,
+    limit: int = 50,
+    date_filter: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Builds an enriched, batched list of recent source videos with thumbnails,
-    origin detection, child clip breakdown, timing telemetry, and candidate summaries.
+    origin detection, child clip breakdown, timing telemetry, candidate summaries,
+    and optional date-range filtering.
     Executes exactly 2 queries regardless of video count (eliminating N+1 query loops).
     """
-    recent_videos_raw = (
+    from datetime import timedelta
+
+    query = (
         db.query(SourceVideo)
         .options(joinedload(SourceVideo.channel), joinedload(SourceVideo.transcript))
-        .order_by(SourceVideo.updated_at.desc())
-        .limit(limit)
-        .all()
     )
+
+    now_naive = datetime.utcnow()
+    df = (date_filter or "all").lower()
+
+    if df == "today":
+        start_of_day = now_naive.replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.filter(SourceVideo.created_at >= start_of_day)
+    elif df == "yesterday":
+        start_of_today = now_naive.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_yesterday = start_of_today - timedelta(days=1)
+        query = query.filter(SourceVideo.created_at >= start_of_yesterday, SourceVideo.created_at < start_of_today)
+    elif df == "7days":
+        seven_days_ago = now_naive - timedelta(days=7)
+        query = query.filter(SourceVideo.created_at >= seven_days_ago)
+    elif df == "30days":
+        thirty_days_ago = now_naive - timedelta(days=30)
+        query = query.filter(SourceVideo.created_at >= thirty_days_ago)
+    elif df == "custom" and start_date:
+        try:
+            s_dt = datetime.fromisoformat(start_date.split("T")[0])
+            query = query.filter(SourceVideo.created_at >= s_dt)
+            if end_date:
+                e_dt = datetime.fromisoformat(end_date.split("T")[0]) + timedelta(days=1)
+                query = query.filter(SourceVideo.created_at < e_dt)
+        except Exception as e:
+            logger.warning("Invalid custom date range (%s - %s): %s", start_date, end_date, e)
+
+    recent_videos_raw = query.order_by(SourceVideo.updated_at.desc()).limit(limit).all()
     if not recent_videos_raw:
         return []
 
@@ -553,6 +585,9 @@ def build_recent_videos_payload(db: Session, limit: int = 25) -> List[Dict[str, 
 @router.get("/", response_class=HTMLResponse, summary="Pipeline status dashboard")
 def dashboard_status(
     request: Request,
+    date_filter: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_viewer),
 ):
@@ -566,7 +601,13 @@ def dashboard_status(
     api_key_metrics = usage_tracker.get_per_key_metrics()
 
     channels = db.query(Channel).order_by(Channel.name.asc()).all()
-    recent_videos = build_recent_videos_payload(db, limit=25)
+    recent_videos = build_recent_videos_payload(
+        db,
+        limit=50,
+        date_filter=date_filter,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     ctx = {
         "request": request,
@@ -574,6 +615,9 @@ def dashboard_status(
         "csrf_token": get_csrf_token(request),
         "channels": channels,
         "recent_videos": recent_videos,
+        "current_date_filter": date_filter or "all",
+        "current_start_date": start_date or "",
+        "current_end_date": end_date or "",
         "total_videos": db.query(SourceVideo).count(),
         "in_progress": db.query(SourceVideo).filter(
             SourceVideo.status.in_([
@@ -600,6 +644,20 @@ def dashboard_status(
         "settings": settings,
     }
     return templates.TemplateResponse(request=request, name="status.html", context=ctx)
+
+
+@router.get("/api/estimate-clips", summary="Calculate optimal clip limits & model for video duration")
+def api_estimate_clips(
+    duration_sec: float,
+    min_dur: float = 30.0,
+    max_dur: float = 60.0,
+):
+    from shorts_engine.services.clip_selection.estimator import estimate_optimal_clip_count
+    return estimate_optimal_clip_count(
+        video_duration_sec=duration_sec,
+        target_duration_min=min_dur,
+        target_duration_max=max_dur,
+    )
 
 
 @router.post("/process-video", summary="Manually trigger pipeline on any YouTube URL or ID")
@@ -1498,10 +1556,14 @@ def check_video_status(
         else:
             recommended_tier = "⚡ Tier 1: Groq Ultra-Fast (<15m)"
 
+    from shorts_engine.services.clip_selection.estimator import estimate_optimal_clip_count
+    clip_estimate = estimate_optimal_clip_count(dur_sec) if dur_sec > 0 else None
+
     return {
         "is_valid": True,
         "exists": True,
         "video_id": clean_id,
+        "clip_estimate": clip_estimate,
         "title": v.title or f"YouTube Video ({clean_id})",
         "channel_name": v.channel.name if v.channel else "Default Channel",
         "channel": {
@@ -1553,6 +1615,93 @@ def api_status(
         "quota_subtext": api_summary["subtext"],
         "api_key_metrics": usage_tracker.get_per_key_metrics(),
     }
+
+
+@router.get("/api/status/summary", summary="Status summary JSON endpoint for React SPA")
+def api_status_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+):
+    storage_stats = get_storage_stats()
+    per_key = usage_tracker.get_per_key_metrics()
+    api_keys = []
+    for k in per_key:
+        api_keys.append({
+            "provider": k.get("provider", "LLM"),
+            "model": k.get("model", ""),
+            "rpm_used": k.get("rpm_used", 0),
+            "rpm_limit": k.get("rpm_limit", 15),
+            "tpm_used": k.get("tpm_used", 0),
+            "tpm_limit": k.get("tpm_limit", 1000000),
+            "latency_ms": k.get("latency_ms", 0),
+            "status": "HEALTHY" if k.get("is_active", True) else "DEGRADED",
+        })
+
+    recent_vids = (
+        db.query(SourceVideo)
+        .order_by(SourceVideo.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    pipelines = []
+    for v in recent_vids:
+        pipelines.append({
+            "id": v.id,
+            "youtube_video_id": v.youtube_video_id,
+            "title": v.title,
+            "status": v.status.value,
+            "created_at": v.created_at.isoformat() if v.created_at else "",
+            "updated_at": v.updated_at.isoformat() if v.updated_at else None,
+        })
+
+    return {
+        "api_keys": api_keys,
+        "pipelines": pipelines,
+        "disk_used_gb": storage_stats.get("used_gb", 0.0),
+        "disk_total_gb": storage_stats.get("total_gb", 100.0),
+        "clip_count": db.query(Clip).count(),
+        "published_count": db.query(Clip).filter_by(status=ClipStatus.PUBLISHED).count(),
+        "pending_count": db.query(Clip).filter_by(status=ClipStatus.WAITING_APPROVAL).count(),
+    }
+
+
+@router.post("/api/pipeline/{video_id}/cancel", summary="Cancel pipeline from React SPA")
+def api_cancel_pipeline(
+    video_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    from shorts_engine.orchestration.runner import signal_cancellation
+    v = db.query(SourceVideo).filter((SourceVideo.id == video_id) | (SourceVideo.youtube_video_id == video_id)).first()
+    if v:
+        signal_cancellation(v.youtube_video_id)
+        signal_cancellation(v.id)
+    return {"status": "cancelled", "video_id": video_id}
+
+
+@router.post("/api/ingest", summary="Ingest video from React SPA")
+def api_ingest_video(
+    request: Request,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    url = (payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="Video URL/path cannot be empty")
+    runtime_overrides = {}
+    if "override_min_segments" in payload:
+        runtime_overrides["min_segments"] = payload["override_min_segments"]
+    if "override_max_segments" in payload:
+        runtime_overrides["max_segments"] = payload["override_max_segments"]
+
+    t = threading.Thread(
+        target=_run_pipeline_background,
+        args=(url, payload.get("channel_id"), False, "hormozi_viral", runtime_overrides or None),
+        daemon=True,
+    )
+    t.start()
+    return {"status": "started", "video": url}
 
 
 @router.post("/api/analytics/sync", summary="Synchronize YouTube analytics for all published clips")

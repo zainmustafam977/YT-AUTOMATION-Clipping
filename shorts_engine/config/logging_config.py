@@ -82,8 +82,8 @@ def setup_logging(level: int = logging.INFO) -> None:
 
     # Propagate uvicorn and app loggers
     for log_name in ["shorts_engine", "uvicorn", "uvicorn.access", "uvicorn.error"]:
-        l = logging.getLogger(log_name)
-        l.setLevel(level)
+        log_inst = logging.getLogger(log_name)
+        log_inst.setLevel(level)
 
 
 def reload_runtime_settings() -> Dict[str, Any]:
@@ -111,7 +111,7 @@ def reload_runtime_settings() -> Dict[str, Any]:
                 try:
                     if val is None:
                         converted_val = None
-                    elif target_type == bool and isinstance(val, str):
+                    elif target_type is bool and isinstance(val, str):
                         converted_val = val.lower() in ("true", "1", "yes", "on")
                     elif isinstance(val, list):
                         converted_val = [str(x) for x in val]

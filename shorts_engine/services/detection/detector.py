@@ -8,7 +8,6 @@ from typing import Optional, Callable
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from shorts_engine.config.settings import settings
 from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus
 from shorts_engine.services.detection.rss_poller import RSSPoller, RSSPollLoop
 from shorts_engine.services.detection.websub import WebSubSubscriber, WebSubLeaseRenewer

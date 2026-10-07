@@ -1,0 +1,327 @@
+<original_task>
+Task: # Shorts Engine — Final Implementation Plan (Enterprise Grade)
+
+**Scope:** Docked master-detail Publishing Studio inside the Review Queue, identity-first multi-channel YouTube OAuth, reliable scheduled publishing with a quota ledger, Windows Explorer fix, and the operator setup guide.
+
+**Working directory:** `d:/Projects/YT AUTOMATION`
+**Delivery model:** Two phases with a hard gate between them. Phase 2 does not start until every Phase 1 acceptance item passes and the report is delivered.
+
+---
+
+## 0. Engineering Principles (binding on all work)
+
+1. **Reproduce, then fix.** Every bug is reproduced with captured evidence (logs, exact arguments) and a root cause before code changes. No fixes based on theory.
+2. **Verify external facts.** Platform behavior stated in this plan (YouTube API policy, quota, scopes, Win32 behavior) is a claim to confirm against current official documentation. Report any discrepancy in the final report; do not silently adapt.
+3. **Fail closed and visible.** Any ambiguity about *which channel* an action targets stops the action and asks the operator. Nothing rebinds credentials or reroutes uploads silently.
+4. **One correct mechanism over fallback cascades.** Where a fallback is unavoidable, it is logged and visible to the operator.
+5. **Idempotent and recoverable.** Every long-running or external operation survives a crash or restart without duplicating uploads or losing work.
+6. **Auditable.** Credential changes, channel bindings, and publish attempts are written to an append-only audit log.
+7. **Parity.** Every UI change ships in both the Jinja2 dashboard and the React 19 SPA, unless stated otherwise.
+8. **Tests are the definition of done.** Failures are reported honestly. Tests are never weakened to pass.
+9. **No secrets in the repo, logs, or screenshots.** Tokens, auth codes, PKCE verifiers, client secrets, and the encryption key are never logged or committed.
+
+---
+
+## 1. Architecture Overview
+
+```mermaid
+flowchart LR
+    subgraph UI["Operator Browser (Jinja2 + React 19 SPA)"]
+        Q["Review Queue (master)"]
+        S["Publishing Studio (docked detail panel)"]
+        C["Channels page"]
+        O["Outbox & History"]
+    end
+    subgraph API["FastAPI Backend (127.0.0.1 only)"]
+        R["Routes: queue, channels, publish, oauth, video"]
+        OA["OAuth Manager"]
+        PUB["Publish Orchestrator (job state machine)"]
+        QL["Quota Ledger"]
+        SCH["Scheduler"]
+        AUD["Audit Log"]
+    end
+    DB[("SQLite (WAL)")]
+    YT["YouTube Data API v3"]
+    GO["Google OAuth"]
+
+    Q --> S
+    UI --> R
+    R --> OA
+    R --> PUB
+    PUB --> QL
+    SCH --> PUB
+    OA --> GO
+    OA --> YT
+    PUB --> YT
+    OA --> DB
+    PUB --> DB
+    QL --> DB
+    AUD --> DB
+```
+
+**Layout (desktop ≥ 1024px):** two columns. Left: queue grid with sticky top bar. Right: docked Publishing Studio panel. **Below 1024px:** the panel becomes a sliding drawer. State is synced to the URL: `/app/queue?clip=<clip_id>&studio=open`.
+
+---
+
+## 2. Data Model
+
+All changes via versioned migrations. **Back up the SQLite file before migrating**, provide a tested rollback script, enable WAL mode, and wrap multi-row writes in transactions.
+
+| Table | Key fields | Constraints / notes |
+|---|---|---|
+| `channels` | id, `youtube_channel_id`, title, handle, avatar_url, created_at, last_verified_at | `youtube_channel_id` **UNIQUE NOT NULL**. Never keyed by title or handle. |
+| `channel_credentials` | channel_id (FK), encrypted_refresh_token, nonce, scopes, status, verified_at, last_error | **UNIQUE(channel_id)**. Status: `active` \| `needs_auth` \| `revoked` \| `identity_mismatch`. Separate table so a channel survives credential loss. |
+| `oauth_states` | state (opaque random), pkce_verifier, intended_channel_id (nullable), expected_handle (nullable), created_at, expires_at | Single-use, 10-minute expiry, deleted on consumption. |
+| `publish_jobs` | id, clip_id, **target_youtube_channel_id (snapshot)**, title, description, tags, category_id, privacy_status, made_for_kids, schedule_mode, scheduled_at, status, attempts, youtube_video_id, upload_session_uri, last_error, created_at, updated_at | Target channel is snapshotted at job creation and never changes afterward. |
+| `quota_ledger` | ts, units, operation, channel_id (nullable), job_id (nullable) | Append-only. One row per API call at its documented cost. |
+| `audit_log` | ts, actor, event, channel_id, job_id, details (no secrets) | Append-only. |
+| `clips` (existing) | add: draft metadata fields, `draft_version` (integer, optimistic concurrency), `source` (`pipeline` \| `external`) | |
+
+---
+
+## 3. Identity-First Multi-Channel OAuth
+
+### 3.1 Platform facts to confirm against current docs
+- One authorization yields one token bound to exactly one channel. For Brand Accounts the operator picks the channel on Google's consent screen; the app cannot preselect it.
+- `channels.list(mine=true)` returns only the token's own channel. There is no API that enumerates all channels a Google account manages. Discovery therefore means "each authorization adds one channel."
+- `channels.list` is not callable with `youtube.upload` alone. Request both `youtube.upload` and `youtube.readonly`.
+- `prompt=select_account consent` forces the account chooser and a fresh refresh token. It does not guarantee a channel chooser. It reduces mistakes; it cannot prevent them. The design detects them.
+
+### 3.2 Core rule
+**The channel ID returned by Google (`mine=true`) is the only source of truth for what gets saved.** Every write is an upsert on that ID.
+
+### 3.3 Connect flow
+1. Operator clicks **Connect Channel** (new) or **Reconnect** (existing channel). Reconnect sets `intended_channel_id`. For a new connection an optional "Expected handle" field sets `expected_handle`.
+2. Backend creates an `oauth_states` row and builds the authorization URL with: opaque state, PKCE (S256), `access_type=offline`, `prompt=select_account consent`, both scopes, redirect `http://127.0.0.1:8000/oauth2callback`. **The state carries no channel data**; intent lives server-side.
+3. Callback: look up and consume state (reject unknown, expired, or reused). Exchange the code. If no refresh token is returned, fail the connection with a clear message and offer retry. Never save an unrefreshable credential.
+4. Call `channels.list(part=id,snippet, mine=true)` (record 1 unit in the ledger). Extract ID, title, handle, avatar.
+5. Reconcile:
+
+| Case | Behavior |
+|---|---|
+| No intent set | Upsert by channel ID. Show confirmation card: avatar, title, handle, ID, and "Not the channel you wanted? Connect another." |
+| Intent matches | Upsert credential, status `active`, set `verified_at`. |
+| Intent differs, authorized channel already exists | **Mismatch dialog.** Intended channel untouched. |
+| Intent differs, authorized channel is new | **Mismatch dialog.** No auto-import. |
+
+**Mismatch dialog:** "You authorized **B** (avatar, title, handle, ID), but you were connecting **A**." Actions: **Connect B instead** (adds or updates B only), **Retry for A**, **Cancel** (discard token). Every outcome writes an audit entry.
+
+### 3.4 Pre-upload identity guard
+Before every upload (including each item in a batch and every retry):
+1. Refresh the access token for the job's snapshotted target channel.
+2. Call `channels.list(mine=true)` (1 unit, recorded) and compare the ID to `target_youtube_channel_id`.
+3. On mismatch, `invalid_grant`, revoked token, or insufficient scope: **do not upload.** Set the credential status, set the job to `PAUSED_NEEDS_ATTENTION` (recoverable, not failed), write an audit entry, and raise a dashboard notification with the cause and a **Reconnect** action. The 1,600-unit upload cost is not incurred; the 1-unit guard call is recorded.
+4. After the operator reconnects the correct channel, the paused job resumes without re-entry of metadata.
+
+### 3.5 Token security
+- AES-256-GCM at rest, unique nonce per record. Key protected with Windows DPAPI or a key file with restricted ACLs. Key never in the DB or repo.
+- **Disconnect** revokes the token at Google, deletes the credential, keeps the channel record and its history.
+- Never log tokens, codes, verifiers, or secrets. Add a log-scrubbing test.
+
+### 3.6 Local-app web security
+- Bind to `127.0.0.1` only. Validate the `Host` header (defends against DNS rebinding). Require a CSRF token or same-origin check on all state-changing endpoints, including `/api/clips/*/open-folder`.
+- Validate every file path against an allow-listed media root.
+
+---
+
+## 4. Publishing Orchestration, Scheduling, and Quota
+
+### 4.1 Job state machine
+`DRAFT → SCHEDULED → UPLOADING → PUBLISHED`, with side states `PAUSED_NEEDS_ATTENTION`, `FAILED`, `CANCELLED`. Transitions are explicit, logged, and persisted before the external call is made.
+
+### 4.2 Reliability requirements
+- **Resumable uploads.** Persist `upload_session_uri`. After a crash, resume rather than restart.
+- **No duplicate uploads.** Before retrying an upload whose outcome is unknown, check for an existing `youtube_video_id` or resume the stored session. Retry only when it is provably safe, otherwise pause for the operator.
+- **Backoff and classification.** Exponential backoff with jitter for transient errors (5xx, network). Treat `quotaExceeded`, `uploadLimitExceeded`, and `forbidden` as non-retryable-now, with a clear cause and next-eligible time.
+- **Startup recovery.** On launch, reconcile jobs stuck in `UPLOADING`.
+- **Notifications.** Each pause or failure shows cause, affected clip and channel, and the exact next action.
+
+### 4.3 Scheduling mechanism (decision required, default proposed)
+Two options; the agent must confirm feasibility against current API policy before building:
+- **A. Native scheduling (default):** upload ahead of time with `privacyStatus=private` and `publishAt`; YouTube publishes at the scheduled time even if the PC is off. Quota is spent on the *upload* day.
+- **B. Local scheduling:** the app uploads at the scheduled time. Requires the PC and app running at that moment; quota is spent on the publish day.
+
+Make the mode a config setting (`schedule_mode`), show the implications in the UI, and write the choice into the setup guide. If unaudited API projects are forced to private, confirm that scheduled release still works and document the result.
+
+### 4.4 Quota ledger
+- The API does not report consumption, so the app keeps a local ledger and labels the gauge **"estimate."**
+- Quota is **per Google Cloud project, shared by all channels.** The gauge is global.
+- Reset is **midnight `America/Los_Angeles`** (DST-correct), not local time.
+- Costs are config constants: upload 1,600, `channels.list` 1. Record every call.
+- Operator can **calibrate** "used today" from the Cloud Console.
+- **Daily upload cap** = floor((daily_limit − safety_reserve) ÷ upload_cost). With defaults (10,000 limit, 300 reserve) this is **6 uploads/day across all channels combined.** The scheduler and bulk scheduling enforce it and never queue more uploads for a day than the cap.
+- Publishing is blocked or warned when the estimate says the limit would be exceeded, with the reset time shown.
+
+---
+
+## 5. Review Queue and Publishing Studio
+
+### 5.1 Routes
+- `/publish` → `/queue` and `/app/publish` → `/app/queue`, as **temporary 307 redirects** (301 is cached permanently by browsers). In React use `<Navigate to="/queue" replace />`.
+- Delete `publish.html` and `PublishPage.tsx`, remove the sidebar entries, and grep the codebase for dead references.
+- Keep `/oauth2callback` and all in-use `/api` routes working.
+
+### 5.2 Master column
+Sticky top bar: Active / Rejected tabs, **Add External Video**, quota gauge (with "estimate" label), channel health badge. Clip cards: thumbnail, waveform, score, hook/payoff, selection highlight, quick actions (play, style, trim, folder, publish). Existing broken items (style button, caption style not reflected in render) are fixed or explicitly reported, not left silently broken.
+
+### 5.3 Detail column: `PublishingStudioPanel.tsx`
+Collapsible sections:
+1. **Preview** — player, style badge, download, open folder.
+2. **Metadata** — title, description, tags, category, privacy, made-for-kids, live validators.
+3. **AI Assist** — Curiosity Gap, High Stakes, Question, Punchy titles; description and tag SEO; regenerate and apply.
+4. **Channel Destination** — verified identity (avatar, title, handle, short ID), status badge, Connect/Reconnect.
+5. **Schedule** — instant or scheduled, timezone shown explicitly, future-date validation.
+6. **Quota** — cost preview, remaining estimate, insufficient-quota guard.
+
+Pinned footer: Save Draft, Schedule, Publish Now, Prev/Next, autosave status. Above the footer, a one-line confirmation: **"Uploading to [Channel title] ([handle]) as [privacy]."**
+
+**Validation (confirm current limits against docs):** title ≤ 100 characters (warn > 95); description ≤ 5,000 **bytes** UTF-8 (warn near limit); tags ≤ 500 characters total, counting how multi-word tags are quoted; reject disallowed characters such as angle brackets; the made-for-kids declaration is required before publish.
+
+**Autosave and concurrency:** debounced (~800 ms) `PATCH /api/clips/{id}/publish-draft` with `draft_version` for optimistic concurrency (409 on conflict, with a clear UI message). Switching clips and pressing Publish/Schedule both **flush pending edits first**. Status badge: Saved / Saving / Failed.
+
+### 5.4 Outbox & History
+Table: clip, target channel, privacy, scheduled time, status, YouTube URL, error cause, **Retry** (re-runs the guard). Collapsible at the bottom of the queue.
+
+### 5.5 Channels page
+Connect, Reconnect, Disconnect, status, last verified, avatar/title/handle/ID. Keeps the queue uncluttered.
+
+### 5.6 External video ingestion
+**Default:** "Add External Video" ingests a local `.mp4` as a queue item with `source=external`, publishable as-is through the studio. Validate type, size, duration, and Shorts constraints, and reject with a reason. Sending it through the clipping pipeline is **optional** and only if the pipeline already accepts a local file without new architecture; otherwise defer it and say so.
+
+### 5.7 Phase 2 UX features
+Resizable panel (380–750 px, persisted width), Expand mode, keyboard shortcuts (J/K, Ctrl+Enter, Ctrl+S, Esc, never active while typing in inputs), multi-select and bulk actions (schedule across dates within the daily cap, bulk AI metadata, bulk channel assign, bulk approve/reject), full-page screenshots.
+
+---
+
+## 6. Windows Explorer Fix
+
+1. **Reproduce first.** Log the exact path string and exact command. Check likely causes: forward slashes, `/select,` and the path split into separate list arguments, unquoted paths with spaces or special characters, relative paths. The earlier DDE/privilege-token theory is unverified.
+2. **Single endpoint:** `POST /api/clips/{clip_id}/open-folder`. Resolve the absolute path server-side, require it to exist and lie under the media root.
+3. **Primary:** normalize to a backslash absolute path and call `explorer /select,"<path>"` as one properly quoted string, or use `SHOpenFolderAndSelectItems` via ctypes with `CoInitialize`. Do **not** treat Explorer's exit code as failure (it returns 1 on success).
+4. **One logged fallback:** if the file is missing or the primary raises, `os.startfile(parent_folder)`.
+5. **Operator actions, not cascade:** **Copy path** and **Download** (`/api/video/{clip_id}?download=1`) are visible buttons; in-browser playback via `/api/video/{clip_id}`.
+6. Return `{ok, method_used, error}` so the toast reports what actually happened.
+7. Do not block on the child process; verify no `explorer.exe` accumulation after repeated clicks.
+8. **Limitation:** works only when the server runs in the operator's interactive desktop session. Detect and show a clear message otherwise.
+
+---
+
+## 7. API Surface
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/channels` | List channels with status and identity |
+| `POST /api/channels/connect` | Start OAuth (optional `intended_channel_id`, `expected_handle`) |
+| `GET /oauth2callback` | Callback, reconcile, or return mismatch payload |
+| `POST /api/channels/connect/resolve` | Operator's choice from the mismatch dialog |
+| `POST /api/channels/{id}/disconnect` | Revoke and remove credential |
+| `POST /api/channels/{id}/verify` | On-demand identity check |
+| `PATCH /api/clips/{id}/publish-draft` | Autosave draft (with `draft_version`) |
+| `POST /api/clips/{id}/schedule` | Validate future time, quota, cap; create job |
+| `POST /api/clips/{id}/publish` | Run guard, then upload |
+| `GET /api/publish/jobs` / `POST /api/publish/jobs/{id}/retry` | Outbox and retry |
+| `GET /api/quota` / `POST /api/quota/calibrate` | Ledger-based estimate and manual calibration |
+| `POST /api/queue/ingest` | External video ingestion |
+| `POST /api/clips/{id}/open-folder` | Explorer action |
+| `GET /api/video/{id}` (`?download=1`) | Stream or download |
+| Phase 2: `POST /api/clips/bulk/schedule`, `POST /api/clips/bulk/metadata` | Bulk actions |
+
+---
+
+## 8. Setup Guide: `docs/CHANNEL_SETUP_GUIDE.md`
+
+Step-by-step, using real console labels:
+1. GCP project creation; enable YouTube Data API v3.
+2. OAuth consent screen: app info, scopes (`youtube.upload`, `youtube.readonly`).
+3. **Testing vs. In production:** apps in Testing have refresh tokens that expire after 7 days, causing repeated Needs Auth. Explain moving to In production (a personal-use app can stay unverified; click through the warning) and the trade-offs. Test users only apply while in Testing.
+4. **Upload visibility policy:** verify the current rule for API projects that have not passed the compliance audit (uploads may be forced private); document the audit application process, what to expect meanwhile, and how it interacts with scheduling.
+5. OAuth client: Web application type, redirect URI `http://127.0.0.1:8000/oauth2callback`, where to place credentials.
+6. Brand Accounts: how channel selection works, how to add the Google account as a manager, one authorization = one channel, connecting several channels, recovering from a wrong selection.
+7. Quota: 10,000/day default, 1,600 per upload, shared across channels, midnight-Pacific reset, why the gauge is an estimate, how to request an increase.
+8. Scheduling modes A and B and their quota and PC-uptime implications.
+9. Troubleshooting table: `invalid_grant`, `access_denied`, redirect URI mismatch, missing refresh token, insufficient scope, `quotaExceeded`, forced-private uploads, identity mismatch, Explorer not opening.
+
+---
+
+## 9. Verification Strategy
+
+### Unit and integration (use a fake YouTube/Google server; no live calls)
+- **OAuth:** match; mismatch→new; mismatch→existing (intended channel unchanged); state unknown/expired/reused; no refresh token; unique-constraint enforcement; token log-scrubbing.
+- **Guard:** revoked token; token bound to a different channel; missing scope; verify no upload is attempted, job is paused not lost, and ledger records only the 1-unit call.
+- **Jobs:** crash during upload resumes; unknown-outcome retry does not duplicate; backoff classification; startup recovery.
+- **Quota:** ledger arithmetic; midnight-Pacific reset across a DST boundary; daily cap = 6 with defaults; calibration.
+- **Drafts:** optimistic-concurrency conflict (409); flush-before-publish.
+- **Validators:** title, description (bytes), tags, forbidden characters, made-for-kids required.
+- **Explorer:** normalization and exact argument construction (spaces, `&`, apostrophes, unicode, forward slashes, long paths); path outside media root rejected; fallback only on failure.
+- **Security:** Host-header validation; CSRF enforcement; path allow-list.
+- **Redirects:** `/publish` and `/app/publish` return 307 to the queue.
+- **Migrations:** apply and roll back on a copy of a real database.
+
+### Playwright E2E (Jinja2 and React)
+Desktop 1440×900: select clip opens docked panel; switch clips; type title; autosave indicator; publish confirmation line shows channel and privacy; mismatch dialog cannot be dismissed into a silent bind; folder action toast is accurate; redirects work. Narrow 800×900: drawer opens and closes. Phase 2: resize, expand, shortcuts, bulk selection, and bulk schedule respecting the cap. Capture screenshots (no secrets visible).
+
+### Manual live verification (operator's machine)
+- Explorer launches with the file selected, 10 consecutive times, no process buildup.
+- Connect the operator's own channel(s); deliberately choose the wrong channel to observe the mismatch dialog.
+- One **unlisted** test upload to the operator's test channel ("Debateks"). If forced private by API policy, report it as an expected-policy result and confirm the guide documents it.
+- Test a scheduled upload per the chosen mode.
+
+---
+
+## 10. Phases and Acceptance Gates
+
+### Phase 1 (core, must be complete and reported first)
+Migrations; OAuth engine with mismatch handling; pre-upload guard; job state machine with resumable upload; quota ledger and daily cap; scheduling mechanism; docked Publishing Studio with single-clip publish, autosave, and validators; Channels page; Outbox; external ingestion; Explorer fix; redirects and cleanup; setup guide; all tests above except Phase 2 items.
+
+**Gate:** every box below is checked and the report (section 12) is delivered.
+
+- [ ] Credentials keyed by Google-returned channel ID with DB-level uniqueness; no code path overwrites one channel's credentials with another's.
+- [ ] Unintended-channel authorization always produces the explicit mismatch dialog; nothing rebinds silently.
+- [ ] Every upload re-verifies identity first; failures pause the job recoverably with a Reconnect action.
+- [ ] Both scopes requested; `mine=true` verified working.
+- [ ] State is opaque, single-use, expiring, with PKCE.
+- [ ] Quota gauge is a labeled estimate, global, resets midnight Pacific, enforces the 6/day cap.
+- [ ] Interrupted uploads resume or pause safely, with no duplicates.
+- [ ] Explorer root cause documented; action selects the file; Copy path and Download work.
+- [ ] `/publish` and `/app/publish` redirect (307); no dead links or sidebar entries.
+- [ ] Studio, outbox, channels page, and ingestion work in both Jinja2 and React.
+- [ ] Setup guide complete, including Testing vs. In production and the upload-visibility policy.
+- [ ] All Phase 1 tests pass; no secrets in logs.
+
+### Phase 2 (after the Phase 1 gate)
+Resizable panel and Expand mode, keyboard shortcuts, multi-select with bulk schedule and bulk AI metadata, extended E2E coverage and screenshots.
+
+- [ ] Bulk scheduling never exceeds the daily cap.
+- [ ] Shortcuts never fire while typing in inputs.
+- [ ] Panel width persists; drawer behavior intact below 1024px.
+- [ ] All Phase 2 tests pass.
+
+---
+
+## 11. Out of Scope and Prohibitions
+
+- No changes to clipping, captioning, or reframing beyond what this plan touches.
+- No auto-binding or auto-importing of channels without operator confirmation.
+- No tokens, secrets, or encryption keys in the repo, logs, or screenshots.
+- The live upload test runs only against the operator's own test channel.
+- No weakening of tests to obtain a pass.
+
+---
+
+## 12. Final Report (required at the end of each phase)
+
+1. Explorer root cause and the change that fixed it.
+2. Every platform claim in this plan that proved wrong or changed (scopes, scheduling behavior, upload-visibility policy, validation limits).
+3. Decisions taken: scheduling mode, external-video behavior, and the justification.
+4. Known issues deliberately left, with reasons.
+5. Exact commands to run the full test suite, and the migration and rollback commands.
+6. Anything the agent could not verify and needs the operator to check.
+
+Additional Context:
+(1) Work strictly in Phase 1 first. Execute and satisfy all Phase 1 acceptance gate criteria before proceeding to Phase 2.
+(2) Existing SQLite database is at `d:/Projects/YT AUTOMATION/storage/shorts_engine.db`. Always create a safe backup (`storage/shorts_engine.db.bak`) before applying database migrations.
+(3) Standardized Google OAuth client secret is at `d:/Projects/YT AUTOMATION/storage/client_secret.json`.
+(4) Running server is on `http://127.0.0.1:8000`, test user credentials `admin` / `AdminPass12345!`.
+(5) When compiling the React SPA, run `npm run build` inside `frontend/` to generate `shorts_engine/dashboard/static/dist/`.
+(6) Ensure complete test coverage and visual verification via Playwright in the browser. Deliver the Phase 1 report adhering to Section 12 before Phase 2.
+</original_task>

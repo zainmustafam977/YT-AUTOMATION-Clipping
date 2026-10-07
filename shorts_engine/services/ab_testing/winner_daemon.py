@@ -7,10 +7,9 @@ triggers emergency circuit breaker rollbacks when view velocity collapses > 50%.
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings

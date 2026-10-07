@@ -23,6 +23,61 @@
 </div>
 {% endif %}
 
+<!-- 🛡️ System Setup & Operational Readiness Assistant -->
+{% if channels|length == 0 or not (ai_provider.has_groq or ai_provider.has_gemini or ai_provider.has_openrouter or ai_provider.has_openai) %}
+<div class="card bg-dark border-warning mb-4 shadow-sm">
+    <div class="card-header bg-warning-subtle text-warning py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-bold small d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill"></i> System Setup &amp; Operational Readiness Checklist
+        </span>
+        <span class="badge bg-warning text-dark">Action Recommended for Full Automation</span>
+    </div>
+    <div class="card-body p-3">
+        <p class="small text-muted mb-3">
+            Some operational parameters have been reset or have not been configured yet. Follow these quick steps to ensure 100% automated video processing and YouTube publishing:
+        </p>
+        <div class="row g-3">
+            {% if not (ai_provider.has_groq or ai_provider.has_gemini or ai_provider.has_openrouter or ai_provider.has_openai) %}
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-black border border-warning-subtle h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-danger">Not Configured</span>
+                            <span class="fw-bold text-light small">AI Model &amp; API Key</span>
+                        </div>
+                        <p class="text-muted small mb-3" style="font-size: 0.8rem;">
+                            No Groq or Gemini API keys configured. The engine is operating in algorithmic heuristic fallback mode. Add a free Groq or Gemini key for AI viral clip selection, hook scoring, and CTR titles.
+                        </p>
+                    </div>
+                    <a href="/settings" class="btn btn-sm btn-outline-warning w-100 fw-semibold">
+                        🔑 Configure API Key in Settings →
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+            {% if channels|length == 0 %}
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-black border border-info-subtle h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-danger">Not Configured</span>
+                            <span class="fw-bold text-light small">Monitored YouTube Channel</span>
+                        </div>
+                        <p class="text-muted small mb-3" style="font-size: 0.8rem;">
+                            No target channels registered. Connect your YouTube Channel ID and upload defaults to enable automatic new video detection and scheduled Shorts publishing.
+                        </p>
+                    </div>
+                    <a href="/channels" class="btn btn-sm btn-outline-info w-100 fw-semibold">
+                        📺 Add Channel in Channel Manager →
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Top Telemetry Summary Cards -->
 <div class="row g-3 mb-4">
     <div class="col-md-2">
@@ -228,9 +283,14 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span class="fw-bold text-light">⚡ Manual Video Ingestion & Processing</span>
-                <span class="badge bg-secondary">Operator Action</span>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="fw-bold text-light">⚡ Video Ingestion &amp; Processing</span>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#directIngestStudioModal">
+                        📁 Direct Ingestion Studio (Zero-Copy &amp; Upload)
+                    </button>
+                    <span class="badge bg-secondary">Operator Action</span>
+                </div>
             </div>
             <div class="card-body">
                 <form method="post" action="/process-video" class="row g-3 align-items-start" id="manual-ingest-form"
@@ -353,14 +413,24 @@
                                                         <input type="number" min="10" max="180" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_max_duration" placeholder="{{ settings.TARGET_DURATION_MAX_SEC }}s">
                                                     </div>
                                                 </div>
-                                                <div class="row g-2 mb-2">
+                                                <div class="mb-2">
+                                                    <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Clip Limits Generation Mode</label>
+                                                    <select class="form-select form-select-sm bg-dark text-light border-secondary" id="clip_limit_mode_select" name="clip_limit_mode" onchange="toggleClipLimitMode(this.value)">
+                                                        <option value="auto" selected>✨ Auto-Calculate (Smart Length Adaptive)</option>
+                                                        <option value="manual">⚙️ Manual Override Limits</option>
+                                                    </select>
+                                                    <div id="smart-clip-hint" class="text-info mt-1" style="font-size:0.7rem;">
+                                                        ⚡ Auto-calculates optimal clips based on total video length to maximize quality and eliminate overlap.
+                                                    </div>
+                                                </div>
+                                                <div class="row g-2 mb-2" id="manual-clips-row" style="display:none;">
                                                     <div class="col-6">
                                                         <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Min Clips</label>
-                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_min_segments" placeholder="{{ settings.MIN_SEGMENTS_PER_VIDEO }}">
+                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" id="override_min_segments" name="override_min_segments" placeholder="{{ settings.MIN_SEGMENTS_PER_VIDEO }}">
                                                     </div>
                                                     <div class="col-6">
                                                         <label class="form-label text-muted small mb-1" style="font-size:0.75rem;">Max Clips</label>
-                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" name="override_max_segments" placeholder="{{ settings.MAX_SEGMENTS_PER_VIDEO }}">
+                                                        <input type="number" min="1" max="20" class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" id="override_max_segments" name="override_max_segments" placeholder="{{ settings.MAX_SEGMENTS_PER_VIDEO }}">
                                                     </div>
                                                 </div>
                                                 <div class="row g-2">
@@ -522,6 +592,24 @@
                         <option value="Manual Trigger">⚡ Manual</option>
                     </select>
 
+                    <!-- Date Filter -->
+                    <select id="activity-date-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 145px;" onchange="handleActivityDateFilterChange(this.value)">
+                        <option value="all" {% if current_date_filter == 'all' %}selected{% endif %}>📅 All Dates</option>
+                        <option value="today" {% if current_date_filter == 'today' %}selected{% endif %}>📅 Today</option>
+                        <option value="yesterday" {% if current_date_filter == 'yesterday' %}selected{% endif %}>📅 Yesterday</option>
+                        <option value="7days" {% if current_date_filter == '7days' %}selected{% endif %}>📅 Last 7 Days</option>
+                        <option value="30days" {% if current_date_filter == '30days' %}selected{% endif %}>📅 Last 30 Days</option>
+                        <option value="custom" {% if current_date_filter == 'custom' %}selected{% endif %}>📅 Custom Range...</option>
+                    </select>
+
+                    <!-- Custom Date Range Inputs -->
+                    <div id="activity-custom-date-container" class="d-flex align-items-center gap-1 {% if current_date_filter != 'custom' %}d-none{% endif %}">
+                        <input type="date" id="activity-custom-start" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:130px;" value="{{ current_start_date }}">
+                        <span class="text-muted small">to</span>
+                        <input type="date" id="activity-custom-end" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:130px;" value="{{ current_end_date }}">
+                        <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" onclick="applyCustomDateFilter()">Apply</button>
+                    </div>
+
                     <!-- Sort Order Filter -->
                     <select id="activity-sort-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 145px;">
                         <option value="newest">Sort: Newest</option>
@@ -631,6 +719,10 @@
                                         <div class="d-flex align-items-center gap-1 flex-wrap">
                                             {% if v.is_skipped_short %}
                                                 <span class="badge bg-info-subtle text-info border border-info text-nowrap" title="Skipped by Pre-ingestion Shorts filter (already short / #shorts)">⏭️ Skipped Short</span>
+                                            {% elif v.status == 'POLICY_RESTRICTED' %}
+                                                <span class="badge bg-danger-subtle text-danger border border-danger text-nowrap fw-bold" title="Blocked by Policy Gate (Age-restricted / Sensitive Content)">🛡️ POLICY RESTRICTED</span>
+                                            {% elif v.status == 'PENDING_POLICY_REVIEW' %}
+                                                <span class="badge bg-warning-subtle text-warning border border-warning text-nowrap fw-bold" title="Held by Policy Gate awaiting Operator Review">⚠️ PENDING REVIEW</span>
                                             {% elif v.status in ['COMPLETED', 'DONE'] %}
                                                 <span class="badge bg-success text-nowrap">✓ PROCESSED</span>
                                             {% elif v.status in ['DOWNLOADING', 'TRANSCRIBING', 'ANALYZING', 'DETECTED', 'SEGMENTS_SELECTED'] %}
@@ -901,6 +993,47 @@
         var currentAi = "";
         var currentOrigin = "";
         var currentSort = "newest";
+        var currentDateFilter = "{{ current_date_filter or 'all' }}";
+        var currentStartDate = "{{ current_start_date or '' }}";
+        var currentEndDate = "{{ current_end_date or '' }}";
+
+        window.toggleClipLimitMode = function(val) {
+            var manualRow = document.getElementById("manual-clips-row");
+            var hint = document.getElementById("smart-clip-hint");
+            if (val === "manual") {
+                if (manualRow) manualRow.style.display = "flex";
+                if (hint) {
+                    hint.className = "text-warning mt-1";
+                    hint.textContent = "⚙️ Manual override active: the pipeline will strictly target your specified Min/Max bounds.";
+                }
+            } else {
+                if (manualRow) manualRow.style.display = "none";
+                if (hint) {
+                    hint.className = "text-info mt-1";
+                    hint.textContent = "⚡ Auto-calculates optimal clips based on total video length to maximize quality and eliminate overlap.";
+                }
+            }
+        };
+
+        window.handleActivityDateFilterChange = function(val) {
+            currentDateFilter = val;
+            var customCont = document.getElementById("activity-custom-date-container");
+            if (val === "custom") {
+                if (customCont) customCont.classList.remove("d-none");
+            } else {
+                if (customCont) customCont.classList.add("d-none");
+                applyActivityFilters();
+            }
+        };
+
+        window.applyCustomDateFilter = function() {
+            var startEl = document.getElementById("activity-custom-start");
+            var endEl = document.getElementById("activity-custom-end");
+            currentStartDate = startEl ? startEl.value : "";
+            currentEndDate = endEl ? endEl.value : "";
+            currentDateFilter = "custom";
+            applyActivityFilters();
+        };
 
         window.toggleClipDrawer = function(videoId) {
             var drawer = document.getElementById("drawer-row-" + videoId);
@@ -980,6 +1113,9 @@
                 currentAi = "";
                 currentOrigin = "";
                 currentSort = "newest";
+                currentDateFilter = "all";
+                currentStartDate = "";
+                currentEndDate = "";
 
                 pills.forEach(function(p) {
                     p.classList.toggle("active", p.getAttribute("data-filter") === "all");
@@ -989,6 +1125,10 @@
                 if (aiSelect) aiSelect.value = "";
                 if (originSelect) originSelect.value = "";
                 if (sortSelect) sortSelect.value = "newest";
+                var dateSelect = document.getElementById("activity-date-select");
+                if (dateSelect) dateSelect.value = "all";
+                var customCont = document.getElementById("activity-custom-date-container");
+                if (customCont) customCont.classList.add("d-none");
 
                 applyActivityFilters();
                 sortActivityRows();
@@ -1009,6 +1149,7 @@
                 var origin = row.getAttribute("data-origin") || "";
                 var title = row.getAttribute("data-title") || "";
                 var ytId = row.getAttribute("data-yt-id") || "";
+                var updatedRaw = row.getAttribute("data-updated-raw") || "";
 
                 var matchesFilter = true;
                 if (currentFilter === "running") {
@@ -1047,7 +1188,41 @@
                     matchesOrigin = origin === currentOrigin;
                 }
 
-                var show = matchesFilter && matchesSearch && matchesChannel && matchesAi && matchesOrigin;
+                var matchesDate = true;
+                if (currentDateFilter !== "all" && updatedRaw) {
+                    try {
+                        var rowDate = new Date(updatedRaw);
+                        var now = new Date();
+                        if (currentDateFilter === "today") {
+                            matchesDate = rowDate.toDateString() === now.toDateString();
+                        } else if (currentDateFilter === "yesterday") {
+                            var yest = new Date(now);
+                            yest.setDate(yest.getDate() - 1);
+                            matchesDate = rowDate.toDateString() === yest.toDateString();
+                        } else if (currentDateFilter === "7days") {
+                            var sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+                            matchesDate = rowDate >= sevenDaysAgo;
+                        } else if (currentDateFilter === "30days") {
+                            var thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+                            matchesDate = rowDate >= thirtyDaysAgo;
+                        } else if (currentDateFilter === "custom") {
+                            if (currentStartDate) {
+                                var sDate = new Date(currentStartDate);
+                                sDate.setHours(0, 0, 0, 0);
+                                if (rowDate < sDate) matchesDate = false;
+                            }
+                            if (currentEndDate && matchesDate) {
+                                var eDate = new Date(currentEndDate);
+                                eDate.setHours(23, 59, 59, 999);
+                                if (rowDate > eDate) matchesDate = false;
+                            }
+                        }
+                    } catch (e) {
+                        matchesDate = true;
+                    }
+                }
+
+                var show = matchesFilter && matchesSearch && matchesChannel && matchesAi && matchesOrigin && matchesDate;
                 row.classList.toggle("d-none", !show);
                 if (show) visibleCount++;
 
@@ -1484,6 +1659,21 @@
                                     }
                                 }
 
+                                var estimateBox = "";
+                                if (data.clip_estimate) {
+                                    estimateBox = "<div class='mt-2 p-2 rounded bg-dark border border-secondary text-light small'>" +
+                                        "<div class='d-flex align-items-center justify-content-between mb-1'>" +
+                                            "<span class='text-warning fw-bold'>🎯 Smart Dynamic Clip Estimation:</span>" +
+                                            "<span class='badge bg-warning text-dark'>" + data.clip_estimate.recommended_range + "</span>" +
+                                        "</div>" +
+                                        "<div class='text-muted' style='font-size:0.75rem;'>" + data.clip_estimate.explanation + "</div>" +
+                                        "<div class='d-flex align-items-center gap-2 mt-1'>" +
+                                            "<span class='text-muted' style='font-size:0.72rem;'>Recommended AI Model:</span>" +
+                                            "<span class='badge bg-info-subtle text-info border border-info'>" + data.clip_estimate.model_name + "</span>" +
+                                        "</div>" +
+                                    "</div>";
+                                }
+
                                 preflightContent.innerHTML = 
                                     "<div class='d-flex align-items-center gap-2'>" +
                                         "<span class='badge bg-success'>✨ Valid YouTube Video</span>" +
@@ -1491,12 +1681,25 @@
                                         authorInfo +
                                     "</div>" +
                                     chanPrompt +
+                                    estimateBox +
                                     "<div class='text-muted small mt-1'>Ready for automated download, transcription & hook extraction.</div>";
                                 if (forceCheckbox) forceCheckbox.checked = false;
                                 return;
                             }
                             var tierBadge = "";
-                            if (data.recommended_tier) {
+                            if (data.clip_estimate) {
+                                tierBadge = "<div class='mt-2 p-2 rounded bg-dark border border-secondary text-light small'>" +
+                                    "<div class='d-flex align-items-center justify-content-between mb-1'>" +
+                                        "<span class='text-warning fw-bold'>🎯 Smart Dynamic Clip Estimation:</span>" +
+                                        "<span class='badge bg-warning text-dark'>" + data.clip_estimate.recommended_range + "</span>" +
+                                    "</div>" +
+                                    "<div class='text-muted' style='font-size:0.75rem;'>" + data.clip_estimate.explanation + "</div>" +
+                                    "<div class='d-flex align-items-center gap-2 mt-1'>" +
+                                        "<span class='text-muted' style='font-size:0.72rem;'>Recommended AI Model:</span>" +
+                                        "<span class='badge bg-info-subtle text-info border border-info'>" + data.clip_estimate.model_name + "</span>" +
+                                    "</div>" +
+                                "</div>";
+                            } else if (data.recommended_tier) {
                                 tierBadge = "<div class='mt-1 text-muted small d-flex align-items-center gap-2 flex-wrap'>" +
                                     "<span>Estimated Tokens: <strong class='text-light'>~" + (data.estimated_tokens ? data.estimated_tokens.toLocaleString() : "0") + "</strong></span>" +
                                     "<span class='badge bg-dark border border-secondary text-info'>" + data.recommended_tier + "</span>" +
@@ -1718,6 +1921,15 @@
                     console.error("SSE parse error:", err);
                 }
             };
+
+            function cleanupDashboardSSE() {
+                if (source) {
+                    source.close();
+                    source = null;
+                }
+            }
+            window.addEventListener('beforeunload', cleanupDashboardSSE);
+            window.addEventListener('pagehide', cleanupDashboardSSE);
         })();
 
         function setElText(id, text) {
@@ -1757,5 +1969,190 @@
             }
         }
     });
+
+    // Direct Ingestion Studio JS Logic
+    function getStatusCsrfToken() {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        return tokenMeta ? tokenMeta.content : '';
+    }
+
+    async function probeLocalVideoPath() {
+        const pathInput = document.getElementById('studio-local-path');
+        const feedback = document.getElementById('studio-probe-feedback');
+        if (!pathInput || !pathInput.value.trim()) {
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Please enter a valid file path</span>';
+            return;
+        }
+        if (feedback) feedback.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-info"></span>Probing video metadata...';
+        try {
+            const resp = await fetch('/api/ingest/validate-path', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getStatusCsrfToken()
+                },
+                body: JSON.stringify({ file_path: pathInput.value.trim() }),
+                credentials: 'same-origin'
+            });
+            const data = await resp.json();
+            if (data.valid) {
+                if (feedback) {
+                    const resStr = data.resolution || `${data.width}x${data.height}`;
+                    const codecStr = data.codec_name || data.codec || 'unknown';
+                    feedback.innerHTML = `
+                        <div class="alert alert-success py-2 px-3 mb-0 small">
+                            <div class="fw-bold">✓ Valid Video Detected (Zero-Copy Ready)</div>
+                            <div>Duration: <strong>${Math.round(data.duration_sec || 0)}s</strong> | Resolution: <strong>${resStr}</strong> | Codec: <strong>${codecStr}</strong> | Size: <strong>${((data.size_bytes || 0) / (1024*1024)).toFixed(1)} MB</strong></div>
+                        </div>
+                    `;
+                }
+            } else {
+                if (feedback) feedback.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0 small">${data.error || 'Invalid video file'}</div>`;
+            }
+        } catch (err) {
+            if (feedback) feedback.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0 small">${err.message}</div>`;
+        }
+    }
+
+    async function submitZeroCopyIngest() {
+        const pathInput = document.getElementById('studio-local-path');
+        const titleInput = document.getElementById('studio-local-title');
+        const feedback = document.getElementById('studio-probe-feedback');
+        if (!pathInput || !pathInput.value.trim()) return;
+        if (feedback) feedback.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-warning"></span>Registering zero-copy video...';
+        try {
+            const resp = await fetch('/api/ingest/local-path', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getStatusCsrfToken()
+                },
+                body: JSON.stringify({ file_path: pathInput.value.trim(), title: titleInput ? titleInput.value.trim() || undefined : undefined }),
+                credentials: 'same-origin'
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                if (feedback) feedback.innerHTML = `<div class="alert alert-success py-2 px-3 mb-0 small">✓ Successfully queued! Video ID: ${data.video_id}</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                throw new Error(data.detail || 'Ingestion failed');
+            }
+        } catch (err) {
+            if (feedback) feedback.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0 small">${err.message}</div>`;
+        }
+    }
+
+    async function submitDirectFileUpload() {
+        const fileInput = document.getElementById('studio-file-upload');
+        const titleInput = document.getElementById('studio-upload-title');
+        const feedback = document.getElementById('studio-upload-feedback');
+        if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Please choose a video file</span>';
+            return;
+        }
+        const csrfToken = getStatusCsrfToken();
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        if (titleInput && titleInput.value.trim()) {
+            fd.append('title', titleInput.value.trim());
+        }
+        if (csrfToken) {
+            fd.append('csrf_token', csrfToken);
+        }
+        if (feedback) feedback.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-info"></span>Uploading and streaming to engine...';
+        try {
+            const resp = await fetch('/api/ingest/local-file', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-Token': csrfToken
+                },
+                body: fd,
+                credentials: 'same-origin'
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                if (feedback) feedback.innerHTML = `<div class="alert alert-success py-2 px-3 mb-0 small">✓ Upload complete and queued! Video: ${data.title}</div>`;
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                throw new Error(data.detail || 'Upload failed');
+            }
+        } catch (err) {
+            if (feedback) feedback.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0 small">${err.message}</div>`;
+        }
+    }
 </script>
+
+<!-- Direct Ingestion Studio Modal -->
+<div class="modal fade" id="directIngestStudioModal" tabindex="-1" aria-labelledby="directIngestStudioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+            <div class="modal-header border-secondary py-2">
+                <h5 class="modal-title fw-bold text-light" id="directIngestStudioLabel">
+                    📁 Direct Video Ingestion Studio
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-pills mb-3" id="ingestStudioTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active btn-sm" id="zero-copy-tab" data-bs-toggle="pill" data-bs-target="#pills-zero-copy" type="button" role="tab">
+                            📁 Zero-Copy Local File Path
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm" id="direct-upload-tab" data-bs-toggle="pill" data-bs-target="#pills-direct-upload" type="button" role="tab">
+                            ⬆️ Multipart File Upload
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="ingestStudioTabContent">
+                    <!-- Tab 1: Zero Copy -->
+                    <div class="tab-pane fade show active" id="pills-zero-copy" role="tabpanel">
+                        <p class="text-muted small mb-3">
+                            Directly map a video file residing on this system (MP4, MKV, MOV, WebM, AVI). No data is duplicated on disk.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label small text-light fw-semibold">Local File Path (Absolute or Relative)</label>
+                            <input type="text" id="studio-local-path" class="form-control bg-dark text-light border-secondary font-monospace" placeholder="e.g. D:\Videos\raw_podcast.mp4">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-light fw-semibold">Custom Title (Optional)</label>
+                            <input type="text" id="studio-local-title" class="form-control bg-dark text-light border-secondary" placeholder="Optional custom title">
+                        </div>
+                        <div id="studio-probe-feedback" class="mb-3"></div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="probeLocalVideoPath()">
+                                🔍 Pre-Flight Probe
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="submitZeroCopyIngest()">
+                                ⚡ Ingest Zero-Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Upload -->
+                    <div class="tab-pane fade" id="pills-direct-upload" role="tabpanel">
+                        <p class="text-muted small mb-3">
+                            Stream master footage directly from your browser to storage. Supports multi-gigabyte video files.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label small text-light fw-semibold">Select Video File</label>
+                            <input type="file" id="studio-file-upload" class="form-control bg-dark text-light border-secondary" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,video/x-msvideo,.mp4,.mov,.mkv,.webm,.avi">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-light fw-semibold">Custom Title (Optional)</label>
+                            <input type="text" id="studio-upload-title" class="form-control bg-dark text-light border-secondary" placeholder="Optional custom title">
+                        </div>
+                        <div id="studio-upload-feedback" class="mb-3"></div>
+                        <div class="d-flex justify-content-end">
+                            <button type="button" class="btn btn-success btn-sm fw-bold" onclick="submitDirectFileUpload()">
+                                ⬆️ Upload &amp; Ingest Video
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

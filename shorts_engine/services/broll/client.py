@@ -4,14 +4,13 @@ Fetches relevant contextual stock video cutaways from Pexels Video API
 with local caching and graceful offline fallback.
 """
 
-import os
 import re
 import logging
 import urllib.request
 import urllib.parse
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 from shorts_engine.config.settings import settings
 

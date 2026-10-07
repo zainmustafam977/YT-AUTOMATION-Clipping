@@ -22,11 +22,11 @@ _alerter_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="alerter")
 
 class PipelineAlerter:
     def __init__(self):
-        self.slack_url = settings.SLACK_WEBHOOK_URL
-        self.discord_url = settings.DISCORD_WEBHOOK_URL
-        self.telegram_bot = settings.TELEGRAM_BOT_TOKEN
-        self.telegram_chat = settings.TELEGRAM_CHAT_ID
-        self.sentry_dsn = settings.SENTRY_DSN
+        self.slack_url = getattr(settings, "SLACK_WEBHOOK_URL", None)
+        self.discord_url = getattr(settings, "DISCORD_WEBHOOK_URL", None)
+        self.telegram_bot = getattr(settings, "TELEGRAM_BOT_TOKEN", None)
+        self.telegram_chat = getattr(settings, "TELEGRAM_CHAT_ID", None)
+        self.sentry_dsn = getattr(settings, "SENTRY_DSN", None)
 
     def has_configured_channels(self) -> bool:
         return bool(

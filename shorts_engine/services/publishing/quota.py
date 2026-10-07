@@ -1,110 +1,275 @@
 """
-YouTube Data API Quota Tracker: protects against daily quota exhaustion (10k units/day limit).
-Each video insert consumes ~1,600 units. Queues jobs when threshold is reached.
+YouTube Data API Quota Tracker & Enterprise Quota Ledger.
+Tracks daily quota units consumed (10,000 units/day default limit).
+Enforces:
+- Quota is per Google Cloud project, shared by all channels (gauge is global).
+- Gauge is labeled 'estimate'.
+- Reset is midnight America/Los_Angeles (Pacific Time, DST-correct).
+- Documented costs: upload = 1,600 units, channels.list = 1 unit.
+- Append-only DB ledger in table `quota_ledger`.
+- Daily upload cap = floor((daily_limit - safety_reserve) / upload_cost) = 6 uploads/day.
+- Manual calibration support via POST /api/quota/calibrate.
 """
 
 import json
 import logging
-from datetime import datetime, date
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
-import portalocker
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from shorts_engine.config.settings import settings
-from shorts_engine.utils.fs import atomic_write_json
+from shorts_engine.db.session import SessionLocal
+from shorts_engine.db.models import QuotaLedger, PublishJob, PublishLog
 
 logger = logging.getLogger(__name__)
 
 UPLOAD_COST_UNITS = 1600
+CHANNELS_LIST_COST_UNITS = 1
+DEFAULT_SAFETY_RESERVE = 300
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def get_pacific_day_bounds() -> Tuple[datetime, datetime, str]:
+    """
+    Returns (start_utc, end_utc, next_reset_iso) for the current Pacific day.
+    Correctly accounts for Daylight Saving Time boundaries in America/Los_Angeles.
+    """
+    now_pt = datetime.now(PACIFIC_TZ)
+    start_pt = now_pt.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_pt = start_pt + timedelta(days=1)
+
+    start_utc = start_pt.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_pt.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc, end_pt.isoformat()
 
 
 class QuotaTracker:
     def __init__(self, state_file: Optional[Path] = None):
         self.state_file = state_file or settings.STORAGE_DIR / "quota_state.json"
-        self.daily_limit = settings.DAILY_QUOTA_LIMIT
+        self.daily_limit = getattr(settings, "DAILY_QUOTA_LIMIT", 10000)
+        self.safety_reserve = getattr(settings, "QUOTA_SAFETY_RESERVE", DEFAULT_SAFETY_RESERVE)
 
     @property
     def lock_file(self) -> Path:
         return self.state_file.with_name(self.state_file.name + ".lock")
 
-    def _load_state(self, db: Optional[Any] = None) -> Dict[str, Any]:
-        today_str = date.today().isoformat()
-        used_units = 0
-        if self.state_file.exists():
-            try:
-                data = json.loads(self.state_file.read_text(encoding="utf-8"))
-                if data.get("date") == today_str:
-                    used_units = int(data.get("used_units", 0))
-            except Exception:
-                pass
+    @property
+    def daily_upload_cap(self) -> int:
+        """
+        Calculates daily upload cap across all channels combined:
+        floor((daily_limit - safety_reserve) / upload_cost)
+        Defaults: floor((10000 - 300) / 1600) = 6 uploads/day
+        """
+        effective_budget = max(0, self.daily_limit - self.safety_reserve)
+        return effective_budget // UPLOAD_COST_UNITS
+
+    def record_usage(
+        self,
+        units: int,
+        operation: str,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """
+        Appends an immutable entry to `quota_ledger`.
+        """
+        def _execute(session: Session) -> int:
+            entry = QuotaLedger(
+                units=units,
+                operation=operation,
+                channel_id=channel_id,
+                job_id=job_id,
+                ts=datetime.utcnow(),
+            )
+            session.add(entry)
+            session.commit()
+            logger.info(
+                "Quota ledger recorded %d units for '%s' (channel: %s, job: %s)",
+                units, operation, channel_id, job_id
+            )
+            return units
 
         if db is not None:
-            try:
-                from shorts_engine.db.models import PublishLog
-                start_of_today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-                db_pub_count = db.query(PublishLog).filter(
-                    PublishLog.published_at >= start_of_today,
-                    PublishLog.status.in_(["SUCCESS", "DRY_RUN", "PUBLISHED"]),
-                ).count()
-                db_units = db_pub_count * UPLOAD_COST_UNITS
-                if db_units > used_units:
-                    used_units = db_units
-                    self._save_state({"date": today_str, "used_units": used_units})
-            except Exception as e:
-                logger.debug("Could not reconcile quota with DB: %s", e)
+            return _execute(db)
+        else:
+            with SessionLocal() as session:
+                return _execute(session)
 
-        return {"date": today_str, "used_units": used_units}
+    def record_publish(
+        self,
+        cost: int = UPLOAD_COST_UNITS,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """Records video publish cost in the ledger."""
+        self.record_usage(
+            units=cost,
+            operation="youtube.videos.insert",
+            channel_id=channel_id,
+            job_id=job_id,
+            db=db,
+        )
+        return self.get_used_units(db=db)
 
-    def _save_state(self, state: Dict[str, Any]) -> None:
-        atomic_write_json(self.state_file, state, indent=2)
+    def record_channels_list(
+        self,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """Records channels.list identity guard cost (1 unit) in the ledger."""
+        self.record_usage(
+            units=CHANNELS_LIST_COST_UNITS,
+            operation="youtube.channels.list",
+            channel_id=channel_id,
+            job_id=job_id,
+            db=db,
+        )
+        return CHANNELS_LIST_COST_UNITS
 
-    def can_publish(self, db: Optional[Any] = None) -> Tuple[bool, int, str]:
+    def get_used_units(self, db: Optional[Session] = None) -> int:
         """
+        Calculates total quota units consumed during the current Pacific day
+        by querying the append-only quota ledger.
+        """
+        start_utc, end_utc, _ = get_pacific_day_bounds()
+
+        def _calculate(session: Session) -> int:
+            try:
+                entries = session.query(QuotaLedger).filter(
+                    QuotaLedger.ts >= start_utc,
+                    QuotaLedger.ts < end_utc,
+                ).all()
+                if isinstance(entries, (list, tuple)):
+                    return sum(int(getattr(e, "units", 0) or 0) for e in entries)
+                return 0
+            except (TypeError, ValueError, Exception):
+                return 0
+
+        if db is not None:
+            return _calculate(db)
+        else:
+            with SessionLocal() as session:
+                return _calculate(session)
+
+    def get_uploads_today(self, db: Optional[Session] = None) -> int:
+        """
+        Returns number of successful/in-progress uploads executed during the current Pacific day.
+        """
+        start_utc, end_utc, _ = get_pacific_day_bounds()
+
+        def _calculate(session: Session) -> int:
+            try:
+                # Count from quota_ledger entries with videos.insert or from publish_jobs
+                ledger_uploads = session.query(QuotaLedger).filter(
+                    QuotaLedger.ts >= start_utc,
+                    QuotaLedger.ts < end_utc,
+                    QuotaLedger.operation == "youtube.videos.insert",
+                ).count()
+                if isinstance(ledger_uploads, (int, float)):
+                    return int(ledger_uploads)
+                return 0
+            except (TypeError, ValueError, Exception):
+                return 0
+
+        if db is not None:
+            return _calculate(db)
+        else:
+            with SessionLocal() as session:
+                return _calculate(session)
+
+    def can_publish(
+        self,
+        db: Optional[Session] = None,
+        cost: int = UPLOAD_COST_UNITS,
+    ) -> Tuple[bool, int, str]:
+        """
+        Checks whether publishing is permitted under quota and daily cap.
         Returns (can_publish: bool, remaining_units: int, reason: str).
         """
-        with portalocker.Lock(str(self.lock_file), timeout=10.0):
-            state = self._load_state(db=db)
-            used = state.get("used_units", 0)
-            remaining = max(0, self.daily_limit - used)
+        start_utc, end_utc, next_reset_iso = get_pacific_day_bounds()
+        used = self.get_used_units(db=db)
+        used = int(used) if isinstance(used, (int, float)) else 0
+        remaining = max(0, self.daily_limit - used)
+        uploads_today = self.get_uploads_today(db=db)
+        uploads_today = int(uploads_today) if isinstance(uploads_today, (int, float)) else 0
+        cap = self.daily_upload_cap
 
-            if remaining < UPLOAD_COST_UNITS:
-                msg = (
-                    f"Daily YouTube quota exhausted! Used: {used}/{self.daily_limit} units. "
-                    f"Required: {UPLOAD_COST_UNITS}. Queuing for next quota reset."
+        # Check upload count cap
+        if uploads_today >= cap:
+            msg = (
+                f"Daily YouTube upload cap reached: {uploads_today}/{cap} uploads today. "
+                f"Next upload available at Pacific midnight ({next_reset_iso})."
+            )
+            logger.warning(msg)
+            return False, remaining, msg
+
+        # Check quota units budget
+        if remaining < cost:
+            msg = (
+                f"Daily YouTube quota exhausted (estimate)! Used: {used}/{self.daily_limit} units. "
+                f"Required: {cost} units. Resets at Pacific midnight ({next_reset_iso})."
+            )
+            logger.warning(msg)
+            return False, remaining, msg
+
+        return True, remaining, "Quota and daily upload slot available"
+
+    def get_usage_metrics(self, db: Optional[Session] = None) -> Dict[str, Any]:
+        """
+        Returns comprehensive quota metrics, labelled as estimate, with reset countdown.
+        """
+        start_utc, end_utc, next_reset_iso = get_pacific_day_bounds()
+        used = self.get_used_units(db=db)
+        used = int(used) if isinstance(used, (int, float)) else 0
+        remaining = max(0, self.daily_limit - used)
+        uploads_today = self.get_uploads_today(db=db)
+        uploads_today = int(uploads_today) if isinstance(uploads_today, (int, float)) else 0
+        cap = self.daily_upload_cap
+        pct = round((used / self.daily_limit) * 100, 1) if self.daily_limit > 0 else 0.0
+
+        return {
+            "used_units": used,
+            "remaining_units": remaining,
+            "daily_limit": self.daily_limit,
+            "safety_reserve": self.safety_reserve,
+            "daily_upload_cap": cap,
+            "uploads_today": uploads_today,
+            "remaining_uploads_today": max(0, cap - uploads_today),
+            "pct": pct,
+            "is_estimate": True,
+            "label": "Estimated Global Project Quota",
+            "warning": pct >= (getattr(settings, "QUOTA_WARNING_THRESHOLD", 0.85) * 100) or uploads_today >= cap,
+            "reset_at_iso": next_reset_iso,
+            "timezone": "America/Los_Angeles (Pacific Time)",
+        }
+
+    def calibrate(self, used_units_target: int, db: Optional[Session] = None) -> Dict[str, Any]:
+        """
+        Operator calibration from Google Cloud Console.
+        Calculates delta between target and current ledger sum for today,
+        and records a calibration entry in `quota_ledger`.
+        """
+        def _cal(session: Session) -> Dict[str, Any]:
+            current_used = self.get_used_units(db=session)
+            delta = used_units_target - current_used
+            if delta != 0:
+                self.record_usage(
+                    units=delta,
+                    operation="calibration",
+                    channel_id=None,
+                    job_id=None,
+                    db=session,
                 )
-                logger.warning(msg)
-                return False, remaining, msg
+            return self.get_usage_metrics(db=session)
 
-            usage_ratio = used / float(self.daily_limit) if self.daily_limit > 0 else 0.0
-            if usage_ratio >= settings.QUOTA_WARNING_THRESHOLD:
-                logger.warning("YouTube quota usage alert: %d%% used (%d/%d)", int(usage_ratio * 100), used, self.daily_limit)
-
-            return True, remaining, "Quota available"
-
-    def get_usage_metrics(self, db: Optional[Any] = None) -> Dict[str, Any]:
-        """Calculates active usage metrics, percentages, and alert flags."""
-        with portalocker.Lock(str(self.lock_file), timeout=10.0):
-            state = self._load_state(db=db)
-            used = state.get("used_units", 0)
-            remaining = max(0, self.daily_limit - used)
-            pct = round((used / self.daily_limit) * 100, 1) if self.daily_limit > 0 else 0.0
-            return {
-                "used_units": used,
-                "remaining_units": remaining,
-                "daily_limit": self.daily_limit,
-                "pct": pct,
-                "warning": pct >= (settings.QUOTA_WARNING_THRESHOLD * 100),
-                "date": state.get("date"),
-            }
-
-    def get_used_units(self, db: Optional[Any] = None) -> int:
-        """Returns total quota units used today."""
-        return self.get_usage_metrics(db=db).get("used_units", 0)
-
-    def record_publish(self, cost: int = UPLOAD_COST_UNITS, db: Optional[Any] = None) -> int:
-        """Records consumption of quota units under cross-process file lock."""
-        with portalocker.Lock(str(self.lock_file), timeout=10.0):
-            state = self._load_state(db=db)
-            state["used_units"] = state.get("used_units", 0) + cost
-            self._save_state(state)
-            logger.info("Recorded %d quota units. Total used today: %d/%d", cost, state["used_units"], self.daily_limit)
-            return state["used_units"]
+        if db is not None:
+            return _cal(db)
+        else:
+            with SessionLocal() as session:
+                return _cal(session)

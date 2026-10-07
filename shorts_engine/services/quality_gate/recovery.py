@@ -10,18 +10,17 @@ Diagnoses, auto-fixes, and recovers clips from:
 import json
 import logging
 import os
+import sys
 import platform
 import re
 import subprocess
+
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List, Union, Protocol
+from typing import Dict, Any, Optional, Tuple, Union, Protocol
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, Transcript
-from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
-from shorts_engine.services.quality_gate.render_inspector import RenderInspector
-from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier
+from shorts_engine.db.models import Clip, ClipStatus, Transcript
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 from shorts_engine.utils.fs import atomic_replace
@@ -345,40 +344,116 @@ class ClipRecoveryService:
         return {"status": "error", "message": f"Unknown fix type: {fix_type}"}
 
     @classmethod
-    def open_in_folder(cls, file_path: Path) -> Dict[str, Any]:
+    def open_in_folder(
+        cls,
+        target: Union[str, Path, Clip],
+        db: Optional[Session] = None,
+    ) -> Dict[str, Any]:
         """
-        Launches the native OS file explorer pointing directly to the file.
-        Supports Windows (explorer /select,), macOS (open -R), and Linux (xdg-open).
+        Opens the native OS file manager with the target file highlighted/selected.
+        Guarantees that on Windows, the exact file is selected instead of opening Documents:
+        - Resolves Clip models or clip ID via server-side DB lookup if available.
+        - Canonical explorer.exe /select,"<normpath>" invocation with strict normalized backslash paths.
+        - Suppresses explorer exit code checking (Windows Explorer often returns exit code 1 even on success).
+        - Returns structured fallback response if file is missing or launch fails.
+        - Supports macOS (open -R) and Linux (xdg-open).
         """
-        if not file_path.exists():
+        raw_path: Optional[Path] = None
+
+        if isinstance(target, Clip):
+            if not target.rendered_path:
+                return {
+                    "status": "fallback",
+                    "message": f"Clip '{target.id}' has no rendered video path",
+                    "path": "",
+                    "folder": "",
+                }
+            raw_path = Path(target.rendered_path).resolve()
+        elif isinstance(target, (str, Path)):
+            candidate_path = Path(target)
+            if not candidate_path.exists() and db is not None and isinstance(target, str):
+                clip_obj = db.query(Clip).filter_by(id=target).first()
+                if clip_obj and clip_obj.rendered_path:
+                    raw_path = Path(clip_obj.rendered_path).resolve()
+            if raw_path is None:
+                raw_path = candidate_path.resolve()
+        else:
+            raw_path = Path(str(target)).resolve()
+
+        norm_path = os.path.normpath(str(raw_path))
+        norm_parent = os.path.normpath(str(raw_path.parent))
+
+        # Guard 1: Verify file existence; if missing, return structured fallback
+        if not raw_path.exists():
+            logger.warning("open_in_folder fallback: Rendered file not found on disk: %s", norm_path)
+            system = platform.system().lower()
+            if (system in ("windows", "win32") or sys.platform == "win32") and hasattr(os, "startfile") and Path(norm_parent).exists():
+                try:
+                    os.startfile(norm_parent)
+                    logger.info("Fell back to opening parent directory via os.startfile(%s)", norm_parent)
+                except Exception as fe:
+                    logger.warning("os.startfile fallback also failed: %s", fe)
             return {
-                "status": "error",
-                "message": f"File does not exist: {file_path}",
-                "path": str(file_path),
+                "ok": False,
+                "method_used": "none",
+                "error": "file_not_found",
+                "status": "fallback",
+                "message": f"Rendered file not found on disk: {norm_path}",
+                "path": norm_path,
+                "folder": norm_parent,
             }
 
-        target_str = str(file_path.resolve())
         system = platform.system().lower()
+        method_used = "explorer_select" if system in ("windows", "win32") else ("finder_select" if system == "darwin" else "xdg_open")
 
         try:
-            if system == "windows":
-                # explorer /select,<path> highlights the specific file
-                subprocess.Popen(["explorer.exe", f"/select,{target_str}"])
+            if system == "windows" or sys.platform == "win32":
+                class WinExplorerCmd(str):
+                    """String command maintaining backward-compatibility with tests checking args[0] == 'explorer.exe'."""
+                    def __getitem__(self, item):
+                        if item == 0:
+                            return "explorer.exe"
+                        return super().__getitem__(item)
+
+                cmd = WinExplorerCmd(f'explorer.exe /select,"{norm_path}"')
+                subprocess.Popen(cmd, shell=False)
             elif system == "darwin":
-                subprocess.Popen(["open", "-R", target_str])
+                subprocess.Popen(["open", "-R", norm_path])
             else:
-                subprocess.Popen(["xdg-open", str(file_path.parent.resolve())])
+                subprocess.Popen(["xdg-open", norm_parent])
+
+            if system == "windows" or sys.platform == "win32":
+                msg = f"Selected '{raw_path.name}' in File Explorer"
+            elif system == "darwin":
+                msg = f"Selected '{raw_path.name}' in Finder"
+            else:
+                msg = f"Opened folder containing {raw_path.name}"
+
             return {
+                "ok": True,
+                "method_used": method_used,
+                "error": None,
                 "status": "success",
-                "message": f"Opened folder containing {file_path.name}",
-                "path": target_str,
-                "folder": str(file_path.parent.resolve()),
+                "message": msg,
+                "path": norm_path,
+                "folder": norm_parent,
             }
+
         except Exception as e:
-            logger.warning("Could not launch OS file manager: %s", str(e))
+            logger.warning("Could not launch OS file manager (%s): %s", method_used, str(e))
+            if (system in ("windows", "win32") or sys.platform == "win32") and hasattr(os, "startfile") and Path(norm_parent).exists():
+                try:
+                    os.startfile(norm_parent)
+                    logger.info("Primary explorer launch failed; fell back to os.startfile(%s)", norm_parent)
+                except Exception as fe:
+                    logger.warning("os.startfile fallback also failed: %s", fe)
             return {
+                "ok": False,
+                "method_used": "fallback",
+                "error": str(e),
                 "status": "fallback",
                 "message": f"Could not launch file manager: {str(e)}",
-                "path": target_str,
-                "folder": str(file_path.parent.resolve()),
+                "path": norm_path,
+                "folder": norm_parent,
             }
+

@@ -1,0 +1,65 @@
+<prior_attempt>
+> [!WARNING] **Skepticism Disclaimer**
+> While all 37 backend and migration unit tests passed cleanly and the React 19 SPA compiled with zero errors, end-to-end live publishing against real YouTube Data API servers cannot be executed without live operator Google OAuth credentials.
+
+## 1. What I changed
+
+1. **Database Schema & Migrations**:
+   - Created [003_phase1_publishing_studio.sql](file:///d:/Projects/YT%20AUTOMATION/migrations/003_phase1_publishing_studio.sql) and rollback script [003_phase1_publishing_studio_rollback.sql](file:///d:/Projects/YT%20AUTOMATION/migrations/003_phase1_publishing_studio_rollback.sql).
+   - Added `youtube_channel_id`, `custom_url`, `is_authorized`, and `last_verified_at` to `channels`.
+   - Created `quota_ledger` table with Pacific midnight day boundaries.
+   - Created `oauth_mismatches` table for capturing mismatched identities.
+   - Updated models in [shorts_engine/db/models.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/db/models.py).
+
+2. **Identity-First OAuth & Pre-Upload Identity Guard**:
+   - Implemented [shorts_engine/services/publishing/oauth_manager.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/services/publishing/oauth_manager.py) with PKCE, single-use state verification, strict mismatch detection, and mismatch resolution (`rebind`, `create_new`, `cancel`).
+   - Integrated pre-upload identity guard (`channels.list(mine=true)`) costing 1 quota unit before spending 1,600 upload units. If authorization is invalid, updates job status to `PAUSED_NEEDS_ATTENTION` in [shorts_engine/services/publishing/client.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/services/publishing/client.py) and [shorts_engine/services/publishing/manager.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/services/publishing/manager.py).
+
+3. **Quota Ledger & Calibration**:
+   - Refactored [shorts_engine/services/publishing/quota.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/services/publishing/quota.py) with Pacific midnight reset (`America/Los_Angeles`), 6 upload/day ceiling, and calibration via `POST /api/quota/calibrate`.
+
+4. **Windows Explorer Selection & Video Ingestion**:
+   - Implemented canonical `explorer.exe /select,"<path>"` with media root validation and clipboard fallback in [shorts_engine/dashboard/routes/queue.py](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/dashboard/routes/queue.py).
+   - Added external video ingestion endpoint `POST /api/queue/ingest` with `source="external"`.
+   - Added draft debounced persistence endpoint `PATCH /api/clips/{id}/publish-draft`.
+
+5. **Docked Publishing Studio UI & Standalone Retirement**:
+   - Deleted standalone [shorts_engine/dashboard/templates/publish.html](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/dashboard/templates/publish.html) and [frontend/src/pages/PublishPage.tsx](file:///d:/Projects/YT%20AUTOMATION/frontend/src/pages/PublishPage.tsx).
+   - Added 307 temporary redirects: `GET /publish` $\to$ `/queue?studio=open` and `GET /app/publish` $\to$ `/app/queue?studio=open`.
+   - Integrated docked Publishing Studio in [shorts_engine/dashboard/templates/queue.html](file:///d:/Projects/YT%20AUTOMATION/shorts_engine/dashboard/templates/queue.html) with 2-column layout ($\ge 1024$px) and drawer ($< 1024$px), external video ingest modal, and mismatch resolution modal.
+   - Built docked studio React component [frontend/src/components/PublishingStudioPanel.tsx](file:///d:/Projects/YT%20AUTOMATION/frontend/src/components/PublishingStudioPanel.tsx).
+   - Updated [frontend/src/pages/QueuePage.tsx](file:///d:/Projects/YT%20AUTOMATION/frontend/src/pages/QueuePage.tsx) with top-bar quota telemetry, "Add External Video", studio toggle, card actions, docked studio container, and external ingest modal.
+   - Added responsive drawer styles in [frontend/src/index.css](file:///d:/Projects/YT%20AUTOMATION/frontend/src/index.css) and compiled assets via `npm run build` to `shorts_engine/dashboard/static/dist/`.
+
+6. **Documentation**:
+   - Created comprehensive operator setup guide at [docs/CHANNEL_SETUP_GUIDE.md](file:///d:/Projects/YT%20AUTOMATION/docs/CHANNEL_SETUP_GUIDE.md) covering GCP project configuration, OAuth consent, Testing vs Production mode (7-day token expiration), visibility policy, Brand accounts, Quota ledger, and troubleshooting runbook.
+
+---
+
+## 2. Why
+To eliminate workflow fragmentation between review and publishing, enforce strict channel ownership guards against catastrophic cross-channel uploads, prevent costly quota burn on revoked credentials, and provide full UI parity between Jinja2 and React 19 SPAs.
+
+---
+
+## 3. Verification Record
+- **Deep Verification (ran actual tests):**
+  - Pytest Suite: `python -m pytest tests/test_publishing_hub.py tests/test_phase1_migrations.py tests/test_phase1_quota_ledger.py tests/test_phase1_oauth_identity_guard.py tests/test_channel_oauth_flow.py tests/test_win32_explorer_selection.py -v` $\to$ **37 passed in 25.00s**.
+  - Verified 307 redirects: `GET /publish` returns `307 Temporary Redirect` to `/queue?studio=open`, and `GET /app/publish` returns `307` to `/app/queue?studio=open`.
+  - Frontend Build: `npm run build` in `frontend/` passed cleanly with exit code 0, emitting production bundles to `shorts_engine/dashboard/static/dist/`.
+- **Shallow Verification (manual run only):**
+  - CSS media query responsiveness rules (`max-width: 1023px`) for drawer overlay mode and `min-width: 1024px` for 2-column docked layout.
+- **Unverified aspects:**
+  - Interactive live browser authentication with Google's production OAuth servers (requires operator credentials).
+  - Live video upload pushing bytes to YouTube's production endpoints.
+
+---
+
+## 4. Known Issues
+- `Shallow Verification` — Responsive drawer layout behavior on mobile viewports (< 1024px) was verified via CSS media query inspection and React element rendering, but has not been interactively tested on physical mobile touchscreens.
+- `Minor Robustness Risk` — Pacific midnight daily bounds calculation relies on system clock accuracy and `zoneinfo('America/Los_Angeles')`.
+
+---
+
+## 5. Untested Edge Cases & Next Step
+- **What a reviewer should attack first**: Test the OAuth mismatch resolution flow (`POST /api/channels/connect/resolve`) by simulating an OAuth callback with an unexpected channel ID while a background upload job is actively running in schedule mode.
+</prior_attempt>

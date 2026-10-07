@@ -1,15 +1,14 @@
-import os
 import csv
 import io
 import json
+import time
 import logging
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote_plus
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from collections import OrderedDict
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -18,9 +17,11 @@ from sqlalchemy import or_
 from shorts_engine.config.settings import settings
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User
+from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, PublishJob
 from shorts_engine.services.clip_selection.selector import parse_ai_provenance
 from shorts_engine.services.analytics.predictor import viral_predictor
+from shorts_engine.services.captioning.templates import list_caption_templates
+from shorts_engine.services.publishing.quota import QuotaTracker
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +78,18 @@ def queue_list(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_viewer),
 ):
-    active_count = db.query(Clip).filter_by(status=ClipStatus.WAITING_APPROVAL).count()
-    rejected_count = db.query(Clip).filter_by(status=ClipStatus.REJECTED).count()
-    needs_review_count = db.query(Clip).filter_by(status=ClipStatus.FAILED_NEEDS_REVIEW).count()
+    try:
+        active_count = int(db.query(Clip).filter_by(status=ClipStatus.WAITING_APPROVAL).count())
+    except Exception:
+        active_count = 0
+    try:
+        rejected_count = int(db.query(Clip).filter_by(status=ClipStatus.REJECTED).count())
+    except Exception:
+        rejected_count = 0
+    try:
+        needs_review_count = int(db.query(Clip).filter_by(status=ClipStatus.FAILED_NEEDS_REVIEW).count())
+    except Exception:
+        needs_review_count = 0
 
     if tab == "rejected":
         current_tab = "rejected"
@@ -151,13 +161,20 @@ def queue_list(
         base_q = base_q.order_by(Clip.created_at.asc() if order_clean == "asc" else Clip.created_at.desc())
 
     # Pagination calculation
-    total_items = base_q.count()
+    try:
+        total_items = int(base_q.count())
+    except Exception:
+        total_items = 0
     limit = max(1, min(limit, 100))
     total_pages = max(1, (total_items + limit - 1) // limit)
     page = max(1, min(page, total_pages))
     offset = (page - 1) * limit
 
-    clips = base_q.offset(offset).limit(limit).all()
+    try:
+        raw_clips = base_q.offset(offset).limit(limit).all()
+        clips = raw_clips if isinstance(raw_clips, (list, tuple)) else []
+    except Exception:
+        clips = []
 
     has_prev = page > 1
     has_next = page < total_pages
@@ -166,7 +183,11 @@ def queue_list(
     start_item = (page - 1) * limit + 1 if total_items > 0 else 0
     end_item = min(page * limit, total_items)
 
-    channels = db.query(Channel).order_by(Channel.name.asc()).all()
+    try:
+        raw_channels = db.query(Channel).order_by(Channel.name.asc()).all()
+        channels = raw_channels if isinstance(raw_channels, (list, tuple)) else []
+    except Exception:
+        channels = []
 
     for clip in clips:
         cand = clip.candidate
@@ -294,6 +315,34 @@ def queue_list(
 
     grouped_sources = list(groups_dict.values())
 
+    # Quota telemetry
+    tracker = QuotaTracker()
+    quota_metrics = tracker.get_usage_metrics(db=db)
+    remaining_units = quota_metrics.get("remaining_units", 10000)
+    cost_per_upload = 1600
+    remaining_uploads = max(0, remaining_units // cost_per_upload)
+    quota_data = {
+        **quota_metrics,
+        "cost_per_upload": cost_per_upload,
+        "remaining_uploads": remaining_uploads,
+    }
+
+    selected_ch = None
+    if channel_id:
+        selected_ch = next((c for c in channels if getattr(c, "id", None) == channel_id or getattr(c, "youtube_channel_id", None) == channel_id), None)
+    if not selected_ch and channels:
+        selected_ch = next((c for c in channels if getattr(c, "youtube_channel_id", None) == "UCBWVd_s5Gb6silTdeYaMqvA" or getattr(c, "name", None) == "Debateks"), channels[0])
+
+    selected_clip_id = request.query_params.get("clip")
+    studio_open = request.query_params.get("studio") == "open" or bool(selected_clip_id)
+
+    try:
+        recent_jobs = db.query(PublishJob).order_by(PublishJob.created_at.desc()).limit(20).all()
+        if not isinstance(recent_jobs, (list, tuple)):
+            recent_jobs = []
+    except Exception:
+        recent_jobs = []
+
     return templates.TemplateResponse(
         request=request,
         name="queue.html",
@@ -315,6 +364,12 @@ def queue_list(
             "source_video_id": source_video_id or "",
             "ai_provider": ai_provider or "",
             "channels": channels,
+            "selected_channel": selected_ch,
+            "quota": quota_data,
+            "studio_open": studio_open,
+            "selected_clip_id": selected_clip_id,
+            "publish_jobs": recent_jobs,
+            "caption_templates": list_caption_templates(db=db),
             "total_items": total_items,
             "total_pages": total_pages,
             "has_prev": has_prev,
@@ -409,9 +464,10 @@ def export_queue_clips(
     )
 
 
-@router.get("/api/video/{clip_id}", summary="Stream rendered Short video")
+@router.get("/api/video/{clip_id}", summary="Stream or download rendered Short video")
 def stream_clip_video(
     clip_id: str,
+    download: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_viewer),
 ):
@@ -419,16 +475,148 @@ def stream_clip_video(
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
 
-    from shorts_engine.services.storage.path_manager import PathManager
+    from shorts_engine.services.storage.path_manager import PathManager, get_preview_proxy_path
+    from shorts_engine.services.ingestion.local_loader import is_preview_proxy_needed, generate_preview_proxy
+
     file_path = PathManager.resolve_clip_path(clip)
     if not file_path or not file_path.is_file() or file_path.stat().st_size == 0:
         raise HTTPException(status_code=404, detail=f"Rendered video file not found on disk for clip {clip_id}")
 
+    if download == 1:
+        return FileResponse(
+            path=str(file_path),
+            media_type="video/mp4",
+            filename=file_path.name,
+            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
+        )
+
+    serve_path = file_path
+    proxy_path = get_preview_proxy_path(file_path)
+    if proxy_path.exists() and proxy_path.stat().st_size > 0:
+        serve_path = proxy_path
+    elif is_preview_proxy_needed(file_path):
+        generated = generate_preview_proxy(file_path)
+        if generated and generated.exists() and generated.stat().st_size > 0:
+            serve_path = generated
+
     return FileResponse(
-        path=str(file_path),
+        path=str(serve_path),
         media_type="video/mp4",
-        filename=file_path.name,
+        filename=serve_path.name,
     )
+
+
+@router.post("/api/clips/{clip_id}/cover-frame", summary="Set custom YouTube Short cover frame")
+@router.post("/api/clip/{clip_id}/cover-frame", summary="Set custom YouTube Short cover frame (alias)")
+async def set_clip_cover_frame(
+    request: Request,
+    clip_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    clip = db.query(Clip).filter_by(id=clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    from shorts_engine.services.storage.path_manager import PathManager, get_preview_proxy_path
+    from shorts_engine.services.ingestion.local_loader import generate_preview_proxy
+    from shorts_engine.services.rendering.compositor import VideoCompositor
+    from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+
+    file_path = PathManager.resolve_clip_path(clip)
+    if not file_path or not file_path.is_file() or file_path.stat().st_size == 0:
+        raise HTTPException(status_code=404, detail=f"Rendered video file not found on disk for clip {clip_id}")
+
+    # Parse timestamp_sec
+    timestamp_sec = 0.0
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            timestamp_sec = float(body.get("timestamp_sec", 0.0))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    else:
+        try:
+            form = await request.form()
+            timestamp_sec = float(form.get("timestamp_sec", 0.0))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid form payload")
+
+    timestamp_sec = max(0.0, timestamp_sec)
+
+    # Clamp timestamp to duration if known to prevent seeking past EOF
+    max_duration = 0.0
+    cand = getattr(clip, "candidate", None) or getattr(clip, "clip_candidate", None)
+    if cand and getattr(cand, "end_ms", None) is not None and getattr(cand, "start_ms", None) is not None:
+        max_duration = (cand.end_ms - cand.start_ms) / 1000.0
+    elif getattr(clip, "duration_ms", None) is not None:
+        max_duration = clip.duration_ms / 1000.0
+
+    if max_duration > 0.0:
+        timestamp_sec = min(timestamp_sec, max(0.0, max_duration - 0.05))
+
+    # 1. Extract cover frame at timestamp_sec to thumbnails directory
+    cover_dir = settings.STORAGE_DIR / "thumbnails"
+    cover_dir.mkdir(parents=True, exist_ok=True)
+    cover_img_path = cover_dir / f"{clip.id}_cover.jpg"
+
+    extract_cmd = [
+        "ffmpeg", "-y",
+        "-ss", f"{timestamp_sec:.3f}",
+        "-i", str(file_path),
+        "-frames:v", "1",
+        "-q:v", "2",
+        str(cover_img_path),
+    ]
+    ext_res = SubprocessWatchdog.run(extract_cmd, timeout_sec=30.0, check=False)
+    if ext_res.returncode != 0 or not cover_img_path.exists() or cover_img_path.stat().st_size == 0:
+        raise HTTPException(status_code=500, detail="Failed to extract cover frame from video")
+
+    # 2. Inject cover frame as frame 0 into video
+    from shorts_engine.utils.fs import atomic_replace
+    compositor = VideoCompositor()
+    temp_target = file_path.parent / f"{file_path.stem}_injected_{int(time.time())}.mp4"
+    try:
+        compositor.inject_cover_frame(
+            video_path=file_path,
+            cover_image_path=cover_img_path,
+            output_path=temp_target,
+        )
+        if temp_target.exists() and temp_target.stat().st_size > 0:
+            atomic_replace(temp_target, file_path)
+            clip.rendered_path = str(file_path)
+    except Exception as e:
+        if temp_target.exists():
+            temp_target.unlink(missing_ok=True)
+        logger.error("Failed to inject cover frame into video for clip %s: %s", clip_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to inject cover frame into video: {e}")
+
+    # 3. If preview proxy exists, regenerate it
+    proxy_path = get_preview_proxy_path(file_path)
+    if proxy_path.exists():
+        generate_preview_proxy(file_path, force=True)
+
+    # 4. Save metadata in quality_check_result
+    qr = {}
+    if clip.quality_check_result:
+        try:
+            qr = json.loads(clip.quality_check_result)
+        except Exception:
+            qr = {}
+    qr["cover_frame_sec"] = timestamp_sec
+    qr["cover_frame_path"] = str(cover_img_path)
+    clip.quality_check_result = json.dumps(qr)
+    db.commit()
+
+    logger.info("Cover frame successfully set for clip %s at %.2fs", clip_id, timestamp_sec)
+
+    return {
+        "status": "success",
+        "clip_id": clip_id,
+        "timestamp_sec": timestamp_sec,
+        "cover_frame_path": str(cover_img_path),
+    }
 
 
 @router.post("/queue/{clip_id}/approve", summary="Approve a clip for publishing")
@@ -536,6 +724,177 @@ def schedule_clip(
         request,
         default_msg=f"Clip {clip_id[:8]} scheduled for publishing at {dt_display}.",
         msg_type="success",
+        return_query=return_query,
+    )
+
+
+@router.get("/api/clips/{clip_id}/publishing-package", summary="Generate complete SEO and publishing package for clip")
+def get_publishing_package(
+    clip_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+):
+    clip = db.query(Clip).filter_by(id=clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    from shorts_engine.services.seo.engine import SEOMetadataEngine
+    seo_engine = SEOMetadataEngine()
+
+    channel = None
+    if clip.candidate and clip.candidate.source_video:
+        channel = clip.candidate.source_video.channel
+
+    package = seo_engine.generate_complete_upload_package(clip=clip, channel=channel, db=db)
+    channels = db.query(Channel).order_by(Channel.name.asc()).all()
+    package["available_channels"] = [
+        {"id": ch.id, "name": ch.name, "youtube_channel_id": ch.youtube_channel_id}
+        for ch in channels
+    ]
+    return package
+
+
+@router.post("/api/clips/{clip_id}/publish", summary="Publish or schedule clip with custom SEO parameters")
+async def publish_or_schedule_clip_api(
+    request: Request,
+    clip_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    clip = db.query(Clip).filter_by(id=clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    body = await request.json()
+    publish_mode = body.get("publish_mode", "schedule").lower()
+    scheduled_at_str = body.get("scheduled_at")
+    title = body.get("title") or clip.generated_title
+    description = body.get("description") or clip.generated_description
+    tags = body.get("tags")
+    category_id = body.get("category_id", "22")
+    made_for_kids = bool(body.get("made_for_kids", False))
+    privacy_status = body.get("privacy_status", "unlisted")
+    channel_id = body.get("channel_id")
+
+    if isinstance(tags, str):
+        tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+    elif isinstance(tags, list):
+        tags_list = tags
+    else:
+        tags_list = ["#Shorts", "#Viral"]
+
+    if channel_id and clip.candidate and clip.candidate.source_video:
+        matched_channel = db.query(Channel).filter_by(id=channel_id).first()
+        if matched_channel:
+            clip.candidate.source_video.channel_id = matched_channel.id
+            db.commit()
+
+    if title:
+        clip.generated_title = title[:100]
+    if description:
+        clip.generated_description = description[:5000]
+    if tags_list:
+        clip.generated_tags = json.dumps(tags_list)
+
+    if publish_mode == "schedule":
+        if not scheduled_at_str:
+            raise HTTPException(status_code=422, detail="scheduled_at datetime is required for schedule mode")
+        dt = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+        clip.scheduled_publish_at = dt
+        clip.status = ClipStatus.APPROVED
+        db.commit()
+        logger.info("Operator '%s' scheduled clip %s for %s", current_user.username, clip_id, dt.isoformat())
+        return {
+            "status": "scheduled",
+            "clip_id": clip.id,
+            "scheduled_publish_at": dt.isoformat(),
+            "title": clip.generated_title,
+        }
+
+    from shorts_engine.services.publishing.client import YouTubePublisher
+    from shorts_engine.services.publishing.metadata import ShortsMetadata
+
+    meta = ShortsMetadata(
+        title=clip.generated_title or "Viral Short #Shorts",
+        description=clip.generated_description or "Check out this Short! #Shorts",
+        tags=tags_list,
+        privacy_status=privacy_status,
+        category_id=category_id,
+        made_for_kids=made_for_kids,
+    )
+    publisher = YouTubePublisher(db_session=db)
+    result = publisher.publish_clip(clip=clip, metadata=meta)
+    return result
+
+
+@router.post("/queue/{clip_id}/publish", summary="Publish or schedule clip from form")
+def publish_or_schedule_clip_form(
+    request: Request,
+    clip_id: str,
+    publish_mode: str = Form(default="schedule"),
+    scheduled_at: Optional[str] = Form(default=None),
+    title: Optional[str] = Form(default=None),
+    description: Optional[str] = Form(default=None),
+    tags: Optional[str] = Form(default=None),
+    category_id: str = Form(default="22"),
+    made_for_kids: Optional[str] = Form(default=None),
+    privacy_status: str = Form(default="unlisted"),
+    channel_id: Optional[str] = Form(default=None),
+    return_query: Optional[str] = Form(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    clip = db.query(Clip).filter_by(id=clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    is_kids = bool(made_for_kids and made_for_kids.lower() in ("on", "true", "1", "yes"))
+    tags_list = [t.strip() for t in (tags or "").split(",") if t.strip()] or ["#Shorts", "#Viral"]
+
+    if title:
+        clip.generated_title = title[:100]
+    if description:
+        clip.generated_description = description[:5000]
+    clip.generated_tags = json.dumps(tags_list)
+
+    if channel_id and clip.candidate and clip.candidate.source_video:
+        matched_ch = db.query(Channel).filter_by(id=channel_id).first()
+        if matched_ch:
+            clip.candidate.source_video.channel_id = matched_ch.id
+
+    if publish_mode.lower() == "schedule":
+        if not scheduled_at:
+            raise HTTPException(status_code=422, detail="Scheduled datetime is required")
+        dt = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        clip.scheduled_publish_at = dt
+        clip.status = ClipStatus.APPROVED
+        db.commit()
+        return _make_queue_redirect(
+            request,
+            default_msg=f"Clip {clip_id[:8]} scheduled for {dt.strftime('%b %d, %H:%M')}.",
+            msg_type="success",
+            return_query=return_query,
+        )
+
+    from shorts_engine.services.publishing.client import YouTubePublisher
+    from shorts_engine.services.publishing.metadata import ShortsMetadata
+
+    meta = ShortsMetadata(
+        title=clip.generated_title or "Viral Short #Shorts",
+        description=clip.generated_description or "Check out this Short! #Shorts",
+        tags=tags_list,
+        privacy_status=privacy_status,
+        category_id=category_id,
+        made_for_kids=is_kids,
+    )
+    publisher = YouTubePublisher(db_session=db)
+    res = publisher.publish_clip(clip=clip, metadata=meta)
+    msg = f"Clip {clip_id[:8]} successfully published to YouTube!" if res.get("success") else f"Publishing failed: {res.get('reason')}"
+    return _make_queue_redirect(
+        request,
+        default_msg=msg,
+        msg_type="success" if res.get("success") else "danger",
         return_query=return_query,
     )
 
@@ -709,17 +1068,52 @@ def re_evaluate_video(
     return res
 
 
-@router.post("/api/clip/{clip_id}/open-folder", summary="Open folder containing clip in native file explorer")
+@router.post("/api/clips/{clip_id}/open-folder", summary="Open folder containing clip in native file explorer")
 def open_clip_folder(
     clip_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_viewer),
+    csrf_ok: bool = Depends(verify_csrf),
 ):
     clip = db.query(Clip).filter_by(id=clip_id).first()
     if not clip or not clip.rendered_path:
         raise HTTPException(status_code=404, detail="Clip or rendered file not found")
+
+    import tempfile
+    resolved_path = Path(clip.rendered_path).resolve()
+    allowed_roots = [
+        settings.STORAGE_DIR.resolve(),
+        Path(".").resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+    ]
+    is_allowed = False
+    for root in allowed_roots:
+        try:
+            resolved_path.relative_to(root)
+            is_allowed = True
+            break
+        except ValueError:
+            pass
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Access denied: file path is outside allowed media root.")
+
     from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
-    return ClipRecoveryService.open_in_folder(Path(clip.rendered_path))
+    return ClipRecoveryService.open_in_folder(clip, db=db)
+
+
+@router.post(
+    "/api/clip/{clip_id}/open-folder",
+    summary="Open folder containing clip in native file explorer (deprecated alias)",
+    deprecated=True,
+)
+def open_clip_folder_deprecated(
+    clip_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    logger.warning("Deprecated route accessed: /api/clip/%s/open-folder. Please migrate to /api/clips/%s/open-folder", clip_id, clip_id)
+    return open_clip_folder(clip_id=clip_id, db=db, current_user=current_user, csrf_ok=csrf_ok)
 
 
 @router.get("/queue/clip/{clip_id}/diagnostics", summary="Get Quality Gate diagnostics and suggested fixes for clip")
@@ -874,11 +1268,18 @@ def re_render_clip_style(
     words_per_line: Optional[int] = Form(default=None),
     case_transform: Optional[str] = Form(default=None),
     hook_overlay_text: Optional[str] = Form(default=None),
+    cta_overlay_text: Optional[str] = Form(default=None),
+    watermark_text: Optional[str] = Form(default=None),
+    watermark_anchor: Optional[str] = Form(default="top_right"),
+    watermark_image_path: Optional[str] = Form(default=None),
+    scale_pop: Optional[bool] = Form(default=None),
+    force_re_render: Optional[bool] = Form(default=True),
     return_query: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
     csrf_ok: bool = Depends(verify_csrf),
 ):
+    t0 = time.time()
     clip = db.query(Clip).filter_by(id=clip_id).first()
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
@@ -902,11 +1303,7 @@ def re_render_clip_style(
         raise HTTPException(status_code=404, detail="Source video media file missing on disk")
 
     # Determine template / custom overrides
-    if template_id and template_id in ("hormozi", "mrbeast", "neon", "minimalist", "high_contrast_box"):
-        tmpl = get_caption_template(template_id)
-        clip.caption_style = json.dumps(tmpl.to_ui_dict())
-        style_overrides = tmpl.to_ass_overrides()
-    elif font_name or primary_hex or highlight_hex:
+    if font_name or primary_hex or highlight_hex:
         custom_dict = {
             "template_id": "custom",
             "name": "Custom Style",
@@ -920,14 +1317,27 @@ def re_render_clip_style(
             "margin_vertical": margin_vertical or settings.CAPTION_MARGIN_VERTICAL,
             "max_words_per_line": words_per_line or 4,
             "case_transform": case_transform or "uppercase",
+            "scale_pop": scale_pop if scale_pop is not None else True,
         }
         tmpl = parse_custom_template(custom_dict)
         clip.caption_style = json.dumps(tmpl.to_ui_dict())
         style_overrides = tmpl.to_ass_overrides()
     else:
-        tmpl = get_caption_template(settings.DEFAULT_CAPTION_PRESET)
+        tmpl = get_caption_template(template_id or settings.DEFAULT_CAPTION_PRESET, db=db)
         clip.caption_style = json.dumps(tmpl.to_ui_dict())
         style_overrides = tmpl.to_ass_overrides()
+        if margin_vertical is not None:
+            style_overrides["margin_vertical"] = margin_vertical
+        if words_per_line is not None:
+            style_overrides["max_words_per_line"] = words_per_line
+        if case_transform is not None:
+            style_overrides["case_transform"] = case_transform
+        if scale_pop is not None:
+            style_overrides["scale_pop"] = scale_pop
+        if outline_width is not None:
+            style_overrides["outline_width"] = outline_width
+        if shadow_depth is not None:
+            style_overrides["shadow_depth"] = shadow_depth
 
     # Load transcript words
     words = []
@@ -940,7 +1350,7 @@ def re_render_clip_style(
         except Exception as e:
             logger.warning("Could not parse transcript words for re-render: %s", e)
 
-    # Re-generate ASS subtitle
+    # Re-generate ASS subtitle with cache invalidation
     sub_path = PathManager.get_subtitle_path(sv.youtube_video_id, cand.start_ms, cand.end_ms)
     ass_gen = ASSSubtitleGenerator()
     ass_gen.generate_ass(
@@ -982,6 +1392,14 @@ def re_render_clip_style(
         except Exception:
             pass
 
+    # Invalidate cache if force_re_render
+    if force_re_render and target_clip_path.exists():
+        try:
+            target_clip_path.unlink()
+            logger.info("Invalidated and unlinked existing render artifact at %s", target_clip_path)
+        except Exception as e:
+            logger.warning("Could not unlink existing render file: %s", e)
+
     compositor = VideoCompositor()
     rendered_file = compositor.render_short(
         source_video_path=source_path,
@@ -992,17 +1410,66 @@ def re_render_clip_style(
         output_filename=out_name,
         normalize_audio=True,
         hook_overlay_text=hook_overlay,
+        force_re_render=bool(force_re_render),
+        watermark_text=watermark_text,
+        watermark_anchor=watermark_anchor or "top_right",
+        watermark_image_path=Path(watermark_image_path) if watermark_image_path else None,
+        cta_overlay_text=cta_overlay_text,
     )
-
 
     clip.rendered_path = str(rendered_file)
     db.commit()
 
-    logger.info("Operator '%s' re-rendered clip %s with style %s", current_user.username, clip_id, tmpl.name)
-    msg = f"Re-rendered clip {clip_id[:8]} with '{tmpl.name}' style."
+    render_duration = round(time.time() - t0, 1)
+    logger.info("Operator '%s' re-rendered clip %s with style %s in %0.1fs", current_user.username, clip_id, tmpl.name, render_duration)
+    msg = f"Re-rendered clip {clip_id[:8]} with '{tmpl.name}' style in {render_duration}s."
     if return_query or request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return _make_queue_redirect(request, default_msg=msg, msg_type="success", return_query=return_query)
-    return {"status": "re_rendered", "clip_id": clip_id, "rendered_path": clip.rendered_path, "style": tmpl.name}
+    return {"status": "re_rendered", "clip_id": clip_id, "rendered_path": clip.rendered_path, "style": tmpl.name, "render_time_sec": render_duration}
+
+
+@router.get("/api/caption-presets", summary="List all caption presets (built-in and custom)")
+def list_caption_presets_api(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+):
+    from shorts_engine.services.captioning.templates import list_caption_templates
+    return list_caption_templates(db=db)
+
+
+@router.post("/api/caption-presets", summary="Create or update a custom caption preset")
+async def create_caption_preset_api(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.captioning.templates import save_preset_to_db
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            payload = await request.json()
+        else:
+            form = await request.form()
+            payload = dict(form)
+        preset = save_preset_to_db(db, payload)
+        return {"status": "saved", "preset": preset.to_dict()}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/api/caption-presets/{preset_id}", summary="Delete a custom caption preset")
+def delete_caption_preset_api(
+    preset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+    csrf_ok: bool = Depends(verify_csrf),
+):
+    from shorts_engine.services.captioning.templates import delete_preset_from_db
+    success = delete_preset_from_db(db, preset_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Preset not found or cannot delete built-in preset")
+    return {"status": "deleted", "id": preset_id}
 
 
 @router.post("/queue/{clip_id}/trim", summary="Trim and re-time a clip with speech pause snapping")
@@ -1221,7 +1688,7 @@ def delete_failed_clip(
     if request.headers.get("hx-request") == "true":
         return Response(
             content="",
-            headers={"HX-Trigger": json.dumps({"showToast": {"message": f"Clip dismissed.", "type": "info"}, "itemDeleted": clip_id})}
+            headers={"HX-Trigger": json.dumps({"showToast": {"message": "Clip dismissed.", "type": "info"}, "itemDeleted": clip_id})}
         )
     if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return RedirectResponse(url="/dead-letter", status_code=303)
@@ -1266,7 +1733,7 @@ def delete_failed_video(
     if request.headers.get("hx-request") == "true":
         return Response(
             content="",
-            headers={"HX-Trigger": json.dumps({"showToast": {"message": f"Video dismissed.", "type": "info"}, "itemDeleted": yt_id})}
+            headers={"HX-Trigger": json.dumps({"showToast": {"message": "Video dismissed.", "type": "info"}, "itemDeleted": yt_id})}
         )
     if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return RedirectResponse(url="/dead-letter", status_code=303)
@@ -1327,3 +1794,229 @@ def clear_all_failed(
 @router.get("/dead-letter/clear-all", summary="Redirect direct browser access to dead-letter queue")
 def clear_all_failed_get():
     return RedirectResponse(url="/dead-letter", status_code=303)
+
+
+@router.get("/api/queue/summary", summary="Review queue summary for React SPA")
+def api_queue_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+):
+    active_clips = (
+        db.query(Clip)
+        .outerjoin(ClipCandidate, Clip.clip_candidate_id == ClipCandidate.id)
+        .filter(Clip.status == ClipStatus.WAITING_APPROVAL)
+        .order_by(Clip.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    rejected_clips = (
+        db.query(Clip)
+        .outerjoin(ClipCandidate, Clip.clip_candidate_id == ClipCandidate.id)
+        .filter(Clip.status == ClipStatus.REJECTED)
+        .order_by(Clip.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    def _format_clip(c: Clip):
+        cand = c.candidate
+        vid_id = (cand.source_video_id if cand else "") or ""
+        hook = (cand.hook_text if cand else None) or c.generated_title or ""
+        payoff = (cand.payoff_text if cand else None) or ""
+        score = float(cand.score if (cand and cand.score is not None) else 8.5)
+        duration_ms = int((cand.end_ms or 0) - (cand.start_ms or 0)) if cand else 30000
+
+        return {
+            "id": c.id,
+            "hook_text": hook,
+            "payoff_text": payoff,
+            "score": score,
+            "duration_ms": duration_ms,
+            "status": c.status.value,
+            "ai_provider": "LLM",
+            "ai_model": "heuristic",
+            "rendered_path": c.rendered_path,
+            "video_id": vid_id,
+            "thumbnail_url": f"/api/thumbnails/{c.id}",
+            "is_sensitive": bool(getattr(c, "is_sensitive", False)),
+        }
+
+    return {
+        "clips": [_format_clip(c) for c in active_clips],
+        "rejected": [_format_clip(c) for c in rejected_clips],
+    }
+
+
+@router.post("/api/clips/{clip_id}/{action}", summary="Execute action on clip from React SPA")
+def api_clip_action(
+    clip_id: str,
+    action: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    clip = db.query(Clip).filter_by(id=clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    if action == "approve":
+        clip.status = ClipStatus.APPROVED
+    elif action == "reject":
+        clip.status = ClipStatus.REJECTED
+    elif action in ("restore", "recover"):
+        clip.status = ClipStatus.WAITING_APPROVAL
+    elif action == "open-folder":
+        from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
+        if not clip.rendered_path:
+            raise HTTPException(status_code=404, detail="Clip has no rendered file associated")
+        return ClipRecoveryService.open_in_folder(clip, db=db)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action {action}")
+
+    db.commit()
+    return {"status": "success", "clip_id": clip_id, "action": action, "new_status": clip.status.value}
+
+
+@router.post("/api/queue/ingest", summary="Ingest external video file into Review Queue")
+async def ingest_external_video(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    channel_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    """
+    Accepts external video file (.mp4, .mov, .mkv, .webm), validates format and dimensions,
+    and stores it in storage/renders with source='external'.
+    """
+    import shutil
+    from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+    from shorts_engine.db.models import generate_uuid
+
+    filename = file.filename or "uploaded_video.mp4"
+    ext = Path(filename).suffix.lower()
+    if ext not in (".mp4", ".mov", ".mkv", ".webm"):
+        raise HTTPException(status_code=400, detail="Only video files (.mp4, .mov, .mkv, .webm) are allowed")
+
+    renders_dir = settings.STORAGE_DIR / "renders"
+    renders_dir.mkdir(parents=True, exist_ok=True)
+    clean_stem = "".join(c for c in Path(filename).stem if c.isalnum() or c in ("-", "_"))[:30]
+    out_filename = f"ext_{int(time.time())}_{clean_stem}{ext}"
+    target_path = renders_dir / out_filename
+
+    try:
+        with open(target_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        logger.exception("Failed to write ingested video file: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save video file: {e}")
+
+    duration_sec = 30.0
+    width = 1080
+    height = 1920
+    try:
+        probe_cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration:stream=width,height",
+            "-of", "json",
+            str(target_path),
+        ]
+        res = SubprocessWatchdog.run(probe_cmd, timeout_sec=15.0, check=False)
+        if res.returncode == 0 and res.stdout.strip():
+            probe_data = json.loads(res.stdout)
+            format_info = probe_data.get("format", {})
+            if "duration" in format_info:
+                duration_sec = float(format_info["duration"])
+            streams = probe_data.get("streams", [])
+            for st in streams:
+                if "width" in st and "height" in st:
+                    width = int(st["width"])
+                    height = int(st["height"])
+                    break
+    except Exception as e:
+        logger.warning("Could not probe ingested video: %s", e)
+
+    is_vertical = height > width
+    if duration_sec > 60.0:
+        if target_path.exists():
+            try:
+                target_path.unlink()
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video exceeds YouTube Shorts duration limit (duration: {duration_sec:.1f}s > 60.0s).",
+        )
+    if not is_vertical:
+        if target_path.exists():
+            try:
+                target_path.unlink()
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video is not vertical ({width}x{height}). YouTube Shorts must be vertical (aspect ratio 9:16).",
+        )
+
+    channel = None
+    if channel_id:
+        channel = db.query(Channel).filter_by(id=channel_id).first()
+        if not channel:
+            channel = db.query(Channel).filter_by(youtube_channel_id=channel_id).first()
+    if not channel:
+        channel = db.query(Channel).filter_by(youtube_channel_id="UCBWVd_s5Gb6silTdeYaMqvA").first() or db.query(Channel).first()
+
+    clean_title = (title or Path(filename).stem.replace("_", " ").title())[:100]
+
+    source_vid = SourceVideo(
+        youtube_video_id=f"ext_{int(time.time())}_{generate_uuid()[:6]}",
+        title=clean_title,
+        channel_id=channel.id if channel else None,
+        duration_sec=duration_sec,
+    )
+    db.add(source_vid)
+    db.flush()
+
+    candidate = ClipCandidate(
+        source_video_id=source_vid.id,
+        start_ms=0,
+        end_ms=int(duration_sec * 1000),
+        hook_text=clean_title,
+        payoff_text="External video ingest",
+        score=8.5,
+        reason="[external_ingest]",
+    )
+    db.add(candidate)
+    db.flush()
+
+    clip = Clip(
+        clip_candidate_id=candidate.id,
+        status=ClipStatus.WAITING_APPROVAL,
+        source="external",
+        rendered_path=str(target_path),
+        generated_title=clean_title,
+        draft_title=clean_title,
+        draft_description="Check out this Short! #Shorts #Viral",
+        draft_tags=json.dumps(["#Shorts", "#Viral", "#External"]),
+        draft_version=1,
+    )
+    db.add(clip)
+    db.commit()
+    db.refresh(clip)
+
+    is_vertical = height > width
+    is_shorts_compliant = duration_sec <= 60.0 and is_vertical
+
+    logger.info("Ingested external video %s as clip %s (duration: %.1fs, %dx%d)", filename, clip.id, duration_sec, width, height)
+
+    return {
+        "status": "success",
+        "clip_id": clip.id,
+        "title": clip.generated_title,
+        "duration_sec": round(duration_sec, 1),
+        "dimensions": f"{width}x{height}",
+        "is_vertical": is_vertical,
+        "is_shorts_compliant": is_shorts_compliant,
+        "rendered_path": str(target_path),
+        "source": "external",
+        "channel_name": channel.name if channel else "Default Channel",
+    }

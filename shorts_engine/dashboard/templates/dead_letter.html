@@ -74,23 +74,32 @@
 {% else %}
 <div class="table-responsive">
 <table class="table table-dark table-hover align-middle">
-    <thead><tr><th>Video ID</th><th>YouTube ID</th><th>Retries & Failure Type</th><th>Error Details & Diagnostics</th><th>Action</th></tr></thead>
+    <thead><tr><th>Video Title & Channel</th><th>YouTube ID</th><th>Retries & Failure Type</th><th>Error Details & Diagnostics</th><th>Action</th></tr></thead>
     <tbody>
     {% for video in failed_videos %}
     <tr>
-        <td><code>{{ video.id[:8] }}…</code></td>
+        <td>
+            <div class="fw-semibold text-light">{{ video.title }}</div>
+            <div class="small text-muted">{{ video.channel.name if video.channel else 'Unknown Channel' }}</div>
+        </td>
         <td>
             <a href="https://www.youtube.com/watch?v={{ video.youtube_video_id }}" target="_blank" class="text-info text-decoration-none small">
                 <code class="d-inline-block text-truncate align-middle" style="max-width: 180px;" title="{{ video.youtube_video_id }}">{{ video.youtube_video_id }}</code> ↗
             </a>
         </td>
         <td>
+            {% if video.status.value == 'POLICY_RESTRICTED' or video.status == 'POLICY_RESTRICTED' %}
+            <span class="badge bg-danger text-light border border-danger mb-1 d-block" title="Ingestion blocked by Policy Gate">🛡️ POLICY RESTRICTED</span>
+            {% endif %}
             {% if video.retry_count >= (settings.MAX_RETRY_COUNT if settings else 3) %}
             <span class="badge bg-danger" title="Automatic retries exhausted">Exhausted ({{ video.retry_count }}/{{ settings.MAX_RETRY_COUNT if settings else 3 }})</span>
             {% elif video.retry_count > 0 %}
             <span class="badge bg-warning text-dark">{{ video.retry_count }} / {{ settings.MAX_RETRY_COUNT if settings else 3 }} Retries</span>
             {% else %}
             <span class="badge bg-secondary">Manual Failure</span>
+            {% endif %}
+            {% if video.is_sensitive %}
+            <span class="badge bg-danger-subtle text-danger border border-danger ms-1" title="Marked as Sensitive Content">⚠️ SENSITIVE</span>
             {% endif %}
         </td>
         <td>

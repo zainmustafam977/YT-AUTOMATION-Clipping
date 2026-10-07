@@ -5,7 +5,7 @@ and computes optimal FFmpeg crop parameters with center/blurred background fallb
 
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 import cv2
 from shorts_engine.config.settings import settings
 from shorts_engine.services.reframing.detector import SubjectDetector
@@ -69,8 +69,6 @@ class VideoReframer:
 
         src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1920
         src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1080
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-
         # Calculate 9:16 crop dimensions from source
         # In a landscape 16:9 (e.g. 1920x1080), 9:16 height is src_h, width is src_h * 9 / 16
         crop_h = src_h

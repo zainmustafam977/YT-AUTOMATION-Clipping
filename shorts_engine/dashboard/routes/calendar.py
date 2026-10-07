@@ -4,7 +4,6 @@ Provides a visual interactive calendar for viewing, scheduling, and drag-and-dro
 rescheduling of YouTube Shorts.
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -13,11 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, Channel, User, PublishLog
+from shorts_engine.db.models import Clip, ClipStatus, User, PublishLog
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ with idempotency, step resumption, and audit logging.
 """
 
 import os
-import re
 import json
+import shutil
 import logging
 import threading
 from pathlib import Path
@@ -23,8 +23,9 @@ from shorts_engine.db.models import (
     ClipStatus,
 )
 from shorts_engine.services.ingestion.downloader import IngestionService
+from shorts_engine.services.ingestion.policy_gate import PolicyGate
 from shorts_engine.services.transcription.engine import TranscriptionService
-from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
+from shorts_engine.services.transcription.formatter import FormattedTranscript
 from shorts_engine.services.clip_selection.selector import ClipSelectionService, SelectedClip
 from shorts_engine.services.reframing.cropper import VideoReframer
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
@@ -102,6 +103,22 @@ def release_video_lock(video_id: str) -> bool:
 
 
 
+def assert_sufficient_disk_space(target_dir: Optional[Path] = None, min_free_gb: float = 5.0) -> float:
+    """
+    Pre-flight circuit assertion checking free disk space (Enhancement 10).
+    Raises RuntimeError if free space < min_free_gb.
+    """
+    target = Path(target_dir or settings.STORAGE_DIR)
+    target.mkdir(parents=True, exist_ok=True)
+    usage = shutil.disk_usage(str(target))
+    free_gb = usage.free / (1024 ** 3)
+    if free_gb < min_free_gb:
+        msg = f"Low Disk Space: Free space < {min_free_gb:.1f} GB ({free_gb:.2f} GB available on {target})"
+        logger.critical(msg)
+        raise RuntimeError(msg)
+    return free_gb
+
+
 class PipelineRunner:
     def __init__(self, db_session: Session):
         self.db = db_session
@@ -151,6 +168,7 @@ class PipelineRunner:
 
         reload_runtime_settings()
         reconcile_stale_claims(self.db)
+        assert_sufficient_disk_space(min_free_gb=5.0)
         video_id = self.ingestion.extract_video_id(video_id_or_url)
         logger.info(
             "Starting pipeline for video ID: %s (dry_run=%s, caption_preset=%s, overrides=%s)...",
@@ -215,6 +233,20 @@ class PipelineRunner:
                 video.runtime_overrides = runtime_overrides
                 self.db.commit()
 
+            # Early oEmbed metadata enrichment for human-readable title
+            if not video.title or video.title == f"Video {video_id}":
+                try:
+                    import httpx
+                    with httpx.Client(timeout=2.5) as client:
+                        oe_res = client.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json")
+                        if oe_res.status_code == 200:
+                            oe_title = oe_res.json().get("title")
+                            if oe_title:
+                                video.title = str(oe_title).strip()
+                                self.db.commit()
+                except Exception:
+                    pass
+
             if is_video_cancelled(video_id):
                 logger.info("Pipeline processing aborted before Step A for cancelled video %s", video_id)
                 return {
@@ -228,78 +260,177 @@ class PipelineRunner:
 
             # Step A: Ingestion / Download
             if video.status == SourceVideoStatus.DETECTED:
-                self.lifecycle.transition_video(video, SourceVideoStatus.DOWNLOADING)
-                try:
-                    download_res = self.ingestion.download_video(video_id_or_url)
-                    if download_res.title and download_res.title != video_id:
-                        video.title = download_res.title
-                    elif not video.title:
-                        video.title = download_res.title
-                    video.duration_sec = download_res.duration_sec or video.duration_sec
-                    video.downloaded_path = str(download_res.video_path)
-                    video.audio_path = str(download_res.audio_path)
-
-                    # Dynamic channel re-assignment if currently linked to default_channel
-                    if video.channel.youtube_channel_id == "default_channel":
-                        meta = download_res.metadata if isinstance(download_res.metadata, dict) else {}
-                        ch_name = meta.get("uploader") or meta.get("channel")
-                        ch_yt_id = meta.get("channel_id") or meta.get("uploader_id")
-                        if ch_name:
-                            clean_name = str(ch_name).strip()
-                            clean_yt_id = str(ch_yt_id).strip() if ch_yt_id else clean_name
-                            matched_ch = self.db.query(Channel).filter(
-                                (Channel.youtube_channel_id == clean_yt_id) |
-                                (Channel.name.ilike(clean_name)) |
-                                (Channel.youtube_channel_id == clean_yt_id.lstrip("@"))
-                            ).first()
-                            if not matched_ch and clean_yt_id:
-                                matched_ch = Channel(
-                                    name=clean_name,
-                                    youtube_channel_id=clean_yt_id,
-                                    watch_enabled=True,
-                                    human_review_required=True,
-                                )
-                                self.db.add(matched_ch)
-                                self.db.commit()
-                                self.db.refresh(matched_ch)
-                            if matched_ch:
-                                video.channel_id = matched_ch.id
-                                channel = matched_ch
-                                self.db.commit()
-                                self.db.refresh(video)
-                                logger.info("Auto-assigned video %s to detected creator channel '%s' (%s)", video_id, clean_name, clean_yt_id)
-
-                    # Pre-ingestion Shorts filter: skip videos that are already YouTube Shorts
-                    is_short, short_reason = is_existing_short(
-                        title=download_res.title,
-                        duration_sec=download_res.duration_sec,
-                        tags=download_res.metadata.get("tags") if isinstance(download_res.metadata, dict) else None,
-                    )
-                    if is_short:
-                        logger.info("Skipping video %s: already a YouTube Short (%s)", video_id, short_reason)
-                        video.status = SourceVideoStatus.DONE
-                        video.error_message = f"Skipped: already a YouTube Short ({short_reason})"
+                is_local_file = bool(video.downloaded_path and Path(video.downloaded_path).is_file())
+                if not is_local_file:
+                    # Pre-flight Policy Gate & Safety Triage (Pillar 2)
+                    policy_res = PolicyGate.assess_video(video_id)
+                    if policy_res.action == "skip":
+                        logger.info("PolicyGate auto-skipped video %s: %s", video_id, policy_res.reason)
+                        video.status = SourceVideoStatus.POLICY_RESTRICTED
+                        video.is_sensitive = True
+                        video.error_message = f"Skipped: Policy restricted ({policy_res.reason})"
                         self.db.commit()
                         job_progress_tracker.update_progress(
                             video_id=video_id,
-                            stage="DONE",
+                            stage="POLICY_RESTRICTED",
                             percent=100.0,
-                            detail=f"Skipped: already a YouTube Short ({short_reason})",
+                            detail=video.error_message,
                         )
                         return PipelineResult({
                             "source_video_id": video.id,
                             "youtube_video_id": video_id,
                             "title": video.title,
-                            "status": "SKIPPED",
-                            "message": f"Skipped: already a YouTube Short ({short_reason})",
+                            "status": "POLICY_RESTRICTED",
+                            "message": video.error_message,
                             "clips_count": 0,
                             "clips": [],
                         })
+                    elif policy_res.action == "hold":
+                        logger.info("PolicyGate strict hold for video %s: %s", video_id, policy_res.reason)
+                        video.status = SourceVideoStatus.PENDING_POLICY_REVIEW
+                        video.is_sensitive = True
+                        video.error_message = f"Pending Policy Review: {policy_res.reason}"
+                        self.db.commit()
+                        job_progress_tracker.update_progress(
+                            video_id=video_id,
+                            stage="PENDING_POLICY_REVIEW",
+                            percent=100.0,
+                            detail=video.error_message,
+                        )
+                        self.alerter.alert("Pending Policy Review", f"Video {video_id} held: {policy_res.reason}", level="WARNING", context={"video_id": video_id})
+                        return PipelineResult({
+                            "source_video_id": video.id,
+                            "youtube_video_id": video_id,
+                            "title": video.title,
+                            "status": "PENDING_POLICY_REVIEW",
+                            "message": video.error_message,
+                            "clips_count": 0,
+                            "clips": [],
+                        })
+                    elif policy_res.action == "require_auth":
+                        logger.warning("PolicyGate failed fast for video %s (require_auth): %s", video_id, policy_res.reason)
+                        video.status = SourceVideoStatus.POLICY_RESTRICTED
+                        video.is_sensitive = True
+                        video.error_message = f"Policy Restricted: {policy_res.reason} (0 retries burned)"
+                        self.db.commit()
+                        job_progress_tracker.update_progress(
+                            video_id=video_id,
+                            stage="POLICY_RESTRICTED",
+                            percent=100.0,
+                            detail=video.error_message,
+                        )
+                        self.alerter.alert("Policy Restricted", f"Video {video_id} restricted: {policy_res.reason}", level="WARNING", context={"video_id": video_id})
+                        return PipelineResult({
+                            "source_video_id": video.id,
+                            "youtube_video_id": video_id,
+                            "title": video.title,
+                            "status": "POLICY_RESTRICTED",
+                            "message": video.error_message,
+                            "clips_count": 0,
+                            "clips": [],
+                        })
+
+                    # If cleared or approved with sensitivity advisory:
+                    if policy_res.is_restricted or policy_res.sensitive_themes:
+                        video.is_sensitive = True
+                        if policy_res.title and (not video.title or video.title == f"Video {video_id}"):
+                            video.title = policy_res.title
+                        self.db.commit()
+
+                self.lifecycle.transition_video(video, SourceVideoStatus.DOWNLOADING)
+                try:
+                    if is_local_file:
+                        logger.info("Local video %s already present at %s; skipping YouTube download", video_id, video.downloaded_path)
+                        # Ensure audio extraction for transcription
+                        target_audio = Path(settings.STORAGE_DIR) / "downloads" / f"{video.youtube_video_id}.wav"
+                        if not video.audio_path or not Path(video.audio_path).is_file():
+                            logger.info("Extracting audio from local video %s to %s", video.downloaded_path, target_audio)
+                            self.ingestion.extract_audio(Path(video.downloaded_path), target_audio)
+                            video.audio_path = str(target_audio)
+                        self.db.commit()
+                        self.db.refresh(video)
+                    else:
+                        download_res = self.ingestion.download_video(video_id_or_url)
+                        if download_res.title and download_res.title != video_id:
+                            video.title = download_res.title
+                        elif not video.title:
+                            video.title = download_res.title
+                        video.duration_sec = download_res.duration_sec or video.duration_sec
+                        video.downloaded_path = str(download_res.video_path)
+                        video.audio_path = str(download_res.audio_path)
+
+                        # Dynamic channel re-assignment if currently linked to default_channel
+                        if video.channel.youtube_channel_id == "default_channel":
+                            meta = download_res.metadata if isinstance(download_res.metadata, dict) else {}
+                            ch_name = meta.get("uploader") or meta.get("channel")
+                            ch_yt_id = meta.get("channel_id") or meta.get("uploader_id")
+                            if ch_name:
+                                clean_name = str(ch_name).strip()
+                                clean_yt_id = str(ch_yt_id).strip() if ch_yt_id else clean_name
+                                matched_ch = self.db.query(Channel).filter(
+                                    (Channel.youtube_channel_id == clean_yt_id) |
+                                    (Channel.name.ilike(clean_name)) |
+                                    (Channel.youtube_channel_id == clean_yt_id.lstrip("@"))
+                                ).first()
+                                if not matched_ch and clean_yt_id:
+                                    matched_ch = Channel(
+                                        name=clean_name,
+                                        youtube_channel_id=clean_yt_id,
+                                        watch_enabled=True,
+                                        human_review_required=True,
+                                    )
+                                    self.db.add(matched_ch)
+                                    self.db.commit()
+                                    self.db.refresh(matched_ch)
+                                if matched_ch:
+                                    video.channel_id = matched_ch.id
+                                    channel = matched_ch
+                                    self.db.commit()
+                                    self.db.refresh(video)
+                                    logger.info("Auto-assigned video %s to detected creator channel '%s' (%s)", video_id, clean_name, clean_yt_id)
+
+                        # Pre-ingestion Shorts filter: skip videos that are already YouTube Shorts
+                        is_short, short_reason = is_existing_short(
+                            title=download_res.title,
+                            duration_sec=download_res.duration_sec,
+                            tags=download_res.metadata.get("tags") if isinstance(download_res.metadata, dict) else None,
+                        )
+                        if is_short:
+                            logger.info("Skipping video %s: already a YouTube Short (%s)", video_id, short_reason)
+                            video.status = SourceVideoStatus.DONE
+                            video.error_message = f"Skipped: already a YouTube Short ({short_reason})"
+                            self.db.commit()
+                            job_progress_tracker.update_progress(
+                                video_id=video_id,
+                                stage="DONE",
+                                percent=100.0,
+                                detail=f"Skipped: already a YouTube Short ({short_reason})",
+                            )
+                            return PipelineResult({
+                                "source_video_id": video.id,
+                                "youtube_video_id": video_id,
+                                "title": video.title,
+                                "status": "SKIPPED",
+                                "message": f"Skipped: already a YouTube Short ({short_reason})",
+                                "clips_count": 0,
+                                "clips": [],
+                            })
 
                     self.lifecycle.transition_video(video, SourceVideoStatus.TRANSCRIBING)
                 except Exception as e:
                     video.status = SourceVideoStatus.FAILED
                     video.error_message = str(e)
+                    if not video.title or video.title == f"Video {video_id}":
+                        try:
+                            import httpx
+                            with httpx.Client(timeout=2.0) as client:
+                                oe_res = client.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json")
+                                if oe_res.status_code == 200:
+                                    oe_title = oe_res.json().get("title")
+                                    if oe_title:
+                                        video.title = str(oe_title).strip()
+                        except Exception:
+                            pass
                     self.db.commit()
                     job_progress_tracker.update_progress(
                         video_id=video_id,
@@ -369,12 +500,48 @@ class PipelineRunner:
 
             # Resolve effective per-video runtime overrides or fallback to global settings
             overrides = video.runtime_overrides or runtime_overrides or {}
-            eff_min_clips = int(overrides.get("min_segments_per_video") or settings.MIN_SEGMENTS_PER_VIDEO)
-            eff_max_clips = int(overrides.get("max_segments_per_video") or settings.MAX_SEGMENTS_PER_VIDEO)
             eff_min_dur = int(overrides.get("target_duration_min_sec") or settings.TARGET_DURATION_MIN_SEC)
             eff_max_dur = int(overrides.get("target_duration_max_sec") or settings.TARGET_DURATION_MAX_SEC)
             eff_provider = overrides.get("llm_provider") or settings.LLM_PROVIDER
             eff_model = overrides.get("llm_model_name") or settings.LLM_MODEL_NAME
+
+            from shorts_engine.services.clip_selection.estimator import estimate_optimal_clip_count, select_optimal_model_for_duration
+            has_explicit_clip_counts = "min_segments_per_video" in overrides or "max_segments_per_video" in overrides
+            default_clip_mode = "manual" if has_explicit_clip_counts else "auto"
+            clip_limit_mode = str(overrides.get("clip_limit_mode") or default_clip_mode).lower()
+
+            valid_duration = None
+            raw_dur = getattr(video, "duration_sec", None)
+            if raw_dur is not None and type(raw_dur) in (int, float) and raw_dur > 0:
+                valid_duration = float(raw_dur)
+            elif isinstance(raw_dur, str):
+                try:
+                    dur_f = float(raw_dur)
+                    if dur_f > 0:
+                        valid_duration = dur_f
+                except ValueError:
+                    pass
+
+            if clip_limit_mode == "auto" and valid_duration is not None:
+                est = estimate_optimal_clip_count(
+                    video_duration_sec=valid_duration,
+                    target_duration_min=float(eff_min_dur),
+                    target_duration_max=float(eff_max_dur),
+                )
+                eff_min_clips = est["min_clips"]
+                eff_max_clips = est["max_clips"]
+                logger.info(
+                    "Dynamic length-adaptive clip limits applied for video %s (%s): %d - %d clips",
+                    video_id, est["duration_display"], eff_min_clips, eff_max_clips,
+                )
+                if not overrides.get("llm_provider") or overrides.get("llm_provider") == "auto":
+                    opt_prov, opt_model, opt_reason = select_optimal_model_for_duration(valid_duration)
+                    eff_provider = opt_prov
+                    eff_model = opt_model
+                    logger.info("Adaptive model selected for video %s: %s/%s (%s)", video_id, eff_provider, eff_model, opt_reason)
+            else:
+                eff_min_clips = int(overrides.get("min_segments_per_video") or settings.MIN_SEGMENTS_PER_VIDEO)
+                eff_max_clips = int(overrides.get("max_segments_per_video") or settings.MAX_SEGMENTS_PER_VIDEO)
             eff_temp = float(overrides.get("llm_temperature")) if "llm_temperature" in overrides and overrides.get("llm_temperature") is not None else getattr(settings, "LLM_TEMPERATURE", 0.3)
             eff_crf = int(overrides.get("video_encoding_crf")) if overrides.get("video_encoding_crf") else getattr(settings, "VIDEO_ENCODING_CRF", 18)
             eff_preset = overrides.get("video_encoding_preset") or getattr(settings, "VIDEO_ENCODING_PRESET", "medium")
@@ -490,11 +657,15 @@ class PipelineRunner:
                     clip = Clip(
                         clip_candidate_id=cand.id,
                         status=ClipStatus.RENDERING,
+                        is_sensitive=bool(getattr(video, "is_sensitive", False)),
                     )
                     self.db.add(clip)
                     self.db.commit()
                     self.db.refresh(clip)
                 else:
+                    if getattr(video, "is_sensitive", False) and not clip.is_sensitive:
+                        clip.is_sensitive = True
+                        self.db.commit()
                     self.db.refresh(clip)
 
                 # D1: Reframing, Captioning & Rendering

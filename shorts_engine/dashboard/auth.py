@@ -6,6 +6,7 @@ All authentication requires an active User entity with assigned role (admin, ope
 
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 from typing import Optional, List, Union
@@ -16,6 +17,8 @@ from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import User, UserRole
 
+logger = logging.getLogger(__name__)
+
 
 def get_db():
     db = SessionLocal()
@@ -23,6 +26,36 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_default_admin(db: Session) -> None:
+    """
+    Ensures at least one active administrator exists with valid credentials.
+    If 'admin' exists with legacy 'change-me' password, automatically upgrades it to settings.DASHBOARD_PASSWORD.
+    """
+    try:
+        admin_user = db.query(User).filter_by(username="admin").first()
+        default_user = settings.DASHBOARD_USERNAME or "admin"
+        default_pass = settings.DASHBOARD_PASSWORD or "AdminPass12345!"
+
+        if not admin_user:
+            admin_user = User(
+                username=default_user,
+                password_hash=hash_password(default_pass),
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+            db.add(admin_user)
+            db.commit()
+            logger.info("Created default administrator '%s'", default_user)
+        else:
+            if verify_password("change-me", admin_user.password_hash):
+                admin_user.password_hash = hash_password(default_pass)
+                admin_user.is_active = True
+                db.commit()
+                logger.info("Migrated administrator '%s' from legacy default password", default_user)
+    except Exception as e:
+        logger.warning("ensure_default_admin check failed: %s", e)
 
 
 # ── Password Hashing (PBKDF2-HMAC-SHA256, 600,000 iterations) ─────────────
