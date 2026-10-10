@@ -1,6 +1,12 @@
-"""
-Pytest configuration and test isolation fixtures.
-"""
+import os
+
+# Prevent OpenMP and BLAS threading runtime conflicts between torch, ctranslate2, and pyav on Linux
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import json
 import pytest

@@ -93,6 +93,13 @@ jobs:
         run: python setup_environment.py
 
       - name: Run Pytest Test Suite
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          VECLIB_MAXIMUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+          KMP_DUPLICATE_LIB_OK: "TRUE"
         run: python -m pytest tests -q
 
   docker-build:
