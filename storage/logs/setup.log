@@ -1,0 +1,290 @@
+﻿================================================================================
+  YouTube Shorts Automation Engine - Setup Log
+  Script Version : 2.0
+  Started        : 2026-10-06 02:43:46
+  Project Root   : D:\Projects\YT AUTOMATION
+  Parameters     : GPU=False  SkipTests=False  NoBrowser=True  NoServer=True
+================================================================================
+[02:43:46] Starting setup. Total steps: 10
+[02:43:46] 
+[1/10] Python Detection & Validation
+[02:43:46] [OK]   Found: C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\python.exe  (Python 3.11.6)
+[02:43:46] 
+[2/10] FFmpeg Detection & Setup
+[02:43:46] [OK]   ffmpeg in PATH: C:\Users\ZACODEC\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe  (ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers)
+[02:43:46] 
+[3/10] Virtual Environment Setup
+[02:43:46] [OK]   Existing .venv is healthy  (Python 3.11.6)
+[02:43:46] 
+[4/10] Installing Python Dependencies
+[02:43:46]        Upgrading pip, setuptools, wheel...
+[02:43:46]          Attempt 1/3 : pip install --upgrade pip setuptools wheel
+[02:43:52] [WARN] Attempt 1 threw exception: ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+[02:43:52]          Waiting 5 seconds before retry...
+[02:43:57]          Attempt 2/3 : pip install --upgrade pip setuptools wheel
+[02:44:00] Requirement already satisfied: pip in .\.venv\Lib\site-packages (26.2.1)
+[02:44:00] Requirement already satisfied: setuptools in .\.venv\Lib\site-packages (84.0.0)
+[02:44:00] Requirement already satisfied: wheel in .\.venv\Lib\site-packages (0.48.0)
+[02:44:00] Requirement already satisfied: packaging>=24.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from wheel) (26.0)
+[02:44:00] [OK]   pip / setuptools / wheel upgraded
+[02:44:00]        Installing requirements.txt  (this may take several minutes)...
+[02:44:00]          Attempt 1/3 : pip install -r D:\Projects\YT AUTOMATION\requirements.txt --no-warn-script-location
+[02:44:07] Requirement already satisfied: fastapi<1.0.0,>=0.110.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 8)) (0.137.1)
+[02:44:07] Requirement already satisfied: uvicorn<1.0.0,>=0.28.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (0.49.0)
+[02:44:07] Requirement already satisfied: starlette<1.0.0,>=0.36.0 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 10)) (0.52.1)
+[02:44:07] Requirement already satisfied: jinja2<4.0.0,>=3.1.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 11)) (3.1.6)
+[02:44:07] Requirement already satisfied: python-multipart>=0.0.9 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 12)) (0.0.32)
+[02:44:07] Requirement already satisfied: httpx<1.0.0,>=0.27.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 13)) (0.28.1)
+[02:44:07] Requirement already satisfied: pydantic<3.0.0,>=2.6.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 16)) (2.13.4)
+[02:44:07] Requirement already satisfied: pydantic-settings<3.0.0,>=2.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 17)) (2.15.0)
+[02:44:07] Requirement already satisfied: sqlalchemy<3.0.0,>=2.0.25 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 20)) (2.0.52)
+[02:44:07] Requirement already satisfied: aiosqlite>=0.20.0 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 21)) (0.22.1)
+[02:44:07] Requirement already satisfied: asyncpg>=0.29.0 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 22)) (0.31.0)
+[02:44:07] Requirement already satisfied: portalocker>=2.8.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 23)) (4.4.0)
+[02:44:07] Requirement already satisfied: psycopg2-binary>=2.9.9 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 25)) (2.9.13)
+[02:44:07] Requirement already satisfied: cryptography>=42.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 28)) (50.0.1)
+[02:44:07] Requirement already satisfied: groq>=0.9.0 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 31)) (1.7.0)
+[02:44:07] Requirement already satisfied: google-genai>=1.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 32)) (2.22.0)
+[02:44:07] Requirement already satisfied: google-api-python-client>=2.115.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (2.200.0)
+[02:44:07] Requirement already satisfied: google-auth-oauthlib>=1.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 34)) (1.4.1)
+[02:44:07] Requirement already satisfied: google-auth-httplib2>=0.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 35)) (0.4.2)
+[02:44:07] Requirement already satisfied: google-auth<3.0.0,>=2.27.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 36)) (2.58.0)
+[02:44:07] Requirement already satisfied: yt-dlp>=2024.3.10 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 39)) (2026.8.19)
+[02:44:07] Requirement already satisfied: faster-whisper>=1.0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (1.2.1)
+[02:44:07] Requirement already satisfied: torch>=2.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 41)) (2.12.0)
+[02:44:07] Requirement already satisfied: numpy<2.0.0,>=1.24.0 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 42)) (1.26.4)
+[02:44:07] Requirement already satisfied: opencv-python-headless>=4.9.0.80 in .\.venv\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 45)) (4.11.0.86)
+[02:44:07] Requirement already satisfied: pillow>=10.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 46)) (10.4.0)
+[02:44:07] Requirement already satisfied: scikit-learn>=1.4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 47)) (1.9.0)
+[02:44:07] Requirement already satisfied: scipy>=1.11.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 48)) (1.17.1)
+[02:44:07] Requirement already satisfied: typer<1.0.0,>=0.9.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 51)) (0.25.1)
+[02:44:07] Requirement already satisfied: rich>=13.7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 52)) (15.0.0)
+[02:44:07] Requirement already satisfied: sentry-sdk>=1.40.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 55)) (2.69.1)
+[02:44:07] Requirement already satisfied: psutil>=5.9.8 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from -r D:\Projects\YT AUTOMATION\requirements.txt (line 56)) (7.2.1)
+[02:44:07] Requirement already satisfied: typing-extensions>=4.8.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from fastapi<1.0.0,>=0.110.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 8)) (4.15.0)
+[02:44:07] Requirement already satisfied: typing-inspection>=0.4.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from fastapi<1.0.0,>=0.110.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 8)) (0.4.2)
+[02:44:07] Requirement already satisfied: annotated-doc>=0.0.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from fastapi<1.0.0,>=0.110.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 8)) (0.0.4)
+[02:44:07] Requirement already satisfied: click>=7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from uvicorn<1.0.0,>=0.28.0->uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (8.4.1)
+[02:44:07] Requirement already satisfied: h11>=0.8 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from uvicorn<1.0.0,>=0.28.0->uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (0.16.0)
+[02:44:07] Requirement already satisfied: anyio<5,>=3.6.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from starlette<1.0.0,>=0.36.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 10)) (4.13.0)
+[02:44:07] Requirement already satisfied: MarkupSafe>=2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from jinja2<4.0.0,>=3.1.2->-r D:\Projects\YT AUTOMATION\requirements.txt (line 11)) (2.1.5)
+[02:44:07] Requirement already satisfied: certifi in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httpx<1.0.0,>=0.27.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 13)) (2026.1.4)
+[02:44:07] Requirement already satisfied: httpcore==1.* in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httpx<1.0.0,>=0.27.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 13)) (1.0.9)
+[02:44:07] Requirement already satisfied: idna in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httpx<1.0.0,>=0.27.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 13)) (3.11)
+[02:44:07] Requirement already satisfied: annotated-types>=0.6.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic<3.0.0,>=2.6.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 16)) (0.7.0)
+[02:44:07] Requirement already satisfied: pydantic-core==2.46.4 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic<3.0.0,>=2.6.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 16)) (2.46.4)
+[02:44:07] Requirement already satisfied: python-dotenv>=0.21.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic-settings<3.0.0,>=2.2.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 17)) (1.2.1)
+[02:44:07] Requirement already satisfied: greenlet>=1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from sqlalchemy<3.0.0,>=2.0.25->-r D:\Projects\YT AUTOMATION\requirements.txt (line 20)) (3.5.5)
+[02:44:07] Requirement already satisfied: pyasn1-modules>=0.2.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-auth<3.0.0,>=2.27.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 36)) (0.4.2)
+[02:44:07] Requirement already satisfied: shellingham>=1.3.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from typer<1.0.0,>=0.9.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 51)) (1.5.4)
+[02:44:07] Requirement already satisfied: colorama>=0.4 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (0.4.6)
+[02:44:07] Requirement already satisfied: httptools>=0.8.0 in .\.venv\Lib\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (0.8.0)
+[02:44:07] Requirement already satisfied: pyyaml>=5.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (6.0.3)
+[02:44:07] Requirement already satisfied: watchfiles>=0.20 in .\.venv\Lib\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (1.3.0)
+[02:44:07] Requirement already satisfied: websockets>=10.4 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from uvicorn[standard]<1.0.0,>=0.28.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 9)) (16.1.1)
+[02:44:07] Requirement already satisfied: cffi>=2.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from cryptography>=42.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 28)) (2.0.0)
+[02:44:07] Requirement already satisfied: distro<2,>=1.7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from groq>=0.9.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 31)) (1.9.0)
+[02:44:07] Requirement already satisfied: sniffio in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from groq>=0.9.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 31)) (1.3.1)
+[02:44:07] Requirement already satisfied: requests<3.0.0,>=2.28.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 32)) (2.34.2)
+[02:44:07] Requirement already satisfied: tenacity<9.2.0,>=8.2.3 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 32)) (9.1.4)
+[02:44:07] Requirement already satisfied: charset_normalizer<4,>=2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai>=1.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 32)) (3.4.4)
+[02:44:07] Requirement already satisfied: urllib3<3,>=1.26 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai>=1.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 32)) (2.6.3)
+[02:44:07] Requirement already satisfied: httplib2<1.0.0,>=0.19.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (0.32.0)
+[02:44:07] Requirement already satisfied: google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (2.36.0)
+[02:44:07] Requirement already satisfied: uritemplate<5,>=3.0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (4.2.0)
+[02:44:07] Requirement already satisfied: googleapis-common-protos<2.0.0,>=1.69.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (1.75.3)
+[02:44:07] Requirement already satisfied: protobuf<8.0.0,>=6.33.5 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (7.35.1)
+[02:44:07] Requirement already satisfied: proto-plus<2.0.0,>=1.26.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (1.28.4)
+[02:44:07] Requirement already satisfied: opentelemetry-api<2.0.0,>=1.44.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (1.44.0)
+[02:44:07] Requirement already satisfied: pyparsing<4,>=3.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httplib2<1.0.0,>=0.19.0->google-api-python-client>=2.115.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 33)) (3.3.2)
+[02:44:07] Requirement already satisfied: requests-oauthlib>=0.7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-auth-oauthlib>=1.2.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 34)) (2.0.0)
+[02:44:07] Requirement already satisfied: ctranslate2<5,>=4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (4.8.2)
+[02:44:07] Requirement already satisfied: huggingface-hub>=0.21 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (0.36.2)
+[02:44:07] Requirement already satisfied: tokenizers<1,>=0.13 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (0.22.2)
+[02:44:07] Requirement already satisfied: onnxruntime<2,>=1.14 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (1.27.0)
+[02:44:07] Requirement already satisfied: av>=11 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (18.1.0)
+[02:44:07] Requirement already satisfied: tqdm in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (4.68.2)
+[02:44:07] Requirement already satisfied: flatbuffers in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (25.12.19)
+[02:44:07] Requirement already satisfied: packaging in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (26.0)
+[02:44:07] Requirement already satisfied: filelock in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (3.29.4)
+[02:44:07] Requirement already satisfied: fsspec>=2023.5.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.1->-r D:\Projects\YT AUTOMATION\requirements.txt (line 40)) (2026.4.0)
+[02:44:07] Collecting setuptools<82 (from torch>=2.1.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 41))
+[02:44:07]   Using cached setuptools-81.0.0-py3-none-any.whl.metadata (6.6 kB)
+[02:44:07] Requirement already satisfied: sympy>=1.13.3 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from torch>=2.1.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 41)) (1.14.0)
+[02:44:07] Requirement already satisfied: networkx>=2.5.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from torch>=2.1.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 41)) (3.6.1)
+[02:44:07] Requirement already satisfied: joblib>=1.4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 47)) (1.5.3)
+[02:44:07] Requirement already satisfied: narwhals>=2.0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 47)) (2.22.1)
+[02:44:07] Requirement already satisfied: threadpoolctl>=3.5.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 47)) (3.6.0)
+[02:44:07] Requirement already satisfied: markdown-it-py>=2.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from rich>=13.7.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 52)) (4.2.0)
+[02:44:07] Requirement already satisfied: pygments<3.0.0,>=2.13.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from rich>=13.7.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 52)) (2.19.2)
+[02:44:07] Requirement already satisfied: pycparser in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from cffi>=2.0.0->cryptography>=42.0.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 28)) (3.0)
+[02:44:07] Requirement already satisfied: mdurl~=0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from markdown-it-py>=2.2.0->rich>=13.7.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 52)) (0.1.2)
+[02:44:07] Requirement already satisfied: pyasn1<0.7.0,>=0.6.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.27.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 36)) (0.6.4)
+[02:44:07] Requirement already satisfied: oauthlib>=3.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=1.2.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 34)) (3.3.1)
+[02:44:07] Requirement already satisfied: mpmath<1.4,>=1.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from sympy>=1.13.3->torch>=2.1.0->-r D:\Projects\YT AUTOMATION\requirements.txt (line 41)) (1.3.0)
+[02:44:07] Using cached setuptools-81.0.0-py3-none-any.whl (1.1 MB)
+[02:44:07] Installing collected packages: setuptools
+[02:44:07]   Attempting uninstall: setuptools
+[02:44:07]     Found existing installation: setuptools 84.0.0
+[02:44:07]     Uninstalling setuptools-84.0.0:
+[02:44:07]       Successfully uninstalled setuptools-84.0.0
+[02:44:07] Successfully installed setuptools-81.0.0
+[02:44:07] [OK]   requirements.txt dependencies installed
+[02:44:07]        Installing shorts_engine package in editable mode (pip install -e .)...
+[02:44:07]          Attempt 1/3 : pip install -e . --no-warn-script-location
+[02:44:21] Obtaining file:///D:/Projects/YT%20AUTOMATION
+[02:44:21]   Installing build dependencies: started
+[02:44:21]   Installing build dependencies: finished with status 'done'
+[02:44:21]   Checking if build backend supports build_editable: started
+[02:44:21]   Checking if build backend supports build_editable: finished with status 'done'
+[02:44:21]   Getting requirements to build editable: started
+[02:44:21]   Getting requirements to build editable: finished with status 'done'
+[02:44:21]   Preparing editable metadata (pyproject.toml): started
+[02:44:21]   Preparing editable metadata (pyproject.toml): finished with status 'done'
+[02:44:21] Requirement already satisfied: pydantic>=2.5.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.13.4)
+[02:44:21] Requirement already satisfied: pydantic-settings>=2.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.15.0)
+[02:44:21] Requirement already satisfied: cryptography>=42.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (50.0.1)
+[02:44:21] Requirement already satisfied: sqlalchemy>=2.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.0.52)
+[02:44:21] Requirement already satisfied: aiosqlite>=0.20.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.22.1)
+[02:44:21] Requirement already satisfied: opencv-python-headless>=4.8.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (4.11.0.86)
+[02:44:21] Requirement already satisfied: pillow>=10.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (10.4.0)
+[02:44:21] Requirement already satisfied: scikit-learn>=1.4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (1.9.0)
+[02:44:21] Requirement already satisfied: numpy>=1.24.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.26.4)
+[02:44:21] Requirement already satisfied: torch>=2.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.12.0)
+[02:44:21] Requirement already satisfied: faster-whisper>=1.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (1.2.1)
+[02:44:21] Requirement already satisfied: yt-dlp>=2024.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2026.8.19)
+[02:44:21] Requirement already satisfied: httpx>=0.27.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.28.1)
+[02:44:21] Requirement already satisfied: google-genai>=1.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.22.0)
+[02:44:21] Requirement already satisfied: google-api-python-client>=2.100.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.200.0)
+[02:44:21] Requirement already satisfied: google-auth-oauthlib>=1.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (1.4.1)
+[02:44:21] Requirement already satisfied: google-auth-httplib2>=0.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.4.2)
+[02:44:21] Requirement already satisfied: google-auth<3,>=2.14.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.58.0)
+[02:44:21] Requirement already satisfied: sentry-sdk>=1.40.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (2.69.1)
+[02:44:21] Requirement already satisfied: fastapi>=0.100.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.137.1)
+[02:44:21] Requirement already satisfied: uvicorn>=0.20.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.49.0)
+[02:44:21] Requirement already satisfied: jinja2>=3.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (3.1.6)
+[02:44:21] Requirement already satisfied: python-multipart>=0.0.6 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.0.32)
+[02:44:21] Requirement already satisfied: typer>=0.9.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (0.25.1)
+[02:44:21] Requirement already satisfied: rich>=13.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (15.0.0)
+[02:44:21] Requirement already satisfied: psutil>=5.9.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from shorts-engine==0.1.0) (7.2.1)
+[02:44:21] Requirement already satisfied: groq>=0.9.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.7.0)
+[02:44:21] Requirement already satisfied: scipy>=1.11.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (1.17.1)
+[02:44:21] Requirement already satisfied: portalocker>=2.8.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (4.4.0)
+[02:44:21] Requirement already satisfied: watchdog>=4.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from shorts-engine==0.1.0) (6.0.0)
+[02:44:21] Requirement already satisfied: pyasn1-modules>=0.2.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-auth<3,>=2.14.0->shorts-engine==0.1.0) (0.4.2)
+[02:44:21] Requirement already satisfied: cffi>=2.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from cryptography>=42.0.0->shorts-engine==0.1.0) (2.0.0)
+[02:44:21] Requirement already satisfied: pycparser in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from cffi>=2.0.0->cryptography>=42.0.0->shorts-engine==0.1.0) (3.0)
+[02:44:21] Requirement already satisfied: starlette>=0.46.0 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.52.1)
+[02:44:21] Requirement already satisfied: typing-extensions>=4.8.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (4.15.0)
+[02:44:21] Requirement already satisfied: typing-inspection>=0.4.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.4.2)
+[02:44:21] Requirement already satisfied: annotated-doc>=0.0.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.0.4)
+[02:44:21] Requirement already satisfied: ctranslate2<5,>=4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (4.8.2)
+[02:44:21] Requirement already satisfied: huggingface-hub>=0.21 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (0.36.2)
+[02:44:21] Requirement already satisfied: tokenizers<1,>=0.13 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (0.22.2)
+[02:44:21] Requirement already satisfied: onnxruntime<2,>=1.14 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (1.27.0)
+[02:44:21] Requirement already satisfied: av>=11 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (18.1.0)
+[02:44:21] Requirement already satisfied: tqdm in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (4.68.2)
+[02:44:21] Requirement already satisfied: pyyaml<7,>=5.3 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from ctranslate2<5,>=4.0->faster-whisper>=1.0.0->shorts-engine==0.1.0) (6.0.3)
+[02:44:21] Requirement already satisfied: flatbuffers in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (25.12.19)
+[02:44:21] Requirement already satisfied: packaging in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (26.0)
+[02:44:21] Requirement already satisfied: protobuf>=4.25.8 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (7.35.1)
+[02:44:21] Requirement already satisfied: filelock in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (3.29.4)
+[02:44:21] Requirement already satisfied: fsspec>=2023.5.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (2026.4.0)
+[02:44:21] Requirement already satisfied: requests in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (2.34.2)
+[02:44:21] Requirement already satisfied: httplib2<1.0.0,>=0.19.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (0.32.0)
+[02:44:21] Requirement already satisfied: google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (2.36.0)
+[02:44:21] Requirement already satisfied: uritemplate<5,>=3.0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (4.2.0)
+[02:44:21] Requirement already satisfied: googleapis-common-protos<2.0.0,>=1.69.2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (1.75.3)
+[02:44:21] Requirement already satisfied: proto-plus<2.0.0,>=1.26.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (1.28.4)
+[02:44:21] Requirement already satisfied: opentelemetry-api<2.0.0,>=1.44.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (1.44.0)
+[02:44:21] Requirement already satisfied: pyparsing<4,>=3.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httplib2<1.0.0,>=0.19.0->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (3.3.2)
+[02:44:21] Requirement already satisfied: charset_normalizer<4,>=2 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests->huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (3.4.4)
+[02:44:21] Requirement already satisfied: idna<4,>=2.5 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests->huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (3.11)
+[02:44:21] Requirement already satisfied: urllib3<3,>=1.26 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests->huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (2.6.3)
+[02:44:21] Requirement already satisfied: certifi>=2023.5.7 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests->huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (2026.1.4)
+[02:44:21] Requirement already satisfied: requests-oauthlib>=0.7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-auth-oauthlib>=1.1.0->shorts-engine==0.1.0) (2.0.0)
+[02:44:21] Requirement already satisfied: anyio<5.0.0,>=4.8.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (4.13.0)
+[02:44:21] Requirement already satisfied: tenacity<9.2.0,>=8.2.3 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (9.1.4)
+[02:44:21] Requirement already satisfied: websockets<17.0,>=13.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (16.1.1)
+[02:44:21] Requirement already satisfied: distro<2,>=1.7.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (1.9.0)
+[02:44:21] Requirement already satisfied: sniffio in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (1.3.1)
+[02:44:21] Requirement already satisfied: httpcore==1.* in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httpx>=0.27.0->shorts-engine==0.1.0) (1.0.9)
+[02:44:21] Requirement already satisfied: h11>=0.16 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from httpcore==1.*->httpx>=0.27.0->shorts-engine==0.1.0) (0.16.0)
+[02:44:21] Requirement already satisfied: annotated-types>=0.6.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic>=2.5.0->shorts-engine==0.1.0) (0.7.0)
+[02:44:21] Requirement already satisfied: pydantic-core==2.46.4 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic>=2.5.0->shorts-engine==0.1.0) (2.46.4)
+[02:44:21] Requirement already satisfied: MarkupSafe>=2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from jinja2>=3.1.0->shorts-engine==0.1.0) (2.1.5)
+[02:44:21] Requirement already satisfied: pyasn1<0.7.0,>=0.6.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pyasn1-modules>=0.2.1->google-auth<3,>=2.14.0->shorts-engine==0.1.0) (0.6.4)
+[02:44:21] Requirement already satisfied: python-dotenv>=0.21.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from pydantic-settings>=2.1.0->shorts-engine==0.1.0) (1.2.1)
+[02:44:21] Requirement already satisfied: oauthlib>=3.0.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=1.1.0->shorts-engine==0.1.0) (3.3.1)
+[02:44:21] Requirement already satisfied: markdown-it-py>=2.2.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from rich>=13.0.0->shorts-engine==0.1.0) (4.2.0)
+[02:44:21] Requirement already satisfied: pygments<3.0.0,>=2.13.0 in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from rich>=13.0.0->shorts-engine==0.1.0) (2.19.2)
+[02:44:21] Requirement already satisfied: mdurl~=0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from markdown-it-py>=2.2.0->rich>=13.0.0->shorts-engine==0.1.0) (0.1.2)
+[02:44:21] Requirement already satisfied: joblib>=1.4.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (1.5.3)
+[02:44:21] Requirement already satisfied: narwhals>=2.0.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (2.22.1)
+[02:44:21] Requirement already satisfied: threadpoolctl>=3.5.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (3.6.0)
+[02:44:21] Requirement already satisfied: greenlet>=1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from sqlalchemy>=2.0.0->shorts-engine==0.1.0) (3.5.5)
+[02:44:21] Requirement already satisfied: setuptools<82 in .\.venv\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (81.0.0)
+[02:44:21] Requirement already satisfied: sympy>=1.13.3 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (1.14.0)
+[02:44:21] Requirement already satisfied: networkx>=2.5.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (3.6.1)
+[02:44:21] Requirement already satisfied: mpmath<1.4,>=1.1.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from sympy>=1.13.3->torch>=2.0.0->shorts-engine==0.1.0) (1.3.0)
+[02:44:21] Requirement already satisfied: colorama in C:\Users\ZACODEC\AppData\Roaming\Python\Python311\site-packages (from tqdm->faster-whisper>=1.0.0->shorts-engine==0.1.0) (0.4.6)
+[02:44:21] Requirement already satisfied: click>=8.2.1 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from typer>=0.9.0->shorts-engine==0.1.0) (8.4.1)
+[02:44:21] Requirement already satisfied: shellingham>=1.3.0 in C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\site-packages (from typer>=0.9.0->shorts-engine==0.1.0) (1.5.4)
+[02:44:21] Building wheels for collected packages: shorts-engine
+[02:44:21]   Building editable for shorts-engine (pyproject.toml): started
+[02:44:21]   Building editable for shorts-engine (pyproject.toml): finished with status 'done'
+[02:44:21]   Created wheel for shorts-engine: filename=shorts_engine-0.1.0-0.editable-py3-none-any.whl size=7147 sha256=9b8130fde3d9814e43f3c57c3128aee09e772f7d65e9c8cd5e4e98894bf605c0
+[02:44:21]   Stored in directory: C:\Users\ZACODEC\AppData\Local\Temp\pip-ephem-wheel-cache-wyp8wkx8\wheels\e6\fe\29\859c164f857c844632c950d78783c0350a8b713bb43902c184
+[02:44:21] Successfully built shorts-engine
+[02:44:21] Installing collected packages: shorts-engine
+[02:44:21]   Attempting uninstall: shorts-engine
+[02:44:21]     Found existing installation: shorts-engine 0.1.0
+[02:44:21]     Uninstalling shorts-engine-0.1.0:
+[02:44:21]       Successfully uninstalled shorts-engine-0.1.0
+[02:44:21] Successfully installed shorts-engine-0.1.0
+[02:44:21] [OK]   shorts_engine package installed in editable mode
+[02:44:21]        No NVIDIA GPU detected - using CPU PyTorch (re-run with -GPU to force CUDA install)
+[02:44:21] 
+[5/10] Environment Configuration (.env)
+[02:44:21] [OK]   .env already exists (1158 bytes) - preserving your settings
+[02:44:21] 
+[6/10] Storage & Asset Directory Structure
+[02:44:21]        Exists : storage
+[02:44:21]        Exists : storage\downloads
+[02:44:21]        Exists : storage\outputs
+[02:44:21]        Exists : storage\temp
+[02:44:21]        Exists : storage\thumbnails
+[02:44:21]        Exists : storage\models
+[02:44:21]        Exists : storage\logs
+[02:44:21]        Exists : storage\config
+[02:44:21]        Exists : assets
+[02:44:21]        Exists : assets\sfx_library
+[02:44:21]        Exists : assets\fonts
+[02:44:21]        Exists : tools
+[02:44:21]        Exists : tools\ffmpeg
+[02:44:21]        Exists : tools\ffmpeg\bin
+[02:44:21] 
+[7/10] Database Initialization
+[02:44:21]        Running setup_environment.py...
+[02:44:24] [WARN] setup_environment.py threw exception: INSECURE STARTUP: Default placeholder keys detected in settings! Rotate keys before production. - trying fallback...
+[02:44:24]        Attempting direct DB init import fallback...
+[02:44:25] [WARN] Database init fallback exception: INSECURE STARTUP: Default placeholder keys detected in settings! Rotate keys before production. - DB will be created on first run.
+[02:44:25]        runtime_settings.json already exists
+[02:44:25] 
+[8/10] Port 8000 Availability Check
+[02:44:26] [OK]   Port 8000 is free
+[02:44:26] 
+[9/10] Module Import Verification
+[02:44:27] [OK]   FastAPI
+[02:44:28] [OK]   Uvicorn
+[02:44:29] [OK]   SQLAlchemy
+[02:44:29] [OK]   Pydantic
+[02:44:30] [OK]   OpenCV (cv2)
+[02:44:37] [OK]   PyTorch
+[02:44:38] [OK]   Faster-Whisper
+[02:44:38] [OK]   Rich
+[02:44:38] [OK]   shorts_engine
+[02:44:38] [OK]   All critical modules verified
+[02:44:38] 
+[10/10] Setup Complete - Summary & Next Steps
+[02:44:38] Setup finished. Errors: 0  Warnings: 4

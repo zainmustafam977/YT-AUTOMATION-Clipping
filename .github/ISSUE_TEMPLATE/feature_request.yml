@@ -1,0 +1,27 @@
+name: "✨ Feature Request"
+description: "Suggest an idea or architectural enhancement for the engine"
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose a new feature, pipeline enhancement, or model integration.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem or optimization opportunity?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution / Architecture
+      description: Describe the solution you'd like and how it integrates with the event bus or pipeline.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.

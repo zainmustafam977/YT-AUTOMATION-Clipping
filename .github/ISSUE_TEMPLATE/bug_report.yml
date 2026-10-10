@@ -1,0 +1,40 @@
+name: "🐛 Bug Report"
+description: "File a bug report for an unexpected behavior or failure in the engine"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much technical context as possible.
+  - type: input
+    id: environment
+    attributes:
+      label: Operating System & Environment
+      description: e.g. Windows 11 x64, Ubuntu 22.04 LTS, Docker Compose
+      placeholder: Windows 11 Enterprise x64, Python 3.11
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Drop video file into watch folder
+        2. Observer transcription starts
+        3. Fails at render compositor stage
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostic Logs & Stacktrace
+      description: Paste relevant logs from `storage/logs/shorts_engine.log`.
+      render: shell

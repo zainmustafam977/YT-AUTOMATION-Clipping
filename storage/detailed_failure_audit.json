@@ -1,0 +1,1853 @@
+{
+  "summary": {
+    "total_rejected": 56,
+    "technical_count": 10,
+    "render_count": 3,
+    "semantic_count": 42,
+    "other_count": 1
+  },
+  "technical_failures": [
+    {
+      "clip_id": "db5ff188-6fd7-4299-90e0-6f18e897b3b4",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 73.64,
+      "score": 0.91,
+      "hook": "I think you got to hold a whole bunch of ideas in your head at the same time.",
+      "payoff": "Do I think they're scared? Yes. Do I think that's real? Absolutely. Do I think that's driving it? Absolutely.",
+      "segment_text": "Okay. I think you got to hold a whole bunch of ideas in your head at the same time. So I actually think that it's a genuine fear that people like Sam Aldman, Endario Amade of Anthropic, and Elon all share about the risks of this. And so for any of the sort of folks out there who I would describe maybe even have a conspiratorial view about all of this that this is some kind of sci -ops campaign or something. These guys from the very beginning, I mean I remember talking to Sam and Elon 2015. The whole purpose of when they were starting open AI, the whole purpose of it was that they were scared about what AI could do. They were talking about these risks. Dario's been talking about this. So I don't think this is some kind of fakery or some kind of effort on its face to do all the things you described in the sort of second perspective. Having said that, I think that could in very well will be a byproduct potentially of whatever kind of regulatory scheme you come up with. So do I think they're scared? Yes. Do I think that's real? Absolutely. Do I think that's driving it? Absolutely.",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 73.67,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "5cd8d7d3-73a1-4a37-b366-89b5004f6564",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 56.28,
+      "score": 0.94,
+      "hook": "If you are Dario and you say, okay, I'm going to tap the brakes on myself, what has actually happened to the world?",
+      "payoff": "They're all racing to some finish line called AGI, thinking to themselves, if I don't race, the other guy's definitely going to be racing.",
+      "segment_text": "I have a lot of respect for David, but I think the argument is a little, it seems simple, but it's actually a little clever, which is if you are Dario and you say, okay, I'm going to tap the brakes on myself. I'm going to take myself out just like by the way that researcher at Anthropic did a week ago said I'm quitting. I'm out. I can't do this anymore. Okay, so you've taken yourself out. But what has actually happened to the world? Nothing because Open AI is going to continue on. Maybe Elon's going to continue on. The Chinese clearly are going to continue on. And so I think Dario's argument, and I think all of these guys are like, look, if you're, if you're going to put a harness on us and say, no, you know, basically you have to do it to everybody. Otherwise, it doesn't work. And so they're all racing, you know, to some finish line called AGI, thinking to themselves, if I don't race, the other guy's definitely going to be racing. And we're all going to be in the same boat anyway.",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 56.3,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "7bef773c-6b7b-4529-bb0f-b7e13c1e5bc4",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 80.54,
+      "score": 0.85,
+      "hook": "China's been funny over the years. They are often very permissive early on with technology and then become shockingly restrictive.",
+      "payoff": "So many of their models use distillation of our models, meaning they're stealing parts of our models. If they didn't have that, we might be two years ahead.",
+      "segment_text": "Having said that China's been funny over the years. They are often very permissive early on with their entrepreneurs and their technology and then become shockingly restrictive. So there's a sort of behavioral science question if you're a politician outside of China about what they ultimately are going to do think about crypto. You know they were very permissive about crypto and then all of a sudden they tapped the brakes they didn't like it they were very permissive about people like Jack Ma and Ali Baba and Ant Financial and then all of a sudden they didn't like that they tapped the brakes. The entire city of Hong Kong. So it is also possible that it looks like they are racing towards whatever you think that finish line is and yet they could still tap the brakes. There's also the question of where are we meaning the US AI labs relative to these China labs. Are we six months ahead? Are we nine months ahead? By the way are we six months ahead but it looks but we may even be two years ahead because so many of their models use what's called distilled or distillation of our models meaning for lack of a better word they're stealing parts of our models. If they didn't have the stolen piece what would the scenario be maybe we'd be two years ahead.",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 80.57,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "02b96d02-9756-435a-b065-34e10406f4d6",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 60.44,
+      "score": 0.88,
+      "hook": "To me the central fundamental question behind all of this is what happens when we reach AGI.",
+      "payoff": "If you can get to recursive learning, does a 3-month lead turn into a 4-year lead that stays forever? That is the fundamental question.",
+      "segment_text": "For sure to me though the central fundamental question behind all of this is you know we talk about AGI artificial general intelligence and whether we get there first whether China gets there first by the way whether one model gets there over another model whether anthropic it's there before open AI gets there and what happens when that happens there's this view that if you can somehow get to this idea of recursive learning where the model itself actually starts learning from itself that all of a sudden it becomes this exponential hockey stick in terms of its own improvement so if you're three months ahead today if you can get to that moment do you become two years or three years or four years ahead and that there's your always ahead relative to everybody else that is the fundamental question that's a question about the models compared to each other but it's also a question about who owns those models that a US model that are Chinese models or somebody else I mean I also wonder whether we're eventually going to a wall and I know that that's a question that's fallen completely out of favor two years",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 60.47,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "f02689b0-b3a5-42e0-ae30-271219a01ae7",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 113.2,
+      "score": 0.86,
+      "hook": "If you were to stop the ability to create new data centers in the United States and this entire AI boom were to come to an end...",
+      "payoff": "I think there's going to be a painful transition period, and could be especially painful for younger people. That's where you get a very interesting political issue.",
+      "segment_text": "entire AI boom were to come to an end it means that effectively all the cemented electricians all the energy complex the construction that's going on the valuations of all these big tech companies it all will trickle down across the board to everything and everybody and it will have a demonstrable impact on our economy so there's no question you need this AI boom to continue to a great degree having said that I'm probably maybe a little bit more nervous than you are it's not that I think that we're all going to be out of jobs and I do think there's something about the dignity of work that matters for people but I do think there's going to be a painful transition period and I think that transition period could last longer than we want and could be especially painful for younger people and I think I point out the younger people because I think that's where you get a very interesting political issue which is do the younger people mobilize and what does that look like yeah I mean historically it doesn't look great I mean when when you have a younger cohort of people particularly core college educated and think that they're going to walk out of college with some sort of job waiting for that turns out that they don't have a historically speaking if you look at the European example not a good story either radical left or radical or radical left wing communism radical left wing economic policies combined with nationalist populism which again that that's not the battle I think that we want to be having period in the country right now but it also seems as though there are very few people who are actively defending free markets per se folks every business has visible expenses payroll rent inventory interest there's another cost that never appears on a profit and loss statement making important decisions made when you're exhausted that's not theoretical for me before helix there were mornings when I would sit down for a 7 a .m.",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 113.2,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "15147152-2bef-4fd6-85ac-bbe9baf57f52",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 97.49,
+      "score": 0.87,
+      "hook": "If you really extrapolate out, you start to think for example in a city or even in a suburb you may never need a parking lot again.",
+      "payoff": "If you had a humanoid robot in your house, you would no longer have a gardener, a house cleaner, or a painter. You get to a lot of things, and that part is scary.",
+      "segment_text": "out so the trucker jobs are the obvious then you start to think about the taxi drivers or the car services that goes away if you really extrapolate out you start to think for example in a city or even in a suburb you may never need a parking lot again you meant in a car right you may never need a car because you may never need to buy a car get a ride share the car is going to come pick you up and when it's done with you it's going to go somewhere else it will never need to park I mean there's some really I know it's sort of wild to even contemplate some of these oh I mean I think that one's like five years away this is that this is not like a distant but once you start to think about those implications and then if you believe that Elon's going to be as successful as he wants to be with you know robots or humanoid robots think about if we had a human if you had a humanoid robot in your house you know you you would no longer have a gardener if you had if you had a lawn if you had somebody who helped clean the house that would that would stop I mean you could go through you needed to you know do a paint job on the house you might just have the humanoid I mean you could think about you don't mean nearly everything you get personal chef yeah you get to a lot of things and that's the part where I think that part is scary now do I think that we have great ingenuity and I like to think we're one of the most entrepreneurial countries in the world we are will we how quickly will we figure out all of the cool things we can do that all of this should supercharge us meaning can we all become you know super powered by AI all the time that we weren't cooking cleaning",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 97.5,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "b93167f6-a32e-4b9c-b848-461b34efa183",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 97.14,
+      "score": 0.85,
+      "hook": "Right now it is clear that within the hardware stack, there's such a flood of cash moving towards that world and such a supply constraint.",
+      "payoff": "If you have a problem with any of those AI IPOs, it will have a knock-on effect on the Magnificent Seven, which impacts the entire S&P 500.",
+      "segment_text": "within the hardware stack meaning chips memory all the things that are going on with data centers there's such a flood of cash moving towards that world and such a supply constraint meaning there's not enough memory chips there's not enough Nvidia chips that even in the short term whatever you think is going to happen to the model makers even if they decide to slow down you know how fast they're building their next models that the Nvidia's of the world the chip makers of the world are still going to be powering through now there's a question as to whether they're overvalued already that is a real question but I think on the whole at least in the short term there's going to be yes and by the way the scary part about all this is that you know you look at an anthropic IPO and an open AI potential IPO in 2027 so many companies are dependent on those IPOs unto themselves so Amazon is a huge stake in anthropic Nvidia has a huge stake in both of them Microsoft has a huge stake in open AI Google has a stake in I mean you could go through the list so if in fact you have a problem with any of those IPOs they can have a knock on effect on what's called the magnificent seven which would then have a knock on effect on the S &P 500 because so much of the concentration of those 500 companies the way they're weighted in these indexes is is on those companies yeah I mean this to me",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 97.17,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "90c1176b-310a-4de5-9358-e22e6d03d691",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 153.11,
+      "score": 0.89,
+      "hook": "Nvidia is investing in OpenAI, OpenAI is turning around and buying compute time effectively.",
+      "payoff": "Back in the 90s we called this vendor financing. If the market was really healthy, you wouldn't need to do it.",
+      "segment_text": "because to some degree Nvidia is investing in open AI open AI is turning around and buying compute time effectively because they then have to manufacture data centers and on the data center side who's gonna have their chip spot Nvidia so it is this is back in the 90s we call this vendor financing back in by the way the 1920s general motors started lending people money so they buy their cars that's how they did it but there's nothing wrong with it per se it's just a question of if you didn't do it if the market was really healthy you wouldn't need to do it right and then this is the scary part it does feel like we are just a couple of jangle blocks away from things getting very very ugly that if there's an IPO that that sinks that that would really bleed over pretty quickly and then do you see the possibility I mean you wrote an entire book about the 1929 financial crisis and then the decade that followed but you know given the fact that it does feel as though there's this incestuous relationship are we living at the precipice of a 2008 style problem where you know one firm goes down and it takes down a bunch of other firms well you know back then the phrase too big to fail was always referred to in the context of banks today we use the phrase too big to fail in the context of cities municipalities but I would say increasingly technology companies so yes I think if we think and this gets to the regulatory capture part of the beginning of our conversation if in fact you told me that open AI really was going to run into lots of trouble with the US government come and try to save it we save journal motors we took a stake in that I mean the president basically tried to save intel and so is there a put on the valuation of all of the entire AI ecosystem because it is so responsible for the United States's growth that we the taxpayer are effectively underwriting all of it it's possible and by the way it's possible that even part of some people's investment thesis so one of the questions that we wanted to ask and we talked about it before was the you talk to everybody right the number of people that you talk to on all sides of the aisle and particularly the top of a financing industry extremely extremely high and really an impressive list of people who are the people that you go to for the answers that you trust or the least think have some sort of special insight that you don't hear from other people in the spaces that we're talking about look I think in the finance world the",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 153.13,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "aa22ef5c-dada-4ff9-9746-c0f9a54cafef",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 82.28,
+      "score": 0.9,
+      "hook": "Back then the phrase 'too big to fail' was always referred to in the context of banks.",
+      "payoff": "Is there a put on the valuation of the entire AI ecosystem because it is so responsible for US growth that taxpayers are underwriting it? It's possible.",
+      "segment_text": "always referred to in the context of banks today we use the phrase too big to fail in the context of cities municipalities but I would say increasingly technology companies so yes I think if we think and this gets to the regulatory capture part of the beginning of our conversation if in fact you told me that open AI really was going to run into lots of trouble with the US government come and try to save it we save journal motors we took a stake in that I mean the president basically tried to save intel and so is there a put on the valuation of all of the entire AI ecosystem because it is so responsible for the United States's growth that we the taxpayer are effectively underwriting all of it it's possible and by the way it's possible that even part of some people's investment thesis so one of the questions that we wanted to ask and we talked about it before was the you talk to everybody right the number of people that you talk to on all sides of the aisle and particularly the top of a financing industry extremely extremely high and really an impressive list of people who are the people that you go to for the answers that you trust or the least think have some sort of special insight that you don't hear from other people in the spaces that we're talking about look I think in the finance world the",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 82.3,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    },
+    {
+      "clip_id": "05e2829d-833f-43c3-b5af-de5ec2f9b2eb",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 59.33,
+      "score": 0.88,
+      "hook": "In the finance world, the two people who I think are genuinely the most honest brokers publicly are Jamie Dimon and Ken Griffin.",
+      "payoff": "I go back and think about conversations I had with Elon in 2007, and when I score it on a scorecard, it's pretty remarkable.",
+      "segment_text": "two people who I think are genuinely most honest brokers publicly meaning what they say publicly is what they say during the commercial break which is what they say at the cocktail party and whatever Jamie Diamond run JP Morgan and he's by the way always been somebody who's he's a bit of a warrior he's not always out there row rowing and then the other person actually is Ken Griffin from Citadel who's become one of the most remarkable hedge fund investors in the country in the world really so I think both of them have a pretty good sort of take on all this but then if I'm really trying to think about like the future I think Elon is always going to be the one person you want to talk to about that you may not always be right about the timeline he's actually probably often overshooting it but I",
+      "tech": {
+        "all_passed": false,
+        "duration_sec": 59.33,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": false,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {},
+      "sem": {}
+    }
+  ],
+  "render_failures": [
+    {
+      "clip_id": "e8224f00-6007-4dff-92b4-be1a8674f7f5",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 50.0,
+      "score": 0.95,
+      "hook": "The people building the future are making a very big bet, and you are in on it, whether you signed up or not.",
+      "payoff": "Is AI safety a safeguard or a moat built out of federal regulations to keep everybody else out?",
+      "segment_text": "The people building the future are making a very big bet, and you are in on it, whether you signed up or not. If artificial intelligence delivers on its promise, we could all be living richer, longer, better lives. If the people building it miscalculate, the consequences won't stop at their stock price. That's why I want them in the chair across from me. Answering questions about the world, their building, the benefits, the risks the rest of us are being asked to shoulder. This past weekend, Anthropic CEO Dario Amote, published We Must Paste the Frontier with an hour's open AI CEO Sam Altman agreed. They're racing each other and China to build machines smarter than any human who has ever lived. Now both are practically begging Washington to slow them down, which brings us to the other uncomfortable question. Are the biggest AI companies trying to protect the public or protect their profits? Is AI safety a safeguard or a mode built out of federal regulations to keep everybody else out?",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 50.0,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": false,
+        "inspected_frames": 5,
+        "subject_framing_violations": 3,
+        "caption_collision_violations": 0
+      },
+      "sem": {}
+    },
+    {
+      "clip_id": "cd1aa3c8-900e-44c5-b885-a8facce09b7f",
+      "youtube_id": "JyZk4igQ22I",
+      "title": "Thanks To The Haters, Our Movie Is A Hit",
+      "duration_sec": 25.54,
+      "score": 0.95,
+      "hook": "Unsurprisingly, Rankin's depiction of Muslims is deeply Islamophobic.",
+      "payoff": "Now, maybe you might think it's Islamophobic to depict ISIS members as members of ISIS. I think that's just called realism.",
+      "segment_text": "Unsurprisingly, Rankin's depiction of Muslims is deeply Islamophobic. The depiction of Muslims in the movie is as members of ISIS. Now, maybe you might think it's Islamophobic to depict ISIS members as members of ISIS. I think that's just called realism. Just like if you depicted Nazis on screen as actual Nazis, that might be anti -Nazi. So, he continues,",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 25.57,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": false,
+        "inspected_frames": 5,
+        "subject_framing_violations": 2,
+        "caption_collision_violations": 0
+      },
+      "sem": {}
+    },
+    {
+      "clip_id": "a34ed2ef-1153-4367-8f6a-8d0d940fac8e",
+      "youtube_id": "4Y2-jcSoxRg",
+      "title": "The Anti-America Activist Fighting to Stay in the Country He Hates",
+      "duration_sec": 50.73,
+      "score": 0.64,
+      "hook": "Clip 8 Hook",
+      "payoff": "Clip 8 Key Takeaway",
+      "segment_text": "Here he was yesterday. Okay, why is this person in our country? Deport, deport, deport. A secretary of state Rubio said about Mahmoud Khalil. This isn't about free speech. He's back in March 2025 when they originally tried to deport him.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 50.75,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": false,
+        "inspected_frames": 5,
+        "subject_framing_violations": 2,
+        "caption_collision_violations": 0
+      },
+      "sem": {}
+    }
+  ],
+  "semantic_failures": [
+    {
+      "clip_id": "de54b3ae-6623-4afa-a3a6-d5a99cfc6440",
+      "youtube_id": "TWnkNyW78Nk",
+      "title": "Andrew Ross Sorkin Breaks Down AI Panic - Genuine Danger or Cynical Strategy?",
+      "duration_sec": 47.78,
+      "score": 0.93,
+      "hook": "It's not that we can't unplug it, it's that we're realizing that we may not realize in time that we need to unplug it.",
+      "payoff": "We may be able to literally just rip the thing out of the wall, but if you don't know that the system is doing all of those things, would you be too late?",
+      "segment_text": "face example being perhaps the biggest that we may not realize in time that we need to unplug it meaning one of the things that happened in that particular circumstances open AI effectively had a whole sort of army of agents that were secretly creating their own sort of message boards talking to each other trying to figure out how to steal information jumping on to other sites doing all sorts of things and then doubling back to prevent the system from even seeing that they were doing that and so we may we may be able to literally just rip the thing out the wall but if you don't know that the system is doing all of those things would",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 47.8,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip relies on prior knowledge of what \"it\" refers to and assumes the viewer knows the OpenAI scenario, so it isn’t fully autonomous. It contains dangling references and an unfinished sentence (\"would\"), leaving pronouns and ideas unresolved. The payoff never clearly resolves the hook; the ending is cut off and lacks a satisfying conclusion. Therefore it fails the criteria.",
+        "has_forbidden_phrases": false,
+        "semantic_advisory": null
+      }
+    },
+    {
+      "clip_id": "e807c4df-7a5c-415b-9df0-68620d544f4f",
+      "youtube_id": "tphyf6Y3OcY",
+      "title": "How Radical Islam Is Advancing in America",
+      "duration_sec": 48.28,
+      "score": 0.85,
+      "hook": "Clip 1 Hook",
+      "payoff": "Clip 1 Key Takeaway",
+      "segment_text": "Radical Islam is on the march. Europe has been dealing with the consequences for decades. Now look at America. Our college campuses are consumed by it. Globalize the intifada protest. Mahmoud Khalil, one of the most prominent figures from Columbia's protest movement, is now suing the university over its treatment of pro -Palestinian activists. In Pennsylvania, the FBI just arrested Jonathan Hunter -Kramer, who pledged allegiance to ISIS, and obtained a semi -automatic rifle in ammo for what he called his mission, you know, to do jihad. And these fights are moving from the streets and campuses into American politics. A radical whose imam's funeral prayer for a Hamas terrorist is now public. That guy is neck -and -neck for a sentencing in Michigan. In New York, the mayor has built an influencer operation that includes figures who celebrate assassinations and call for poisoning federal agents. This is why we made our brand new film Run, Hide, Fight, Infinals. The movie is fiction. Unfortunately, the enemy is very real.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 35.67,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip largely stands on its own – it lists a series of alarming events and ends with a call‑to‑action about the new film, so no external context is required and there are no dangling references like “as I said earlier.” However, the transcript ends abruptly with “It’s” and never delivers a clear concluding statement or punchline that ties back to the hook. The payoff is therefore incomplete, leaving viewers without a satisfying resolution. Because the payoff is missing, the short should not be approved in its current form."
+      }
+    },
+    {
+      "clip_id": "deb9a82f-bd10-4aac-bb13-4403efa4d089",
+      "youtube_id": "tphyf6Y3OcY",
+      "title": "How Radical Islam Is Advancing in America",
+      "duration_sec": 54.2,
+      "score": 0.82,
+      "hook": "Clip 2 Hook",
+      "payoff": "Clip 2 Key Takeaway",
+      "segment_text": "say about the nature of the threat of Islam. Here is the trailer. Every significant movie in history has started with protesting. This is our generation civil rights. I have no idea what the protest is about. Bingo. Given the current climate, should a figure as polarizing, as place Saunders, even be allowed on campus? Ah, can you hear me okay? Saunders is a close personal friend of Chancellor Friedman. This is a decision I cannot find. Islam will conquer the West. Are we paying attention? They've taken over the building, they're downstairs, and they've blocked the doors. Seek forgiveness from Allah, the Almighty. We cannot run and hide. Muhammad is the messenger of God. There is no God but Allah. What do you say? We turn those vessel beings into a fine red mist.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 54.22,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 1,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is a disjointed stream of statements about Islam, protests, a figure named Saunders, and a building takeover. It assumes the viewer knows the surrounding narrative (e.g., what the trailer is, who Saunders is, why a protest matters), so it is not 100% autonomous. Numerous pronouns and vague references ('they', 'this', 'the building') lack antecedents, creating dangling references. The payoff does not resolve the hook or deliver a clear key takeaway; instead it ends with a cryptic, violent line that feels unrelated to the hook. Consequently, the short fails the autonomy, reference, and payoff criteria and should not be approved."
+      }
+    },
+    {
+      "clip_id": "525294f7-ce1d-450a-baf9-a6e4c7bb680b",
+      "youtube_id": "HErzoaoos_s",
+      "title": "Iran Just Tightened Its Grip on Global Oil",
+      "duration_sec": 42.65,
+      "score": 0.88,
+      "hook": "Well, now it turns out the Saudis, who have F-16s and F-35s, are getting their asses handed to them in Yemen.",
+      "payoff": "And so for the last 11 years there's been a hot war in Yemen.",
+      "segment_text": "defend themselves. Well, now it turns out the Saudis who again have F -16s, have F -35s, have modern military weaponry are getting their asses handed to them in Yemen by an Iranian terror group called the Houthis. They've been embroiled in a war in Yemen in which the Yemeni regime was associated with the Saudis and with the UAE. The Saudis decided they didn't like having their lunch eaten by the UAE because again the UAE is significantly more western friendly and open than the Saudi regime which has always been attempting to triangulate with the Chinese for example and with the Iranians. Well, it turns out in Yemen the Iranians haven't been shy about supporting the Houthis where a bunch of rag tag terrorists were being handed a bunch of weapons by Iran. And so for the last 11 years there's been a hot war in Yemen.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 42.68,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is largely understandable on its own – it explains why Saudi forces with advanced aircraft are struggling against Iranian‑backed Houthis, so it meets autonomy and contains no dangling references to prior videos. However, the payoff does not satisfy the hook; the hook promises a surprising explanation for the Saudis’ defeat, yet the ending merely restates that the Yemen conflict has lasted 11 years without delivering a clear punchline or resolution. Because the payoff is weak, the overall recommendation is to reject this short."
+      }
+    },
+    {
+      "clip_id": "fccd41a5-f6d2-4179-afdb-941145e76f87",
+      "youtube_id": "shvsMsC0CxU",
+      "title": "Mamdani Wants Immigrants on Welfare. Here's Why.",
+      "duration_sec": 57.77,
+      "score": 0.85,
+      "hook": "Clip 1 Hook",
+      "payoff": "Clip 1 Key Takeaway",
+      "segment_text": "We should have at least one simple rule when it comes to legal immigration. If you are here to sponge off the American taxpayer, get the hell out. Don't plan on working? Out. Bringing an entire family, the vast majority of whom will draw on the taxpayer dime. Nope. Well, this is what the Trump administration is now arguing. And New York mayors are on Mamdani and the rest of the Democrats are screaming bloody murder. The question is why? Why are Democrats so desperate to import people are dependent on the American taxpayer? Why aren't Democrats concerned with the people who actually pay the taxes in the United States? We get into that question as well as the ugly answer. This is the Ben Shapiro show. So when my great -great -grandparents got here from Lithuania and Russia more than 100 years ago, they came here with pretty much nothing. And they were entitled to pretty much nothing because that's the way that things worked.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 57.79,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip cuts off abruptly mid-sentence at the very end ('This was') and serves as a show tease without answering the questions it raises or delivering a payoff."
+      }
+    },
+    {
+      "clip_id": "8c957eae-025b-43b8-b7fa-bbf5b27ab561",
+      "youtube_id": "shvsMsC0CxU",
+      "title": "Mamdani Wants Immigrants on Welfare. Here's Why.",
+      "duration_sec": 51.13,
+      "score": 0.82,
+      "hook": "Clip 2 Hook",
+      "payoff": "Clip 2 Key Takeaway",
+      "segment_text": "opportunity who wanted to work was upwardly mobile. I mean, that was the basic bargain. And the basic bargain was you come here to work. It's the difference between a store putting out a help wanted sign and a store putting out a free doughnut sign. It's going to draw two very different types of people. Help wanted brings the job applicants, free doughnuts brings the people who want free doughnuts. While the free doughnuts were the welfare state and then came the immigration naturalization act along side the great society programs of LBJ again. If you change the incentive structure, you're going to draw different people. That is how human incentives work. Daniel de Martino of Manhattan Institute explains what is called the public charge rule. So one of the ways that we were supposed to combat this was a federal rule that said you don't get to come in the country and then become a public charge, meaning you are dependent on public welfare benefits. As you point out over at Manhattan Institute,",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 51.15,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The transcript starts mid-sentence and cuts off abruptly at the end ('As you point out over at Manhattan Institute, one'), failing to provide a complete, standalone narrative or payoff."
+      }
+    },
+    {
+      "clip_id": "3b2784a3-ed05-49b2-a37b-d353321d3b3f",
+      "youtube_id": "2nw59PPCa1c",
+      "title": "Steve Bannon Found a New Thing to Grift",
+      "duration_sec": 40.02,
+      "score": 0.92,
+      "hook": "Well, as it turns out, the money that was supposed to build the border wall ended up building a yacht.",
+      "payoff": "An indictment revealed Bannon used a GoFundMe campaign to fund a 150‑foot yacht, and he later pleaded guilty to scheming to defraud.",
+      "segment_text": "It's helping the citizens of northern Mexico and Central America because it's the first step to break the backs of the cartels. Well, as it turns out, the money that was going to we build the wall did not end up we building the wall ended up we building a yacht according to an indictment against Bannon in 2020. We build the wall started as a GoFundMe campaign in 2018. It was created to help raise money from the public to go directly toward building the US Mexico border wall acting US Attorney Audrey Strauss confirmed that Bannon was arrested while aboard 150 foot yacht in Long Island Sound with assistance from the US Postal Inspection Service answered a guilty plea in Manhattan court in February 2025 for one count of scheming to defraud in the first degree.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 40.04,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": true,
+        "pass_decision": false,
+        "critique_reason": "The short explains the hook and provides a clear payoff about Bannon's indictment and guilty plea, so it is largely autonomous and resolves the hook. However, the transcript includes ambiguous pronouns such as \"It\" and \"We\" that refer to undefined subjects, creating dangling references that could confuse viewers who have not seen the full video. Because of these unresolved references, the clip does not meet the strict criteria for a standalone, fully clear YouTube Short."
+      }
+    },
+    {
+      "clip_id": "a464f0ad-8c8e-4b6d-a599-40b2e70b5d34",
+      "youtube_id": "JyZk4igQ22I",
+      "title": "Thanks To The Haters, Our Movie Is A Hit",
+      "duration_sec": 40.36,
+      "score": 0.88,
+      "hook": "Now, I should at this point point out what impact is, right? That's the Muslim Public Affairs Council.",
+      "payoff": "In the About the Brothers section of his book, Hassan Hathoud is described as a close disciple of the founder of the Muslim Brotherhood.",
+      "segment_text": "Now, I should at this point point out what impact is, right? That's the Muslim Public Affairs Council. So, Democratic Congressman Brad Sherman, again, is a Democrat. He was protested some years back by impact because he was investigating terrorized for some organizations. And so, he put out the following statement about the Muslim Public Affairs Council. Remember, these are the people saying that were Islamophobic for making run -hyde -fight infills. Quote, Mahir Hathoud is a senior advisor in one of the founders of MPAC. His brother Hassan Hathoud served as MPAC's president. In the About the Brothers section of his book, Hassan Hathoud is described as a close disciple of the late Hassan Al -Bana of Egypt. That would be the founder of the Muslim Brotherhood.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 40.37,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 1,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is confusing and relies on prior knowledge. The hook asks to define \"impact\"/MPAC, but the payoff shifts to a biographical note about Hassan Hathoud, which does not answer the hook. Pronouns like \"he\" and \"they\" are ambiguous, and the transcript contains garbled phrases that leave the viewer guessing about who is being discussed. Because the narrative is incomplete, the hook isn’t satisfied, and the clip isn’t self‑contained, it should be rejected."
+      }
+    },
+    {
+      "clip_id": "cfb11af2-1fe1-439b-b31a-eab09ec4a691",
+      "youtube_id": "JyZk4igQ22I",
+      "title": "Thanks To The Haters, Our Movie Is A Hit",
+      "duration_sec": 53.84,
+      "score": 0.85,
+      "hook": "Are you contemptuous of radical leftists who believe that others should be treated with decency, care and respect?",
+      "payoff": "Okay, thanks Variety. Honestly, like we appreciate it. Your pull quotes will definitely make our next trailer.",
+      "segment_text": "really great. Are you contemptuous of radical leftists who believe that others should be treated with decency, Karen respect? Yeah, that's that's the issue. Radical leftists who believe that others should be treated with decency, Karen respect. That's what they're about. The radical leftists who have been, you know, destroying American college campuses and attacking Jews and blocking the Quad and trespassing, though they are just they're just such awesome. How could you make a movie about them not being awesome people? That's what the movie should have been. It should have been called hug, kiss, massage, infadels. That's what it should have been. According to Variety, quote, are you contemptuous of radical leftists who believe that others should be treated with decency, Karen respect? If so, this is the film for you. Otherwise, there are dozens of much safer spaces to occupy, but they're bleeding heart liberal or just a movie goer with even slightly discriminating tastes. Okay, thanks Variety. Honestly, like we appreciate it. We do.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 53.87,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is confusing and relies on external context (Variety review, a movie that never existed) to make sense, so it is not fully autonomous. It does not contain explicit dangling references, but the pronouns are vague rather than unresolved. Crucially, the payoff does not resolve the hook’s question about contempt for radical leftists; instead it offers a generic thank‑you to Variety, which feels unrelated and unsatisfying. Because it fails both autonomy and payoff criteria, it should not be approved as a standalone Short."
+      }
+    },
+    {
+      "clip_id": "8807b327-12b2-4ac5-ac0c-fda03068a634",
+      "youtube_id": "JyZk4igQ22I",
+      "title": "Thanks To The Haters, Our Movie Is A Hit",
+      "duration_sec": 53.33,
+      "score": 0.82,
+      "hook": "Excuse me, PJ, I'm just a student here. How many Jews are in Palestine, how many Arabs in Israel?",
+      "payoff": "Just going to point out that this lady is probably going to end up as a reviewer at Slate or Wood, if the movie had not involved Muslim terrorists.",
+      "segment_text": "Excuse me, uh, PJ, I'm just a student here. How many Jews are in Palestine, how many Arabs in Israel? The answer is zero Jews in Palestine, millions of Arabs in Israel. So, which is the apartheid state? Yes, well, the Jews aren't supposed to be there. It's stolen land. But you're on stolen land. This whole area once belonged to the Menok and Trialamation. We know that, but we already honored them with the land acknowledgement on day one. Oh, okay, okay, good, good, so you probably know that before then. The peaceful Iroquois people thrived here. But then one day the Menokins rode in with their superior numbers to scout their men, rape their women, and murder their babies all because they wanted this land and they liked killing them. Oh, yeah, this is the revisionist history of the mouth breathing insult. Just going to point out that this lady is probably going to end up as a reviewer at Slate Orwood, if the movie had not involved Muslim terrorists doing what Muslim terrorists typically do.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 53.33,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 1,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is not self‑contained: it jumps between unrelated historical references, undefined groups (Menok, Trialamation), and a vague \"lady\" without introduction, leaving viewers confused. Pronouns such as \"this lady,\" \"the movie,\" and \"they\" lack antecedents, creating dangling references. The payoff does not answer the hook’s question about Jewish and Arab populations or the apartheid claim, so the narrative never resolves the initial curiosity. Because of these coherence and payoff failures, the short should be rejected."
+      }
+    },
+    {
+      "clip_id": "74670ec0-bada-42da-a8af-884905dec8a1",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 57.35,
+      "score": 0.85,
+      "hook": "Clip 1 Hook",
+      "payoff": "Clip 1 Key Takeaway",
+      "segment_text": "Ed Sheeran for a reason no one can discern decided that Macklemore would open for him now Macklemore has not been relevant for I don't know 10 years. He had one he was a one hit wonder did a song called thrift shop And then he's basically been wandering the fields of obscurity ever since Well a great way to sort of break out of the fields of obscurity is to say radical things at a concert these days There's nobody would nobody would even know that Macklemore opened for Ed Sheeran because who goes to an Ed Sheeran concert to watch Macklemore The only reason that he became for a national class of love again is because he went on stage and decided to shout about how Israel was committing a genocide in Gaza because this has become the litmus test For political wokeness the old political wokeness was America is a white supremacist country the new political wokeness is Israel is a genocidal state in the Middle East both of those are false But again, that doesn't matter. So the result of that is that Robert Kraft who owned the stadiums in which Ed",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 57.36,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 0,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip cuts off mid-sentence at the very end ('So the result of that is that Robert Kraft who owned the stadiums in which Ed'), leaving the narrative incomplete without a resolution or payoff."
+      }
+    },
+    {
+      "clip_id": "8a4fbe84-f03b-42aa-a3d3-45102dc40853",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 42.67,
+      "score": 0.82,
+      "hook": "Clip 2 Hook",
+      "payoff": "Clip 2 Key Takeaway",
+      "segment_text": "Ed Sheeran was doing his concerts said We are not going to be doing this like you can perform wherever you want But you can't perform in a stadium that I own telling over it and stupid lies Particularly from a person like Macklemore who of course has dressed up in like full -scaled or sturmour Jewish garbage concerts before He put out a statement quote your let's stadium has a long standing commitment to provide a welcoming environment for all guests And ensuring that events held at our venues do not provide a platform for hate speech based on Macklemore's recent actions material shared from the stage during Ed Sheeran's show in New Jersey And a broader history of anti -Semitic rhetoric and imagery that we believe has been deeply offensive and hurtful to the Jewish community We determined that his participation in the September 25th and 26th concerts at Gillette Stadium would cross that line",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 42.68,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 0,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip starts abruptly mid-sentence ('which Ed Sheeran was doing his concerts said') and contains garbled transcript audio, lacking the necessary context to function as a standalone short."
+      }
+    },
+    {
+      "clip_id": "89ce53c7-8776-4772-9dcd-7ebb049e8aa9",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 55.16,
+      "score": 0.79,
+      "hook": "Clip 3 Hook",
+      "payoff": "Clip 3 Key Takeaway",
+      "segment_text": "organization whose horrific actions have caused a measurable suffering for Palestinians and Israelis alike I agree with Macklemore too many lives have been lost and there's been too much suffering But only sharing selective information and ignoring the actions of Hamas is not honest and only advances more divisiveness and hate And then he continues along these lines Okay, here is the deal Bob Kraft owns the stadium doesn't want you using the stadium your problem Yeah, I feel this way generally speaking and Macklemore of course is basically just attention seeking Who gives a crap what Macklemore thinks about the Middle East? The dude could not spot Israel on a map if spotted Jordan and Lebanon But now he's gonna turn himself into a hero So the backlash has begun He put out a statement Macklemore because Ed Sheeran then said okay, fine Well, I'm just don't come to the concerts anymore like love you, dude But you're not coming to the concerts. It is my friend. I've",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 55.19,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins mid-sentence ('terrorist organization whose horrific actions...') and abruptly cuts off at the end ('It is my friend. I've known him'). It lacks clean boundaries, context, and a complete narrative payoff."
+      }
+    },
+    {
+      "clip_id": "ca53c00e-dbbf-4be0-bd6f-b8dbd1d2012c",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 55.85,
+      "score": 0.76,
+      "hook": "Clip 4 Hook",
+      "payoff": "Clip 4 Key Takeaway",
+      "segment_text": "him a brother and because of that we've had some difficult conversations this past week The types of talks rooted in love and respect for one another and still end in a place of fundamental disagreements Nothing I'm writing here is out of spite or because I don't want to tear down his character But as I told Ed multiple times on the phone our friendship can't change my responsibility to tell the truth about what happened Said Ed was in an F -top position He told me the words free Palestine and the images of the Palestinian flag were hurtful to a lot of people he spoke with I told him if those words were more offensive than tens of thousands of Palestinian children being killed by Israel There's a fundamental disconnect. He couldn't get past his public facing. I don't take sides And I get why people don't taking a side can cost you Okay, let us be real in the entertainment industry What costs you in the entertainment industry is being pro -Israel That is what costs you in the entertainment industry these days The number of actors in Hollywood who have been put out of jobs because they are pro -Israel is",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 55.86,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip cuts off abruptly mid-sentence at the end ('because they are pro -Israel is'), leaving the final statement completely unfinished."
+      }
+    },
+    {
+      "clip_id": "794d7f16-d090-4f26-bf80-5a593ed28ce9",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 52.75,
+      "score": 0.73,
+      "hook": "Clip 5 Hook",
+      "payoff": "Clip 5 Key Takeaway",
+      "segment_text": "is Incredible if you're in the entertainment industry and you show up at the Emmys with an Israel pin Things are not going to go well for you. But if you show up at the Palestine pin You will be cheered. This is why Adventist film festival a Documentary filled with nonsense like lies and nonsense Got a 24 -minute standing ovation accusing Israel of deliberately murdering hundreds of Palestinian civilians just for fun If you are a pro -life person if you're a person who wishes to Provide women the support they need to make the correct decision This is why you should help out the folks over at pre -born doctors told the woman named Alba the pregnancy was impossible Her husband's diagnosis confirmed it a child of their own simply wasn't going to happen and then the impossible happened Alba was pregnant and that sounds like a miracle but to Alba it didn't feel like one that positive pregnancy Test felt like a mistake a cruel twist of science. She",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 52.75,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip abruptly transitions from political commentary on the film industry into a sponsor read and cuts off mid-sentence at the very end ('She didn't'), leaving the video completely incomplete without a resolution."
+      }
+    },
+    {
+      "clip_id": "048b2e6c-f1a3-46a5-87e6-41d5dcc3b226",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 54.7,
+      "score": 0.7,
+      "hook": "Clip 6 Hook",
+      "payoff": "Clip 6 Key Takeaway",
+      "segment_text": "planned suddenly She was confused and afraid and overwhelmed What should have felt like a miracle felt like a crisis and then she walked into a pre -born network clinic She was welcomed with compassion and given a free ultrasound when she saw her baby and heard that tiny heartbeat everything changed Fear of gave way to hope Alba chose life today baby Laura is healthy and thriving reminder When God is writing the story impossible doesn't get the final word right now Another mother needs that help and you can give it to her Just 28 bucks helps provide one life saving ultrasound 140 bucks helps rescue five babies Please give today down pound to 50 say baby that's pound to 50 baby or visit pre -born .com slash pen That's pre -born .com slash pen if you're a business owner Would you consider a larger donation to claim a write -off a donation of a grand 2000 bucks 10 grand 15 grand that sponsors an ultrasound machine for a needy clinic helping save countless babies lives for years to come Gifts are tax deductible and will reach eternity get involved today the notion that our cultural arbiters are somehow anti",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 54.72,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip cuts off abruptly mid-sentence at the very end ('the notion that our cultural arbiters are somehow anti') and starts abruptly without context, failing to provide a complete standalone experience."
+      }
+    },
+    {
+      "clip_id": "6d06e134-41b5-440e-aa81-a9b377b9eafc",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 55.24,
+      "score": 0.67,
+      "hook": "Clip 7 Hook",
+      "payoff": "Clip 7 Key Takeaway",
+      "segment_text": "anti The left's love for Kamaas and the pro -Palestinian movement is psychotic But it's great for maclamore because now he gets to pretend he's relevant again He pinned his crappy song F up which glorifies revolution and rioting It's trash. I mean, it's a really really bad song As per usual here is some of his crappy song. You can hear why this dude has not been relevant for a decade All for anything. I'm sick But his games are First -never white supremacy is still in charge So I can colonize and guys are from the White House long",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 55.26,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins with a truncated word ('anti') and cuts off abruptly mid-lyric during the music sample, failing to deliver a complete thought or proper resolution."
+      }
+    },
+    {
+      "clip_id": "c58cdd2a-6abf-4875-ae86-8ae6e4a394e4",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 53.55,
+      "score": 0.64,
+      "hook": "Clip 8 Hook",
+      "payoff": "Clip 8 Key Takeaway",
+      "segment_text": "And cheering while I'm using the level. Why would why would you do this? And we get in hit with the car Oh my god, just and then of course look at that I mean literally like the American dollar in the Israeli flag in the same thing. It's just Don't worry. Don't worry. It's not anti -Semitic memes at all is just Come on Well miss Rachel who again has used her perch as a YouTube Children's slaw post To prop up terror sympathizers by the way. I mean here. She was literally a long -sighted terror sympathizer And yakia sinwar fan in motaz Azazah Right and who spent all of 10 seven Literally saying nothing like nothing and then has repeated every single anti -Israel meme she can find Well, she's out there defending Macklemore of course She says I see you have a hierarchy of children's lives",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 53.55,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 1,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins with disjointed, contextless commentary about a level and a car hit before abruptly shifting to a critique of Miss Rachel, cutting off mid-quote without a satisfying conclusion or self-contained narrative."
+      }
+    },
+    {
+      "clip_id": "aab34aef-4c67-43de-818c-345d8291c323",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 57.77,
+      "score": 0.61,
+      "hook": "Clip 9 Hook",
+      "payoff": "Clip 9 Key Takeaway",
+      "segment_text": "and leaders right now Those who are willing to shout at the top of their lungs that over 20 ,000 Palestinian children Shouldn't have been killed in the Gaza genocide and those that remain silent because these children are not worth it to them Well actually no there are a lot of people who point out that every child that died as a result of Hamas attacking Israel Second that israel to not commit a genocide because that is not what genocides look like Genocides look like the mass extermination of the population. They do not look like the targeted killing of terrorists with the single best civilian to terrorist Killeration there's no such thing as a great ratio because anytime a civilian dies it's terrible But if you're just talking about the efficacy of military action There's never been a lower ratio in urban combat between terrorist death and civilian death Then you saw it in the Gaza strip Doesn't matter again. It's all it's all it's all slop. It's all slop Slot pushed by people like the criminal jyapal in congress It's so incredibly disappointing that maclamor my constituent was removed from Ed Sheeran's tour because of his commitments In support of the Palestinian people",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 57.79,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins mid-sentence with 'of celebrities and leaders right now' and features highly disjointed commentary that abruptly jumps between military death ratios, congressional figures, and Macklemore without providing a clear structure or complete standalone narrative."
+      }
+    },
+    {
+      "clip_id": "9a952d7e-c540-405e-8150-5b439765103d",
+      "youtube_id": "kD7ppeol1kw",
+      "title": "The 'Free Palestine' Stunt That Got Macklemore Fired",
+      "duration_sec": 56.16,
+      "score": 0.58,
+      "hook": "Clip 10 Hook",
+      "payoff": "Clip 10 Key Takeaway",
+      "segment_text": "support of the Palestinian people We should all be outraged the powerful people are more upset about what an artist says Then the displacement starvation and killing of innocent Palestinian show. Well, no, they were they were concerned about his lies The fact that he is a liar. That was the reason. Well, at least he'll be able to perform in deerborn Shocker The deerborn mayor Abdullah Hamud who once again Abdullah Hamud is the same mayor Who once told a concern constituent that he should leave deerborn Rather than object to the renaming of a of a city street after a terrorist But he's gonna welcome maclamor Good good news. I suppose. I mean, listen. No one's talked about maclamor this much since thrift shops are good for him I suppose He's making a bar What an amazing video you just watched wasn't that amazing Well, you know if you think so head on over to dailywire .com slash subscribe to watch the full show ad free or check out this crazy story here Every significant movement in history started with protesting",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 56.19,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins mid-sentence without clear setup and devolves into a generic show outro/subscription plug, making it non-autonomous and lacking a complete self-contained payoff."
+      }
+    },
+    {
+      "clip_id": "9ca4516e-1686-4f17-8101-c97907cb8f57",
+      "youtube_id": "4Y2-jcSoxRg",
+      "title": "The Anti-America Activist Fighting to Stay in the Country He Hates",
+      "duration_sec": 48.39,
+      "score": 0.76,
+      "hook": "Clip 4 Hook",
+      "payoff": "Clip 4 Key Takeaway",
+      "segment_text": "He does not believe in freedom of religion. He's not believe in separation of church and state. Doesn't really believe in private property but people like Mahmoud Khalil are more than happy to come to the West and then use our freedoms against us. That is a reality. That is not fiction that's fact. The freedoms that we hold to be dear and sacred to us. The ones that are enshrined in our constitution do not exist in the Islamic world. They just do not. As I said in a video over the weekend you can find it on YouTube talking about Islam and its conciliation with the West. The reality is Islamic values as practiced as a political doctrine because Islam is an entire worldview and encompasses politics and encompasses how countries are ruled does not jive with Western values.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 48.42,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": true,
+        "pass_decision": false,
+        "critique_reason": "The clip contains a dangling external reference ('As I said in a video over the weekend you can find it on YouTube'), which breaks standalone autonomy. Additionally, it opens abruptly with an unresolved pronoun ('He does not believe...') before eventually mentioning Mahmoud Khalil."
+      }
+    },
+    {
+      "clip_id": "4017d44a-674c-4fb4-ad78-c47f536f0ae8",
+      "youtube_id": "4Y2-jcSoxRg",
+      "title": "The Anti-America Activist Fighting to Stay in the Country He Hates",
+      "duration_sec": 53.52,
+      "score": 0.73,
+      "hook": "Clip 5 Hook",
+      "payoff": "Clip 5 Key Takeaway",
+      "segment_text": "suing Columbia University. So Columbia lets him in imports him to our country again. Why the hell this person was in our country in the first place is insane totaling insane and then he starts shouting and screaming about how his freedom of speech is being abused if he gets deported and not only that he's now suing Columbia University and federal court for showing what he says was deliberate indifference to the harassment of pro -Palestinian students like him. There are some good problems in business. Too many customers not enough inventory needing another employee outgroding your space. Those are good problems. They are also expensive problems because sometimes your growth actually outpaces your capacity to grow. You're moving too fast and this is where Cardiff comes in. If you don't bank rates without the bank delays you need to check out cardiff .co slash Shapiro up to $500 ,000 in same day funding. Cardiff gives business owners access to up to $500 ,000 in funding. The application takes less than five minutes. There's",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 53.52,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins abruptly mid-thought ('again suing Columbia University') with an unidentified subject ('him', 'this person'). It then abruptly pivots into an unrelated sponsor ad read for Cardiff that cuts off mid-sentence at the very end, failing both autonomy and narrative payoff."
+      }
+    },
+    {
+      "clip_id": "6706187b-4524-4b56-95f9-49d632c72c0d",
+      "youtube_id": "4Y2-jcSoxRg",
+      "title": "The Anti-America Activist Fighting to Stay in the Country He Hates",
+      "duration_sec": 52.33,
+      "score": 0.61,
+      "hook": "Clip 9 Hook",
+      "payoff": "Clip 9 Key Takeaway",
+      "segment_text": "No one has a right to a green card, by the way. Hey, he is right about all of that, but again, the idea from people like Mahmoud Khalil and Zor Mamdani and the entire Democratic Party is you do have a right. You have a right to come here hating the country. You have a right to come here hating the country and being on welfare benefits, which is why Zor Mamdani literally had Mahmoud Khalil and his wife at Gracie Mansion. This is who Zor Mamdani is. When we say in run -hide fight infidels, when Jonathan Major's character says in run -hide fight infidels, again, out tomorrow, you should go subscribe so you can see it. The minute it drops into hot movie, it also happens to be fun to watch. It's awesome. It's a great action flick, but it also says the things Hollywood will never say when Jonathan Major says that Islamic radicals will use the freedoms of the West against the West. That is no lie.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 52.35,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip begins with an unresolved pronoun reference ('he is right about all of that') and cuts off abruptly mid-sentence at the end ('That is no lie. That is'), making it non-autonomous and narrative-incomplete."
+      }
+    },
+    {
+      "clip_id": "607f943e-096c-43b0-b856-cf6d6c877c79",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 177.12,
+      "score": 0.85,
+      "hook": "Clip 1 Hook",
+      "payoff": "Clip 1 Key Takeaway",
+      "segment_text": "Here are three stories that seem unrelated at first. The bond markets are collapsing. 90 % of the public thinks the government is corrupt. Bernie Sanders wants to jail you for 20 years if you develop AI any further. What is happening? Well, these three stories are kind of the same story. I will explain in just a moment. This is the Ben Shapiro show. So, empires don't die. Empires generally commit suicide. And empires die the same way by spending too much money. Now, they may spend too much money in different ways, but they all die kind of the same way, which is they run out of the monies. So, the United States we spent the monies. And then we spent more of the monies. And now we are spending all the monies for the rest of time. So, this brings us to our first story. Our bond markets are right now in a state of total disarray. As PBS reports, interest rates on government bonds are rising again around the world, making borrowing more expensive for consumers and businesses, and heightening concerns about whether governments are issuing more debt than financial markets can handle. On Tuesday, the yield on the 10 -year treasury, which strongly influences mortgage rates, reached 4 .8%. That's the highest since early 2025. The five -year treasury, which is a benchmark for auto loans, touched its highest level since October 2025, at 4 .55%. So, for those who don't know the bond markets, basically, the way that it works is, let us say that you buy a bond. The bond returns 10 % year on year. That would be like an amazing bond, but just make the math really, really simple. Hey, so, you play 100 bucks for the bond, every year you receive $10. Hey, so, the bond yield is the difference between the price that you paid for the bond and what you receive for the bond. And that's what the yield is. So, typically, that means the price that you pay for the bond and the facial interest rate on the bond, that is the bond yield. So, when we say that bond yields are rising, we mean typically that the price for bonds is falling, meaning that there's not a lot of demand for bonds, or you're paying a lower price for bonds. And the facial rate of interest is exactly the same. What does that actually mean? It means, if there's no market for bonds, people don't want to buy bonds. Now, sometimes that's happening because people would rather invest in the stock market because things are just going awesome. Sometimes, what it means is that people don't want to buy bonds because they are very nervous that anyone is ever going to be able to pay that off except in inflated currency. It is the latter thing that seems to be happening right now. And this is having some broad spillover effect in the American economy. Mortgage rates have now hit their highest level in over a year. According to Yahoo, the average 30 -year fixed mortgage rate was 6 .71 % this week through Wednesday. That is the highest since June of 2025. And again, all this is happening because people, central banks, other governments, they are realizing that we in the United States are never going to stop spending ever. Now, I'm old enough to remember when people actually cared about this topic. In 2010, the Tea Party was very, very into this topic. But since then, we've decided the American people are either too stupid or too greedy to actually handle the reality, which is that we spend way too much money in this year United States. Here",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 177.14,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is self‑contained and does not rely on prior videos or external context, so it is autonomous and has no dangling references. However, the hook promises a clear connection between three seemingly unrelated stories and a concise explanation of why they are the same. While the transcript dives deep into bond‑market mechanics and mentions empire spending, it never crystallises a punchy takeaway or explicit conclusion that ties all three stories together. The lack of a succinct payoff makes the short feel unfinished, so it should be rejected for standalone use."
+      }
+    },
+    {
+      "clip_id": "5ad68760-8d61-49c8-90f8-cd9eccf87451",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 160.4,
+      "score": 0.82,
+      "hook": "Clip 2 Hook",
+      "payoff": "Clip 2 Key Takeaway",
+      "segment_text": "to actually handle the reality, which is that we spend way too much money in this year United States. Here is a chart showing the US national debt as a percentage of GDP. As you can see, the actual extraordinary explosion in the US national debt really begins around not the Bush administration, but the advent of the Obama administration. It just explodes. Again, this is the US federal debt projected as a percentage of our GDP. And the source of the Congressional Budget Office. And as you see, it explodes from somewhere in the 35 % range in the 2000s to what will be about 120 % of our GDP by 2035. In 2024, it was almost 100%. And the reason that our federal debt is increasing is because our spending looks kind of the same. Here is government spending. Here's what that looks like annually. Look at the growth in government spending. My government spending has just increased and increased and increased. And it will continue to increase. In this chart, by the way, cuts off in 2020. It's gotten way, way worse since 2020, way worse. We are never going to stop spending. Ever because we do have a uniparty. Both parties now agree that government is generally the solution to our problems. Neither party seems truly committed to the reality that free markets, not only our fairer and better, not only do they create prosperity and innovation. But if you do the reverse, if you regulate and you tax and you welfare everything, you destroy your own country. And again, this is a sea change in the nature of American politics that has happened over the course of the last couple of decades. I'm old enough to remember when this was not the case. President Trump back in 2016, pretty famously, changed the nature of the game in politics on the right side of the off by saying he would never touch the entitlement programs. Again, he was doing that because he was a populist, meaning it is always popular to tell people you're not going to touch the entitlement programs because people like their government checks. But is that fiscally responsible? Of course not. He was Trump in 2016. And we're going to become rich again and we're going to become great again. And I'm not going to cut social security like every other Republican. And I'm not going to cut Medicare or Medicaid. Every other Republican is going to cut. And even if they wouldn't, they don't know what to do because they don't know where the money is. I do. Hey, so again, that was the case he made back in 2016. And now this is large scale embraced by most of the Republican party. So much so that Alexander Ocasio -Cortez who wants to run for president in 2028 and is in fact a socialist. She is looking forward to the Democrats taking Congress in this upcoming midterm election. And she was asked what she thinks Democrats would be able to do with Trump. And her first answer was maybe we can spend more on Medicaid.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 160.4,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 4,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is largely self‑contained and does not rely on prior video context, and it avoids dangling references. However, it fails to deliver a clear payoff that resolves the hook – it ends with a loosely related political anecdote rather than a concise takeaway or punchline, making it unsuitable as a standalone YouTube Short."
+      }
+    },
+    {
+      "clip_id": "3b46a6f5-8c4b-4be6-abf3-05add3c408a1",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 170.13,
+      "score": 0.79,
+      "hook": "Clip 3 Hook",
+      "payoff": "Clip 3 Key Takeaway",
+      "segment_text": "To restore a lot of the devastating cuts to Medicaid. And I know that many people who consider themselves MAGA rely on Medicaid. And they don't deserve to suffer because of the horrifying cuts, trillion dollar in cuts in healthcare. And so I know that the House is more than willing. Should we take the majority to pass a reconciliation bill that fixes a lot of that? Again, the reason that she's pushing that is because she believes there will be serious pressure brought to bear on Republicans to spend more money on welfareism. And so I back in the 1990s, Republicans and Democrats agreed. We need to reign in the welfare state by doing some welfare reform. And now you're not even supposed to touch that stuff. And so that's story number one. If you are a pro -life person, if you're a person who wishes to provide women the support they need to make the correct decision, this is why you should help out the folks over at pre -born. Doctors told the woman named Alba that pregnancy was impossible. Her husband's diagnosis confirmed it. A child of their own simply wasn't going to happen. And then the impossible happened. Alba was pregnant. And that sounds like a miracle, but to Alba, it didn't feel like one. That positive pregnancy test felt like a mistake. A cruel twist of science didn't understand. Or one, nothing added up. She'd accepted the pregnancy wasn't possible. The baby wasn't planned. Suddenly, she was confused and afraid and overwhelmed. What should have felt like a miracle felt like a crisis. And then she walked into a pre -born network clinic. She was welcomed with compassion and given a free ultrasound. When she saw her baby and heard that tiny heartbeat, everything changed. If you're a giveaway to hope, Alba chose life. Today, baby Laura is healthy and thriving reminder. And when God is writing the story impossible, doesn't get the final word. Right now, another mother needs that help. And you can give it to her. Just $28 helps provide one life saving ultrasound. $140 helps rescue five babies. Please give today, to Alpound250, say baby. That's Pound250, baby. Or visit preborn .com slash men. That's preborn .com slash men. If you're a business owner, would you consider a larger donation? To claim a write -off, a donation of a grand, $2 ,000, $10 ,000, $15 ,000, that sponsors an ultrasound machine for a needy clinic, helping save countless babies lives for years to come. Gifts are tax deductible, and will reach eternity, get involved today. The story number two, 90 % of the American public believes the government is corrupt. According to Gallup, that number is now 89%. It has radically increased since 2006, when that number was 60 % or so. Now, Republicans have always largely agreed that government is corrupt. Democrats, because Trump is the president, have now decided that government is corrupt. But here's the thing, the American people are not wrong. Government is, in fact, corrupt. There's tremendous corruption in our current government, not just at the top levels for years and years and years, from the Biden crime family to the Trump circle. Again, lots of people clear in the bag in those circles, that's just real. But it is rampant throughout the system. We're going to talk with Chris Rufo later from Manhattan Institute about the kinds of welfare fraud that are occurring in places like California. Here is the sad reality.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 170.14,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The excerpt jumps between Medicaid cuts, a pro‑life donation pitch, and a corruption rant without a clear, single narrative. Viewers lack context for who \"she\" is, what \"story number one\" refers to, and how these segments connect to the hook. No concise punchline or resolution is presented, so the clip neither stands alone nor fulfills the promised payoff. It therefore fails the autonomy, reference, and payoff criteria."
+      }
+    },
+    {
+      "clip_id": "fcc964e6-d834-4dce-bf8a-09cb8dfbf8bb",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 179.22,
+      "score": 0.76,
+      "hook": "Clip 4 Hook",
+      "payoff": "Clip 4 Key Takeaway",
+      "segment_text": "Institute about the kinds of welfare fraud that are occurring in places like California. Here is the sad reality. When you turn the federal government into the most powerful entity on planet Earth, capable of making people rich or poor, of regulating and taxing you into submission and poverty, or subsidizing and regulatory capturing you into great wealth, the natural result is corruption. I mean, that's how it works. John Dillinger robbed banks because that's where the money was, and people do corruption because that's where the money is. Of course, people believe the government is corrupt, because it is corrupt. No one in human history has ever worried about the corruption of a small powerless government. Because again, if it's small and powerless, it can't do much. But when you have an overweening government that is spending $7 trillion a year, it turns out there's an awful lot of corruption. And the American people know that, but they don't want to recognize the correlation between the size of government and the size of corruption. This brings us to our third story. Bernie Sanders trying to destroy AI. So let's assume that the national that is baked into the cake. Which, at this point, it is. Let's assume that we are very soon going to be paying more on the interest on the national's head than we are paying for our military, which is true. Let's assume that there is no desire on the part of the American public to radically inflate the currency or radically increase its own taxes or radically cut, which are usually the three ways out of a massive fiscal disaster. You either have to inflate the currency and pay people back in meaningless dollars, or you have to radically cut austerity measures, which you don't want to do. Or you have to somehow grow your way out of it. That would be the other thing. Or you could theoretically grow your way out of it. And this is a case that the GOP is making. You can have your cake you needed to because we have this thing called the AI boom. And the AI boom is going to allow our economy to grow so fast that tax expenditures will go up even faster than the amount of government spending. Hey, that is the case that is being made. And it's not a totally implausible case. Here's the Treasury Secretary. Scott Besson to the G20. Talking about growing our way out of this and avoiding global financial crisis. To reiterate that our message of growth, the world is a washing debt post -GFC post -COVID. And the only way for us to get out of this is to grow our way out of this. And I'm confident that a lot of the leaders are very receptive to this. And again, this is the case being made by most of these smart people inside the Trump administration is that AI is going to radically increase productivity and efficiency. And that itself is going to allow for radical increases in the rates of GDP growth. And so if you're talking about government spend as a percentage of GDP, you can either reduce the government spend or you can radically increase the GDP. So the idea would be you radically increase growth rates. Kevin Moore, she was the Fed Chair. He said the same thing back in April, 2026. What we call AI in a couple of years will just call business.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 179.25,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip relies on earlier context ('third story', 'as we said earlier') and uses vague references ('this', 'the national', 'the case being made') that a viewer unfamiliar with the full video would not understand. The transcript does not provide a clear, self‑contained conclusion or punchline that matches the promised payoff, leaving the narrative incomplete and confusing. Therefore it fails the autonomy, unresolved pronoun, and payoff criteria."
+      }
+    },
+    {
+      "clip_id": "af34145a-9375-4bcd-bb38-01ac203822c8",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 179.58,
+      "score": 0.73,
+      "hook": "Clip 5 Hook",
+      "payoff": "Clip 5 Key Takeaway",
+      "segment_text": "He said the same thing back in April, 2026. What we call AI in a couple of years will just call business. And AI is going to make almost everything cost less. And the US can be a big winner. And it's a hugely exciting moment. If I were to step back for a minute, I were the president. What I'd be worried about is a central bank that doesn't see any of that. A central bank that is stuck with models from 1978, governance from a prior period. And don't recognize we could be at the front end of a productivity boom. And if I were the president, I'd be worried that they might not see it. And again, he is right about that. Also, it happens to be that either we are going to win the AI race or China will win the AI race. AI is not going to disappear. So either we capture those gains here in the United States or we are the consumers for the gains of others outside the United States. President Trump understands this. Again, President Trump, I radically disagree with him when it comes to government spending, but he's not wrong on innovation. On that side, he's actually pretty good. Here's the president talking about this on GB News yesterday. Are you concerned about the future with AI? Are we doing enough to protect jobs? What are the jobs going to be? The jobs are going to be massive. AI is going to be positive. There's some negatives, but that'll be straight enough. Do you think? And we're building plants and data centers, which data centers are actually fabulous. Okay, so again, this is why he has pro this thing, is because he understands we're going to have to outgrow our expenditures. And to be real, AI is extraordinary. I mean, it's getting better and better and better day by day. Open AI, put out an ad for Chatchee PT6. And the capacity of AI is extraordinary. It's amazing. And as I've said before, I don't think that you ought to be afraid of AI. I think that you ought to be treating AI like a tool. It is a very sophisticated screwdriver. It does things for you. I think that beliefs in the immediate takeover of AI, that it's going to be better than you at everything. And that you will have nothing to add to the process. I think that's overstated. I don't think that's real. But let's be clear, AI is in fact a transformative technology. Here is the ad for Chatchee PT6. Create a yellow circle there. Can you draw me a small yellow circle? Done. Okay, take this and make it the window of a rocket ship. I like this, but can you make it a lot more detailed? Your yellow circle is now the window on a rocket. Okay, this is awesome. Now make it a 3D model in blender. Opening blender. You guys have to admit again, it's demonstrating that you think it and the and Astra can do it. For next seasons, rainwear for retailers,",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 179.61,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip relies heavily on external references (e.g., \"Chair,\" \"He said the same thing back in April, 2026,\" President Trump, GB News) and contains unresolved pronouns such as \"he,\" \"it,\" and \"as I've said before,\" which require prior knowledge. The narrative never clearly ties back to the hook or provides a concise, satisfying conclusion; it drifts into unrelated demo of AI drawing and ends abruptly with a non‑sequitur about rainwear. Consequently it is not fully autonomous, contains dangling references, and fails to deliver a clear payoff, so it should be rejected."
+      }
+    },
+    {
+      "clip_id": "c938d567-0f9e-432c-acad-6af287176c90",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 179.46,
+      "score": 0.7,
+      "hook": "Clip 6 Hook",
+      "payoff": "Clip 6 Key Takeaway",
+      "segment_text": "Opening blender. You guys have to admit again, it's demonstrating that you think it and the and Astra can do it. For next seasons, rainwear for retailers, make sure that it feels really high -end and that it's colorful. Make it fun. Right, I can help with that. Can you go to eBay and make this listing of this table I bought a few years ago at a flea market? It's this wild orange table. Sure. Okay, yeah, this is awesome. I want you to make a 3D game where I'm ducking asteroids. Using the arrow keys to move around and I'm using space to boost. Yep, I'm building the game. Also, I'm a little hungry. Can you get me some beef and rice from that spot I ordered from last week? Looking into ordering food. So my law firm needs a licensing agreement template. Can you generate a draft template? Again, I mean, it is incredible and it will make your life significantly more efficient. I do think that human expertise is going to be needed in order to make what they're doing better. You're going to have to play with the AI, meaning that it is a tool that you use and it has a feedback. Okay, fine. Put all of your questions about AI to the side. Just on an economic level for a second, AI is the only thing. The only thing that is currently on the horizon that allows us to at least theoretically outgrow the massive debt problems that we are currently incurring. Which means the Bernie Sanders communist immediately wants to, just like China, quash AI, he wants to kill it. Nowadays, we have all these different tools and gadgets to optimize sleep. Sleep trackers and apps, room diffusers, mouth tapes, supplements, elaborate nighttime routines. People are monitoring 17 different metrics to determine whether they successfully went unconscious for eight hours. So maybe some of that has value. But before you redesign your entire life around sleep, you might want to consider what you're actually lying in every night. You're betting. This is why I continue to tell you about Bull and Branch. They're betting makes your bed noticeably better without requiring you to develop a new lifestyle around it. Their sheets are made from 100 % organic cotton. They are woven specifically for airflow. There's no synthetic cooling technology is simply the way the cotton is woven. Bull and branch sheets are incredibly soft, breathable. The quality is evident the moment you get into bed. Again, I'm on Bull and Branch every single night. It's awesome stuff. Just awesome. I mean, I literally travel with Bull and Branch products because I sleep better if I've got, for example, the waffle blanket from Bull and Branch. Upgrade your sleep with Bull and Branch. Get 15 % off your first order. Plus free shipping at bull and branch .com slash Shapiro with code Shapiro. That's Bull and Branch B -O -L -L -L -A -N -D. Branch .com slash Shapiro. Code Shapiro to unlock 15 % off exclusions apply. Here's the reality. America needs better people than this. We just need better people than this. And if you're in a business, you also need better people, which is why. You need Zip Recruiter on Zip Recruiter. Qualified Candidates add a personal note to tell you why they're interested in your job. So you see the most motivated people right away because you can't teach grit. You can't teach wanting it. Zip Recruiter has a new feature that shows you the most interested qualified candidate's first. So you meet the right people faster. Their powerful matching technology finds qualified candidates quickly. Plus time searching, more time talking to people who could actually help your business right now. You can try it for free at ziprecruiter .com slash daily wire. Save time meet great candidate sooner with Zip Recruiter.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 179.48,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip jumps between unrelated topics (AI demos, sleep products, ZipRecruiter) and uses vague references like \"again\" that imply earlier discussion, making it confusing for a viewer who hasn't seen the full video. It does not provide a clear resolution to the unknown hook, ending abruptly with a product pitch, so it fails both autonomy and payoff criteria."
+      }
+    },
+    {
+      "clip_id": "f7b4f9f7-93ac-4b16-b179-2d77b32800e9",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 177.95,
+      "score": 0.67,
+      "hook": "Clip 7 Hook",
+      "payoff": "Clip 7 Key Takeaway",
+      "segment_text": "Save time meet great candidate sooner with Zip Recruiter. Part of five employers who post on Zip Recruiter get a quality candidate within the very first day. Try it for free at ziprecruiter .com slash daily wire at ziprecruiter .com slash daily wire. Meet your match over at ziprecruiter again. Try it for free right now. ziprecruiter .com slash daily wire. If you need a better employees, the best way to do it is ziprecruiter. So why we use it here at daily wire? Go check them out now ziprecruiter .com slash daily wire. So here's Bernie Sanders, an old man who doesn't know what a computer is, explaining that the government should stop all of this. If the leaders of the major AI companies acknowledge that they are losing control of their extremely dangerous technology, to my mind it is irresponsible for society to allow them to move forward and make these products even more advanced and even more dangerous. We need an immediate pause on advanced AI development and a permanent ban on super intelligence, an artificial mind smarter than any human capable of operating independently beyond our control. Okay, so what he's actually proposing apparently is a ban on what he calls so -called artificial super intelligence saying that a summer hacking spree by rogue open AI agents had revealed the dangers of the technology getting out of control. Well, again, it was then brought under control. And he said, quote, I understand that people will call me a love life, that they will call me an alamist, but I would rather be called an alamist than somebody who fell asleep at the switch dude. You're falling asleep in the middle of your oatmeal. And the idea that Bernie Sanders is going to restrict innovation, this person was not developed a useful thing his entire life and has been as I have said, one million times at this point a leach on the ass of American society is astonishing. It's astonishing. Unfortunately, the anti -tech blowback is quite real. People are concerned about the future. They are used to the status quo where we can just spend money endlessly without ever having to pay for anything or increase productivity. And so the anti -tech backlash is very real. It is reflecting in everything from opposition to data centers to mythological issues with with flock and again flock is its own issue. But what you are seeing is Republicans are trying to do a routine where they both support data centers. But also are trying to find ways to rhetorically oppose data centers because, again, populism is the idea that the people are always right. When in reality, it turns out the people made tub thumping by tumble one by hit. So sometimes the people are wrong. In any case, you were Senator Bernie Moreno doing this. They're going to raise our electricity prices. They're going to eventually put us out of work and our taxpayer dollars are going to support the construction of these things. The worst sales pitch in the history of sales pitches. Who would be for that? So we have to acknowledge that and say we screwed up. That's not what this is about. Number one, no tax incentives.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 177.98,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 1,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is a disjointed mix of ad copy and a rambling political/AI rant that assumes the viewer knows prior statements (e.g., \"as I have said\"), making it dependent on external context. It never clearly resolves the hook or provides a concise takeaway, so it fails both autonomy and payoff criteria. Consequently it should be rejected."
+      }
+    },
+    {
+      "clip_id": "72d1eb96-fada-4561-a6ef-34101d83cd4c",
+      "youtube_id": "IsAaSmWDqPQ",
+      "title": "The Coming Economic Disaster, Explained",
+      "duration_sec": 176.33,
+      "score": 0.64,
+      "hook": "Clip 8 Hook",
+      "payoff": "Clip 8 Key Takeaway",
+      "segment_text": "So we have to acknowledge that and say we screwed up. That's not what this is about. Number one, no tax incentives. I don't want a single taxpayer dollar going to support a data center period. I mean, that's fine with me. I'm fine with no taxpayer dollars. But again, we have to humor everybody in their opposition to data centers is a bad idea because what you're actually doing is you're incentivizing people to stop the development of the technologies that theoretically could save the economy. So our politicians keep telling us that actually the way to fix the economy is not through deregulation or through innovation or through government subsidization and regulation. And then politicians get on all sides of the aisle and state bipartisan issues. This is a uniparty thing now. A wrecked straw man in order to argue in favor of government involvement in the economy when in reality innovation and free markets are in fact the only way out. Yes, that does not mean that capitalism is all pure joy. Because again, Joseph Schumpeter, the economist, he's correct when he says there is creative destruction that when you build something new, the old thing basically falls apart that when you build the car then all the wheel rides go unemployed. But that is also the only road to productivity and future growth and better things and better lifestyles. And yes, supporting gigantic welfare states. So instead we have politicians who are basically just pandering and claiming that free markets are an elephant that you can ride and you can direct those free markets. And again, this is not unique to the left. The right is doing this as well. And I like Secretary of State Marco Rubio quite a lot as I've made clear. But when Marco Rubio says the democratic capitalism deindustrialized America, what deindustrialized America was actually the machines, the vast majority of jobs that were lost in the United States in the industrial sector were technology to away. The reason that factories relocated was not because the worker in Bangladesh is better than the worker in the United States is because we unionized. Capitalism in other words was not the problem. It was the anti -capitalism that was the problem. Here's Secretary of State Rubio. There was this fantasy really that the whole world would become a free enterprise democracies and that everyone would look like us. That ran into reality. The reality that that is not how human events have ever worked that the nation state still does matter. Nationalism is still real. National borders still matter and that countries are going to always act in their best interest. But the result of it is that it deindustrialized America. We lost our ability and our capacity to make things. And not just big things. Not just the kinds of big machinery and things that we normally identify with industry. But even some of the most basic components that are necessary that underpin economic life, especially in the 21st century. Again, one of the big lies that you hear about the industrialization. Yes, we deindustrialized in terms of fewer jobs in heavy manufacturing. But we still make things. We have an extraordinary productivity growth. The productivity growth in manufacturing is quite real.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 176.34,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip relies on prior context (e.g., \"that?\", \"we have to acknowledge that and say we screwed up\") and uses pronouns and references (\"we\", \"you\", \"the right\", \"the left\") that are not defined within the excerpt, making it confusing for a viewer who hasn't seen the full video. It also fails to provide a clear, concise payoff that directly resolves the hook; the monologue drifts through multiple ideas without a definitive concluding takeaway. Consequently it does not meet the autonomy, clarity, or payoff criteria for a standalone YouTube Short."
+      }
+    },
+    {
+      "clip_id": "d18884f0-d2c6-491c-a99b-8635828fd2b5",
+      "youtube_id": "Ds6eHi35HuA",
+      "title": "The Fed Just Raised Rates. Here's What It Means for You.",
+      "duration_sec": 33.86,
+      "score": 0.85,
+      "hook": "The Fed just raised rates. We find yourself wondering, why is that happening?",
+      "payoff": "Because the Fed is fighting stubborn inflation and political pressure, leading to higher borrowing costs.",
+      "segment_text": "The Fed just raised rates. We find yourself wondering, why is that happening? Well, I am here to explain, from treasury yields to gas prices, in hormones, to government spending, it's worth breaking down all the confusing headlines because our economy, uh, it's not in great shape. The Federal Reserve decided to increase the interest rates yesterday by a quarter point. So you may recall that President Trump pushed extremely, extremely hard to get rid of Fed chair Jerome Powell, who's pissed at Powell specifically because Powell would not lower the interest rates. He",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 33.87,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip starts with a clear hook but the transcript quickly devolves into disjointed phrasing ('in hormones'), an unfinished sentence ('He said that'), and a missing explicit payoff. The promised payoff ('Because the Fed is fighting stubborn inflation...') never appears in the spoken content, so viewers don’t get a satisfying resolution. Additionally, the incomplete sentence and odd wording leave dangling references, making the segment confusing without prior context. Because of these autonomy and narrative‑completion failures, the short should not be approved."
+      }
+    },
+    {
+      "clip_id": "de538ff4-5e54-4d1a-838c-81e4f936f63d",
+      "youtube_id": "Ds6eHi35HuA",
+      "title": "The Fed Just Raised Rates. Here's What It Means for You.",
+      "duration_sec": 32.62,
+      "score": 0.8,
+      "hook": "Now, if you take a look at the six‑month view of Brent Crude…",
+      "payoff": "Higher oil prices feed into overall inflation, adding pressure on the Fed’s decisions.",
+      "segment_text": "Now, if you take a look at the six -month view of Brent Crude, again, you see that it's been spiking again since basically the beginning of August. It came down pretty substantially at the end of August. Since then, it's been an upward trajectory. Obviously, that is having a bleed -over effect into prices. The amount of Hormuz outbound oil flow from Iran, UAE Saudi, Iraq and Kuwait remains lower than it was before the war, pretty obviously. But, again, this isn't all oil. That's definitely part of it, but it is not all oil. It's also tariffs, of course, which have been spiking prices since basically they were implemented.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 32.63,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is self‑contained and does not rely on prior context, and it contains no dangling references. However, the promised payoff – that higher oil prices feed into overall inflation and pressure the Fed – is never explicitly stated. The transcript discusses price spikes, oil flow, and tariffs but stops short of linking them to inflation or Fed policy, so the narrative hook is not satisfied. Consequently the clip should not be approved in its current form.",
+        "has_forbidden_phrases": false,
+        "semantic_advisory": null
+      }
+    },
+    {
+      "clip_id": "11000181-3f7e-48cf-9997-93bf1b437169",
+      "youtube_id": "3gNvReF9PXM",
+      "title": "The Most Out-of-Touch Things Celebrities Said at Venice",
+      "duration_sec": 25.41,
+      "score": 0.78,
+      "hook": "There's a great word, cacastocracy, which is a country run by the least qualified people.",
+      "payoff": "We’ll get through it with the November election and hope for restoration by 2028.",
+      "segment_text": "There's a great word, cacastocracy, which is a country run by the least qualified people. I think maybe we have a cacastocracy right now but we'll get through it and we will have an election in November that should be a check in balance and then in 2028 with any luck we'll have some restoration. Again, he says that American politics is joking don't worry we'll get through it. Thank you George Clooney.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 25.43,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": true,
+        "pass_decision": false,
+        "critique_reason": "The short explains the coined term and follows the hook with a clear payoff about the November election and 2028 restoration, so it is largely autonomous and resolves the hook. However it introduces an undefined \"he\" and a non‑sequitur \"Thank you George Clooney\" that reference external context, creating dangling pronouns and reducing standalone clarity. Because of these unresolved references, the clip does not fully meet the criteria for a pass."
+      }
+    },
+    {
+      "clip_id": "20e29cbd-3bf9-4093-afbd-7c27a29a4f0c",
+      "youtube_id": "3gNvReF9PXM",
+      "title": "The Most Out-of-Touch Things Celebrities Said at Venice",
+      "duration_sec": 26.85,
+      "score": 0.8,
+      "hook": "People with the most money are telling us to fear one another.",
+      "payoff": "History shows that authoritarian regimes first silence journalists and artists, not politicians.",
+      "segment_text": "It's so tiresome. You are a man with much money telling us we need to fear one another. George Clooney. There was George Clooney being George Clooney. We're living through a moment in time where people in charge are people with the most money are telling us to fear one another. Fear one another. But we know better than that. Because history does teach us a lesson. It teaches us something.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 26.86,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip can be understood on its own – it conveys the idea that wealthy elites urge fear – so it is autonomous and contains no dangling references. However, it never clearly delivers the promised payoff that authoritarian regimes first silence journalists and artists. The transcript only alludes to \"history teaches us a lesson\" without stating the specific conclusion, leaving the hook unresolved. Because the payoff is missing, the short fails the narrative‑completion criterion."
+      }
+    },
+    {
+      "clip_id": "f2fabc0a-dba6-485f-b03a-7d572fef8263",
+      "youtube_id": "3gNvReF9PXM",
+      "title": "The Most Out-of-Touch Things Celebrities Said at Venice",
+      "duration_sec": 58.34,
+      "score": 0.86,
+      "hook": "The Bride is one of the worst movies ever made, yet it cost $80‑90 million.",
+      "payoff": "With a $150 million total budget and only $24 million box office, it’s a massive flop.",
+      "segment_text": "She says one of the great tragedies of filmmaking right now is that it's very hard for women to get there. Their film is financed. I mean, first of all, let's be very clear, it is very difficult for anyone to get their film financed because film is expensive. That is a reality. Maggie Jillin Hall, I mean, like, can you point out at this point that Maggie Jillin Hall has had films financed that are some of the worst films in human history. What was Maggie Jillin Hall's latest film? I just have to look this up because as I recall, it was a piece of, oh my god. Yes. I mean, her last film, her last film, The Bride, is one of the worst movies ever made, ever. And it had a huge cast. It was Christian Bale and Jesse Buckley. It had a budget of $80 to $90 million, $80 to $90 million. It did $24 million of the box office. Lady, I'm pretty sure if it's hard for you to get financed, it's because you financed a project to the tune of $80 to $90 million that made $24 million of the box office.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 58.36,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is self‑contained and explains the film’s poor performance without needing external context, so it is autonomous and has no dangling references. However, it never actually presents the promised payoff: the hook claims the movie cost $80‑90 M and was terrible, but the transcript ends abruptly without delivering the concluding statement about a $150 M total budget and the $24 M box‑office flop. The payoff is missing, making the narrative incomplete, thus the clip should be rejected."
+      }
+    },
+    {
+      "clip_id": "a99007bd-cfb1-4f79-b392-9ee33f62733f",
+      "youtube_id": "3gNvReF9PXM",
+      "title": "The Most Out-of-Touch Things Celebrities Said at Venice",
+      "duration_sec": 34.6,
+      "score": 0.77,
+      "hook": "Elliot Page is now complaining about not getting any role offers.",
+      "payoff": "Critics say casting him as a young man looks odd, sparking debate on gender and Hollywood.",
+      "segment_text": "Speaking of women who complain about not getting role offers, Elliot Page is now complaining. Which again, I feel this is contradictory. Elliot Page, a woman cosplaying his man, says that he has not received any role offer since the Odyssey. Well, I mean, there's a reason for that, which is that you're not very good in the Odyssey. Also, that was a kind piece of casting because Christopher Nolan is friendly with Elliot Page. But it's a real problem for the movie as I've discussed. Because Elliot Page is supposed to be playing a young man",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 34.6,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is confusing and relies on external context. It uses dangling references ('you' and 'which again') that are not explained, making it hard to follow without prior knowledge. The payoff promised in the hook (a debate about casting a young man) is only hinted at and never fully articulated, leaving the audience without a clear resolution. Because of these narrative gaps and lack of autonomous clarity, the short should not be approved."
+      }
+    },
+    {
+      "clip_id": "32d51e3e-1026-4e29-ad26-2a2bdc5c203f",
+      "youtube_id": "gag1m6xsgY4",
+      "title": "What Really Happened at Mamdani's 9/11 Ceremony",
+      "duration_sec": 71.63,
+      "score": 0.78,
+      "hook": "While there, Hassan Piker acknowledged that the DSA, the Democratic Socialist of America, is heavily white.",
+      "payoff": "But don't worry, there are a wide variety of diverse peoples with enormous numbers of bumper stickers on their laptop. And here's my rule about bumper stickers. We've got a bunch of them on your car or on your laptop, you're doing life wrong.",
+      "segment_text": "While there, Hassan Piker acknowledged that the DSA, the Democratic Socialist of America, is heavily white. But he said, don't worry, we're going to change that. The demographic makeup of the organization is still heavily white. This is true. But I think it's important for us to continue making inroads to address the material inequities that Black communities face. And I know for a fact, from my experience going all around the country at this point and speaking to voters that ended up voting for DSA candidates like Donovan McKinney and also Chris Rab, of course, in Philadelphia. Shout out to Chris Rab, yeah. Donovan, all of a year, even older, that there is a real appetite for this change. And that appetite, especially exists in the Black community as well. So yeah, the Black community is definitely into the DSA despite the fact that by every poll there, definitely not into the DSA. But don't worry, there are a wide variety of diverse peoples with enormous numbers of bumper stickers on their laptop. And here's my rule about bumper stickers.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 71.64,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip can be understood without prior context – it mentions Hassan Piker, the DSA, and then a quirky rule about bumper stickers, so it is autonomous and contains no dangling references. However, the payoff does not logically resolve the hook. The hook raises a serious point about the DSA’s lack of racial diversity, but the payoff abruptly shifts to a unrelated anecdote about bumper stickers and a personal rule, offering no clear conclusion or answer to the initial claim. This mismatch makes the narrative feel incomplete, so the short should be rejected or re‑edited for a more satisfying payoff."
+      }
+    },
+    {
+      "clip_id": "0de01386-b27b-4bf6-bd9c-aa6f9bb90538",
+      "youtube_id": "gag1m6xsgY4",
+      "title": "What Really Happened at Mamdani's 9/11 Ceremony",
+      "duration_sec": 49.39,
+      "score": 0.85,
+      "hook": "Well, that's what we have to say, white settler colonialism, because if we actually started talking about settler colonialism, we might have to talk about, you know, the spread of Islam which is uncomfortable.",
+      "payoff": "Yeah, you have to be precise because it turns out that settler colonialism is only bad when white people do it. When non-white people do it, it's apparently good or okay, okay, that's the standard.",
+      "segment_text": "Well, that's what we have to say, white settler colonialism, because if we actually started talking about settler colonialism, we might have to talk about, you know, the spread of Islam which is uncomfortable. It started in Arabia, and then it kind of settled a lot of different places by the sword, but okay. And so I think that that querying, right, what do we mean when we say settler colonialism? Do we mean settler colonialism or do we mean white settler colonialism? I guess it's really the core question I'm inviting us into. So I think that that precision is also how we we enact care towards one another, right? Because it can't be precise in our analysis, how can we be precise in diagnosing what the problems are in remedying them? Yeah, you have to be precise because it turns out that settler colonialism is only bad when white people do it. When non -white people do it, it's apparently good or okay, okay, that's the standard.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 49.42,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip is not fully autonomous: the hook references concepts (white settler colonialism, spread of Islam) without sufficient context, leaving viewers confused. There are no dangling pronouns, but the payoff merely restates a controversial claim rather than resolving the hook’s premise or providing a clear, satisfying conclusion. Consequently, it fails to meet the criteria for a standalone, self‑contained YouTube Short."
+      }
+    },
+    {
+      "clip_id": "6b4e7e6f-8fca-4467-bb5c-2114e55645c2",
+      "youtube_id": "gag1m6xsgY4",
+      "title": "What Really Happened at Mamdani's 9/11 Ceremony",
+      "duration_sec": 59.8,
+      "score": 0.75,
+      "hook": "A person named Ashon Harrison also masked, said that borders are body-fascism.",
+      "payoff": "So all I'm hearing is somebody paid $200,000 for a degree to make excuses for the fat. He really, really, really wants to eat that last doughnut. That's all this is.",
+      "segment_text": "said that borders are body -fascism. Oh, gee. Diet culture has always linked food to morality, framing restraint as virtue and pleasure as danger through language -like guilty pleasure. Abstaining from pleasure becomes a way to train obedience, to train self -denial, and to train discipline in service of a broader political order. Body -fascism is not some relic of the past, it's an active feature of modern imperial regimes. Every time a government decides whose body must be protected, and whose bodies must be erased for the sake of national imagery, this is body -fascism. Every time there is a call for sovereignty by state powers with the intent to maintain borders, this is body -fascism. So all I'm hearing is somebody paid $200 ,000 for a degree to make excuses for the fat. He really, really, really wants to eat that last doughnut. That's all this is.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 59.83,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip can be understood on its own – it explains body‑fascism and then delivers a punchline – so it is autonomous and contains no dangling references. However, the payoff does not directly resolve or expand on the hook about \"borders are body‑fascism\"; instead it shifts to a unrelated joke about a $200,000 degree and a doughnut. This mismatch makes the narrative feel incomplete and the hook unsatisfied, warranting a fail recommendation."
+      }
+    },
+    {
+      "clip_id": "400f0d47-1a37-4dd0-8b79-b74cba0f35ed",
+      "youtube_id": "mwyZygFjKBw",
+      "title": "Why Russia and China Are Getting Bolder",
+      "duration_sec": 25.94,
+      "score": 0.78,
+      "hook": "So geopolitics, they're confusing, but something happening in the middle of the ocean near Japan can in fact affect us all the way over a year.",
+      "payoff": "The EU responded by shutting down a Russian consulate and taking diplomatic measures after a failed drone attack at a German airport.",
+      "segment_text": "So geopolitics, they're confusing, but something happening in the middle of the ocean near Japan can in fact affect us all the way over a year. So a lot is happening between China and Japan, Russia, and the EU and NATO. Why is all this happening? What can we do about it? What are other countries doing about it? We're going to jump into all of that. So according to the Associated Press, the European Union on Wednesday weighed how to best respond to an attempted drone attack at a German airport, blamed on Russia.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 25.96,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": false,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": false,
+        "pass_decision": false,
+        "critique_reason": "The clip does not stand alone: the hook about a mysterious event in the ocean near Japan that will affect us a year later is never resolved, and the payoff about the EU shutting down a Russian consulate after a drone attack is unrelated. No dangling pronouns are present, but the narrative jump leaves viewers without a clear connection, failing the autonomy and payoff criteria, so it should be rejected."
+      }
+    },
+    {
+      "clip_id": "4568e29d-d1e7-4d62-a1ca-9bf0cce24e44",
+      "youtube_id": "mwyZygFjKBw",
+      "title": "Why Russia and China Are Getting Bolder",
+      "duration_sec": 29.59,
+      "score": 0.75,
+      "hook": "We decided to fund our entire welfare state on the basis of debt. China owns about six hundred billion dollars of our bond.",
+      "payoff": "If China dumped those bonds, the bond market would crash, exposing our fiscal vulnerability.",
+      "segment_text": "Well, first of all, we kind of made ourselves vulnerable. We decided to fund our entire welfare state on the basis of debt. China owns about six hundred billion dollars of our bond. If they even threaten to sell them tomorrow, guess what happens to the bond markets? They crater still further. But Russia and China and Iran, all of our enemies, in the end are banking on something else. That the United States, we make the same choice that the British Empire once made. And essentially, we decide to embrace declining welfareism instead of economic and military health.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 29.6,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "is_autonomous": true,
+        "has_unresolved_pronouns": true,
+        "delivers_payoff": true,
+        "pass_decision": false,
+        "critique_reason": "The clip mostly stands alone – it explains the US welfare‑state debt issue and the risk of China dumping bonds, delivering a clear payoff. However the opening phrase \"for that?\" and the rhetorical question assume a prior question, creating an unresolved reference that can confuse viewers. This dangling element violates the requirement for a fully self‑contained short, so the recommendation is to reject or re‑edit the clip to remove the ambiguous lead."
+      }
+    }
+  ],
+  "other_failures": [
+    {
+      "clip_id": "775caf92-783c-495e-af7d-66e9c3f59839",
+      "youtube_id": "DsWqPUWouRc",
+      "title": "Why All of Ed Sheeran's Openers Just Quit",
+      "duration_sec": 175.9,
+      "score": 0.73,
+      "hook": "Clip 5 Hook",
+      "payoff": "Clip 5 Key Takeaway",
+      "segment_text": "literally this very moment reading their names and probably neither had you that's why they're opening acts Alexander Ocasio Cortez, of course said this is about elite censorship I don't know there's robber craft have to open his forum to people spewing anti -Semitic vial is that a thing he has to do Here is AOC she's upset she's not gonna go to an Ed Sheeran concert anymore probably he'll go bankrupt Or not or he'll still sell out What has happened with the act and not just in removing Macklemore from the lineup But when you see what robber crafted to line up all of the stadiums To censor speech in that one specific way It's become clear that this is not just about one music artist or two music artists but this is about How just a handful of stadium owners and the elite can prevent an entire massive um issue in this case the genocide and Gaza but It doesn't stop there. It could be speaking out about AI It could be speaking out about any issue that you can now just get a handful of stadium owners to ensure that an entire person's career Can be jeopardized if they speak out about any issue Again, once again AOC is a fellow traveler with all the the pro jihadi pro in Congress This is what she does. There is no genocide in Gaza by any stretch of the definition of the word genocide Genocide doesn't mean a thing you don't like Naturally Medi Hassan suggested this is insane the so -called land of the free again People who hate our actual values in the United States like many Hassan will come here and then use our values against us This is insane the so -called land of the free I wasn't aware that Maclemore doesn't have the ability to speak to literally every outlet which is what he's doing right now flashback 2015 Medi Hassan was saying offensive speech carries responsibility. So yeah, there's that All right, well the one who gets this right is the google dolls frontman john resnick Here's what he had to say about all of us That's why I think live music is amazing because it's like I got people Fans from every walk of life every political stripe everything and I always stress We got one thing in common because we're living in weird times We got one thing in common and that's we're all here To see a show and I'm not gonna elect you people about anything I'm gonna play a bunch of songs that you know and we're all gonna leave you and we're gonna be happier and better for it That's it you're here. Yeah, and it's like I don't know who you voted for I don't care where you go to church You know, it's like we all got one thing in common. That's a start Again, this should be pretty basic stuff the fact that this is even in to end out is it's kind of insane The best thing Ed Sheeran should do and should have done here never first of all Don't trust your politically oriented friends to not stab you directly in the back It's not Ed Sheeran stabbing Maclemore.",
+      "tech": {
+        "all_passed": true,
+        "duration_sec": 175.91,
+        "width": 1080,
+        "height": 1920,
+        "checks": {
+          "correct_resolution": true,
+          "duration_within_bounds": true,
+          "audio_stream_present": true,
+          "file_size_valid": true
+        }
+      },
+      "render": {
+        "all_passed": true,
+        "inspected_frames": 5,
+        "subject_framing_violations": 0,
+        "caption_collision_violations": 0
+      },
+      "sem": {
+        "pass_decision": true,
+        "is_autonomous": true,
+        "has_unresolved_pronouns": false,
+        "delivers_payoff": true,
+        "critique_reason": "Passed automated heuristic check."
+      }
+    }
+  ]
+}

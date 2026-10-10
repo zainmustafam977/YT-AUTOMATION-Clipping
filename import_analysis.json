@@ -1,0 +1,749 @@
+{
+  "file_to_imports": {
+    "cli.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.security",
+      "shorts_engine.db.session",
+      "shorts_engine.orchestration.runner",
+      "shorts_engine.services.detection.detector",
+      "shorts_engine.services.detection.rss_poller",
+      "shorts_engine.services.detection.websub",
+      "shorts_engine.services.ingestion.downloader",
+      "shorts_engine.services.monitoring.alerter",
+      "shorts_engine.services.publishing.quota",
+      "shorts_engine.services.storage.backup_manager",
+      "shorts_engine.services.worker.runner"
+    ],
+    "run.py": [
+      "cli",
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/__init__.py": [],
+    "shorts_engine/config/__init__.py": [],
+    "shorts_engine/config/logging_config.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/config/settings.py": [],
+    "shorts_engine/dashboard/__init__.py": [],
+    "shorts_engine/dashboard/app.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.dashboard.routes",
+      "shorts_engine.db.session",
+      "shorts_engine.services.ab_testing.winner_daemon",
+      "shorts_engine.services.ingestion.downloader",
+      "shorts_engine.services.publishing.drip_feed",
+      "shorts_engine.services.worker.runner"
+    ],
+    "shorts_engine/dashboard/auth.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session"
+    ],
+    "shorts_engine/dashboard/routes/__init__.py": [],
+    "shorts_engine/dashboard/routes/auth.py": [
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/dashboard/routes/calendar.py": [
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session"
+    ],
+    "shorts_engine/dashboard/routes/channels.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.services.detection.rss_poller",
+      "shorts_engine.services.detection.websub",
+      "shorts_engine.services.storage.path_manager"
+    ],
+    "shorts_engine/dashboard/routes/health.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.session"
+    ],
+    "shorts_engine/dashboard/routes/logs.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/dashboard/routes/metrics.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.routes.health",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session"
+    ],
+    "shorts_engine/dashboard/routes/queue.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.orchestration.runner",
+      "shorts_engine.services.analytics.predictor",
+      "shorts_engine.services.captioning.ass_generator",
+      "shorts_engine.services.captioning.templates",
+      "shorts_engine.services.clip_selection.selector",
+      "shorts_engine.services.quality_gate.recovery",
+      "shorts_engine.services.reframing.cropper",
+      "shorts_engine.services.rendering.compositor",
+      "shorts_engine.services.rendering.trimmer",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/dashboard/routes/settings.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.security",
+      "shorts_engine.services.llm.quota_tracker"
+    ],
+    "shorts_engine/dashboard/routes/status.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.dashboard.auth",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.orchestration.runner",
+      "shorts_engine.services.analytics.predictor",
+      "shorts_engine.services.clip_selection.selector",
+      "shorts_engine.services.llm.quota_tracker",
+      "shorts_engine.services.monitoring.analytics_sync",
+      "shorts_engine.services.publishing.quota",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.telemetry.progress_tracker",
+      "shorts_engine.services.worker.runner"
+    ],
+    "shorts_engine/dashboard/routes/websub.py": [
+      "shorts_engine.db.session",
+      "shorts_engine.services.detection.detector",
+      "shorts_engine.services.detection.websub"
+    ],
+    "shorts_engine/db/__init__.py": [],
+    "shorts_engine/db/models.py": [
+      "shorts_engine.db.session"
+    ],
+    "shorts_engine/db/security.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/db/session.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/orchestration/__init__.py": [],
+    "shorts_engine/orchestration/lifecycle.py": [
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/orchestration/runner.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.orchestration.lifecycle",
+      "shorts_engine.services.broll.client",
+      "shorts_engine.services.captioning.ass_generator",
+      "shorts_engine.services.captioning.contrast_sampler",
+      "shorts_engine.services.captioning.sfx_mapper",
+      "shorts_engine.services.captioning.templates",
+      "shorts_engine.services.clip_selection.selector",
+      "shorts_engine.services.detection.filter",
+      "shorts_engine.services.ingestion.downloader",
+      "shorts_engine.services.monitoring.alerter",
+      "shorts_engine.services.publishing.client",
+      "shorts_engine.services.publishing.metadata",
+      "shorts_engine.services.quality.media_qa",
+      "shorts_engine.services.quality_gate.review_queue",
+      "shorts_engine.services.reframing.cropper",
+      "shorts_engine.services.rendering.compositor",
+      "shorts_engine.services.rendering.thumbnail_generator",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.telemetry.progress_tracker",
+      "shorts_engine.services.transcription.engine",
+      "shorts_engine.services.transcription.formatter",
+      "shorts_engine.services.worker.runner"
+    ],
+    "shorts_engine/services/__init__.py": [],
+    "shorts_engine/services/ab_testing/__init__.py": [
+      "shorts_engine.services.ab_testing.analytics_ingestion",
+      "shorts_engine.services.ab_testing.title_generator"
+    ],
+    "shorts_engine/services/ab_testing/analytics_ingestion.py": [],
+    "shorts_engine/services/ab_testing/bandit.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/ab_testing/title_generator.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.llm.router"
+    ],
+    "shorts_engine/services/ab_testing/winner_daemon.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.services.ab_testing.bandit",
+      "shorts_engine.services.publishing.client"
+    ],
+    "shorts_engine/services/analytics/__init__.py": [
+      "shorts_engine.services.analytics.predictor"
+    ],
+    "shorts_engine/services/analytics/predictor.py": [
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/services/audio/mastering.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.execution.watchdog"
+    ],
+    "shorts_engine/services/audio/music_library.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/broll/client.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/captioning/__init__.py": [],
+    "shorts_engine/services/captioning/ass_generator.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/captioning/contrast_sampler.py": [],
+    "shorts_engine/services/captioning/sfx_mapper.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/captioning/templates.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/clip_selection/__init__.py": [],
+    "shorts_engine/services/clip_selection/boundaries.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/clip_selection/prompts.py": [],
+    "shorts_engine/services/clip_selection/selector.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.clip_selection.boundaries",
+      "shorts_engine.services.clip_selection.prompts",
+      "shorts_engine.services.llm.router",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/detection/__init__.py": [],
+    "shorts_engine/services/detection/detector.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.services.detection.rss_poller",
+      "shorts_engine.services.detection.websub"
+    ],
+    "shorts_engine/services/detection/filter.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/detection/rss_poller.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.services.detection.filter"
+    ],
+    "shorts_engine/services/detection/websub.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/execution/__init__.py": [],
+    "shorts_engine/services/execution/watchdog.py": [],
+    "shorts_engine/services/ingestion/__init__.py": [],
+    "shorts_engine/services/ingestion/downloader.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.execution.watchdog",
+      "shorts_engine.services.rendering.thumbnail_generator",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.telemetry.progress_tracker"
+    ],
+    "shorts_engine/services/llm/__init__.py": [
+      "shorts_engine.services.llm.router"
+    ],
+    "shorts_engine/services/llm/quota_tracker.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/llm/router.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.services.llm.quota_tracker"
+    ],
+    "shorts_engine/services/monitoring/__init__.py": [],
+    "shorts_engine/services/monitoring/alerter.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/monitoring/analytics_sync.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/services/publishing/__init__.py": [],
+    "shorts_engine/services/publishing/base.py": [],
+    "shorts_engine/services/publishing/client.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.db.security",
+      "shorts_engine.services.publishing.metadata",
+      "shorts_engine.services.publishing.quota"
+    ],
+    "shorts_engine/services/publishing/drip_feed.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.services.publishing.client",
+      "shorts_engine.services.publishing.metadata"
+    ],
+    "shorts_engine/services/publishing/instagram.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.publishing.base"
+    ],
+    "shorts_engine/services/publishing/manager.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.services.publishing.base",
+      "shorts_engine.services.publishing.client",
+      "shorts_engine.services.publishing.instagram",
+      "shorts_engine.services.publishing.metadata",
+      "shorts_engine.services.publishing.tiktok"
+    ],
+    "shorts_engine/services/publishing/metadata.py": [],
+    "shorts_engine/services/publishing/quota.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models"
+    ],
+    "shorts_engine/services/publishing/tiktok.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.publishing.base"
+    ],
+    "shorts_engine/services/quality/__init__.py": [],
+    "shorts_engine/services/quality/media_qa.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.execution.watchdog"
+    ],
+    "shorts_engine/services/quality_gate/__init__.py": [],
+    "shorts_engine/services/quality_gate/recovery.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.services.captioning.ass_generator",
+      "shorts_engine.services.captioning.contrast_sampler",
+      "shorts_engine.services.quality_gate.render_inspector",
+      "shorts_engine.services.quality_gate.review_queue",
+      "shorts_engine.services.quality_gate.semantic_check",
+      "shorts_engine.services.quality_gate.technical_check",
+      "shorts_engine.services.rendering.compositor",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/quality_gate/render_inspector.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.reframing.detector"
+    ],
+    "shorts_engine/services/quality_gate/review_queue.py": [
+      "shorts_engine.db.models",
+      "shorts_engine.services.quality_gate.render_inspector",
+      "shorts_engine.services.quality_gate.semantic_check",
+      "shorts_engine.services.quality_gate.technical_check"
+    ],
+    "shorts_engine/services/quality_gate/semantic_check.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.llm.router"
+    ],
+    "shorts_engine/services/quality_gate/technical_check.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/reframing/__init__.py": [],
+    "shorts_engine/services/reframing/active_speaker.py": [
+      "shorts_engine.services.reframing.detector"
+    ],
+    "shorts_engine/services/reframing/cropper.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.reframing.active_speaker",
+      "shorts_engine.services.reframing.detector",
+      "shorts_engine.services.reframing.smoothing"
+    ],
+    "shorts_engine/services/reframing/detector.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/reframing/smoothing.py": [],
+    "shorts_engine/services/rendering/__init__.py": [],
+    "shorts_engine/services/rendering/compositor.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.audio.mastering",
+      "shorts_engine.services.execution.watchdog",
+      "shorts_engine.services.reframing.cropper"
+    ],
+    "shorts_engine/services/rendering/thumbnail_generator.py": [],
+    "shorts_engine/services/rendering/trimmer.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.services.captioning.ass_generator",
+      "shorts_engine.services.captioning.templates",
+      "shorts_engine.services.quality_gate.render_inspector",
+      "shorts_engine.services.quality_gate.technical_check",
+      "shorts_engine.services.reframing.cropper",
+      "shorts_engine.services.rendering.compositor",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/storage/__init__.py": [
+      "shorts_engine.services.storage.path_manager"
+    ],
+    "shorts_engine/services/storage/backup_manager.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.execution.watchdog"
+    ],
+    "shorts_engine/services/storage/path_manager.py": [
+      "shorts_engine.config.settings"
+    ],
+    "shorts_engine/services/telemetry/__init__.py": [],
+    "shorts_engine/services/telemetry/progress_tracker.py": [],
+    "shorts_engine/services/transcription/__init__.py": [],
+    "shorts_engine/services/transcription/aligner.py": [
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/transcription/engine.py": [
+      "shorts_engine.config.settings",
+      "shorts_engine.services.telemetry.progress_tracker",
+      "shorts_engine.services.transcription.aligner",
+      "shorts_engine.services.transcription.formatter"
+    ],
+    "shorts_engine/services/transcription/formatter.py": [],
+    "shorts_engine/services/worker/__init__.py": [
+      "shorts_engine.services.worker.runner"
+    ],
+    "shorts_engine/services/worker/runner.py": [
+      "shorts_engine.config.logging_config",
+      "shorts_engine.config.settings",
+      "shorts_engine.db.models",
+      "shorts_engine.db.session",
+      "shorts_engine.services.captioning.ass_generator",
+      "shorts_engine.services.captioning.sfx_mapper",
+      "shorts_engine.services.captioning.templates",
+      "shorts_engine.services.monitoring.alerter",
+      "shorts_engine.services.quality.media_qa",
+      "shorts_engine.services.quality_gate.review_queue",
+      "shorts_engine.services.reframing.cropper",
+      "shorts_engine.services.rendering.compositor",
+      "shorts_engine.services.rendering.thumbnail_generator",
+      "shorts_engine.services.storage.path_manager",
+      "shorts_engine.services.transcription.formatter"
+    ]
+  },
+  "package_graph": {
+    "cli.py": [
+      "shorts_engine.config",
+      "shorts_engine.dashboard",
+      "shorts_engine.db",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.detection",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.publishing",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.worker"
+    ],
+    "run.py": [
+      "cli",
+      "shorts_engine.config"
+    ],
+    "shorts_engine.dashboard": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ab_testing",
+      "shorts_engine.services.analytics",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.clip_selection",
+      "shorts_engine.services.detection",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.llm",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.publishing",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.telemetry",
+      "shorts_engine.services.transcription",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.db": [
+      "shorts_engine.config"
+    ],
+    "shorts_engine.orchestration": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.services.broll",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.clip_selection",
+      "shorts_engine.services.detection",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.publishing",
+      "shorts_engine.services.quality",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.telemetry",
+      "shorts_engine.services.transcription",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.ab_testing": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.services.llm",
+      "shorts_engine.services.publishing"
+    ],
+    "shorts_engine.services.analytics": [
+      "shorts_engine.db"
+    ],
+    "shorts_engine.services.audio": [
+      "shorts_engine.config",
+      "shorts_engine.services.execution"
+    ],
+    "shorts_engine.services.broll": [
+      "shorts_engine.config"
+    ],
+    "shorts_engine.services.captioning": [
+      "shorts_engine.config",
+      "shorts_engine.services.transcription"
+    ],
+    "shorts_engine.services.clip_selection": [
+      "shorts_engine.config",
+      "shorts_engine.services.llm",
+      "shorts_engine.services.transcription"
+    ],
+    "shorts_engine.services.detection": [
+      "shorts_engine.config",
+      "shorts_engine.db"
+    ],
+    "shorts_engine.services.ingestion": [
+      "shorts_engine.config",
+      "shorts_engine.services.execution",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.telemetry"
+    ],
+    "shorts_engine.services.llm": [
+      "shorts_engine.config"
+    ],
+    "shorts_engine.services.monitoring": [
+      "shorts_engine.config",
+      "shorts_engine.db"
+    ],
+    "shorts_engine.services.publishing": [
+      "shorts_engine.config",
+      "shorts_engine.db"
+    ],
+    "shorts_engine.services.quality": [
+      "shorts_engine.config",
+      "shorts_engine.services.execution"
+    ],
+    "shorts_engine.services.quality_gate": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.llm",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.transcription"
+    ],
+    "shorts_engine.services.reframing": [
+      "shorts_engine.config"
+    ],
+    "shorts_engine.services.rendering": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.services.audio",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.execution",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.transcription"
+    ],
+    "shorts_engine.services.storage": [
+      "shorts_engine.config",
+      "shorts_engine.services.execution"
+    ],
+    "shorts_engine.services.transcription": [
+      "shorts_engine.config",
+      "shorts_engine.services.telemetry"
+    ],
+    "shorts_engine.services.worker": [
+      "shorts_engine.config",
+      "shorts_engine.db",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.quality",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.transcription"
+    ]
+  },
+  "reverse_deps": {
+    "shorts_engine.services.worker": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration"
+    ],
+    "shorts_engine.services.publishing": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ab_testing"
+    ],
+    "shorts_engine.config": [
+      "cli.py",
+      "run.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.db",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ab_testing",
+      "shorts_engine.services.audio",
+      "shorts_engine.services.broll",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.clip_selection",
+      "shorts_engine.services.detection",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.llm",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.publishing",
+      "shorts_engine.services.quality",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.reframing",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage",
+      "shorts_engine.services.transcription",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.storage": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.db": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ab_testing",
+      "shorts_engine.services.analytics",
+      "shorts_engine.services.detection",
+      "shorts_engine.services.monitoring",
+      "shorts_engine.services.publishing",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.monitoring": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.detection": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration"
+    ],
+    "shorts_engine.dashboard": [
+      "cli.py"
+    ],
+    "shorts_engine.services.ingestion": [
+      "cli.py",
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration"
+    ],
+    "shorts_engine.orchestration": [
+      "cli.py",
+      "shorts_engine.dashboard"
+    ],
+    "cli": [
+      "run.py"
+    ],
+    "shorts_engine.services.ab_testing": [
+      "shorts_engine.dashboard"
+    ],
+    "shorts_engine.services.captioning": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.clip_selection": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration"
+    ],
+    "shorts_engine.services.transcription": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.captioning",
+      "shorts_engine.services.clip_selection",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.analytics": [
+      "shorts_engine.dashboard"
+    ],
+    "shorts_engine.services.rendering": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.reframing": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.quality_gate": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.llm": [
+      "shorts_engine.dashboard",
+      "shorts_engine.services.ab_testing",
+      "shorts_engine.services.clip_selection",
+      "shorts_engine.services.quality_gate"
+    ],
+    "shorts_engine.services.telemetry": [
+      "shorts_engine.dashboard",
+      "shorts_engine.orchestration",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.transcription"
+    ],
+    "shorts_engine.services.broll": [
+      "shorts_engine.orchestration"
+    ],
+    "shorts_engine.services.quality": [
+      "shorts_engine.orchestration",
+      "shorts_engine.services.worker"
+    ],
+    "shorts_engine.services.execution": [
+      "shorts_engine.services.audio",
+      "shorts_engine.services.ingestion",
+      "shorts_engine.services.quality",
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.storage"
+    ],
+    "shorts_engine.services.audio": [
+      "shorts_engine.services.rendering"
+    ]
+  },
+  "cycles": [
+    [
+      "shorts_engine.services.rendering",
+      "shorts_engine.services.quality_gate",
+      "shorts_engine.services.rendering"
+    ]
+  ]
+}

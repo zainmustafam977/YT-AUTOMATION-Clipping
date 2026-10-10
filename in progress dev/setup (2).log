@@ -1,0 +1,748 @@
+================================================================================
+  YouTube Shorts Automation Engine - Setup Log
+  Script Version : 3.1
+  Started        : 2026-10-07 12:32:45
+  Project Root   : F:\YT\YT AUTOMATION
+  Parameters     : GPU=False CudaIndex= SkipTests=False NoBrowser=False NoServer=False NonInteractive=False Force=False ForceVenv=False VerifyOnly=False PipIndexUrl= ProxySet=False
+  PowerShell     : 5.1.26100.9549
+================================================================================
+[12:32:45] Starting setup. Total steps: 13
+[12:32:45] Console guards enabled (sleep prevention, QuickEdit off).
+[12:32:45] [ 1/13] Pre-flight System Checks
+[12:32:46]          Operating system : Microsoft Windows 11 Pro (build 26300)
+[12:32:46]          PowerShell       : 5.1.26100.9549
+[12:32:46] ENV: PROCESSOR_ARCHITECTURE=AMD64 Culture=en-US User=MUHAMMAD BILAL TEMP=C:\Users\MUHAMM~1\AppData\Local\Temp
+[12:32:46]          Privileges       : standard user (a UAC prompt may appear if the C++ runtime must be installed)
+[12:32:46]   [OK]   Project files located
+[12:32:46]   [OK]   Disk space: 44.6 GB free on F:\
+[12:32:46]   [OK]   Project folder is writable
+[12:32:46]   [WARN] Invalid -Proxy value: Cannot convert argument "0", with value: "System.Net.WebRequest+WebProxyWrapperOpaque", for "WebProxy" to type "System.Uri": "Cannot convert the "System.Net.WebRequest+WebProxyWrapperOpaque" value of type "System.Net.WebRequest+WebProxyWrapperOpaque" to type "System.Uri"."
+[12:32:47]   [OK]   PyPI index     reachable (784 ms)
+[12:32:48]   [OK]   PyPI files     reachable (721 ms)
+[12:32:48]   [OK]   GitHub         reachable (380 ms)
+[12:32:49]   [OK]   python.org     reachable (458 ms)
+[12:32:49]   [OK]   PyTorch index  reachable (754 ms)
+[12:32:50]          -> step finished: WARN in 00:04
+[12:32:50] [ 2/13] Python Detection & Installation
+[12:32:50] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Launcher\py.exe -0p
+[12:32:50]      -V:3.14 *        C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe
+[12:32:50]      -V:3.13          C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python313\python.exe
+[12:32:50]      -V:3.11          C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe
+[12:32:50]    exit=0 timedOut=False stalled=False seconds=0.5
+[12:32:50] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python313\python.exe -c "import sys,struct;print('PYINFO|%d.%d.%d|%d|%s' % (sys.version_info[0],sys.version_info[1],sys.version_info[2],struct.calcsize('P')*8,sys.executable));import venv,ensurepip,ssl,sqlite3;print('PYMODS|OK')"
+[12:32:51]     PYINFO|3.13.15|64|C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python313\python.exe
+[12:32:51]     PYMODS|OK
+[12:32:51]    exit=0 timedOut=False stalled=False seconds=0.9
+[12:32:51]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python313\python.exe - version 3.13.15 is too new (project pins numpy<2, which has no wheels for Python 3.13+)
+[12:32:51]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WindowsApps\python.exe - Microsoft Store alias/stub is not supported
+[12:32:51] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Python\bin\python.exe -c "import sys,struct;print('PYINFO|%d.%d.%d|%d|%s' % (sys.version_info[0],sys.version_info[1],sys.version_info[2],struct.calcsize('P')*8,sys.executable));import venv,ensurepip,ssl,sqlite3;print('PYMODS|OK')"
+[12:32:52]     PYINFO|3.14.7|64|C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe
+[12:32:52]     PYMODS|OK
+[12:32:52]    exit=0 timedOut=False stalled=False seconds=1.0
+[12:32:52]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Python\bin\python.exe - version 3.14.7 is too new (project pins numpy<2, which has no wheels for Python 3.13+)
+[12:32:52]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WindowsApps\python3.exe - Microsoft Store alias/stub is not supported
+[12:32:52] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Python\bin\python3.exe -c "import sys,struct;print('PYINFO|%d.%d.%d|%d|%s' % (sys.version_info[0],sys.version_info[1],sys.version_info[2],struct.calcsize('P')*8,sys.executable));import venv,ensurepip,ssl,sqlite3;print('PYMODS|OK')"
+[12:32:53]     PYINFO|3.14.7|64|C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe
+[12:32:53]     PYMODS|OK
+[12:32:53]    exit=0 timedOut=False stalled=False seconds=1.1
+[12:32:53]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Python\bin\python3.exe - version 3.14.7 is too new (project pins numpy<2, which has no wheels for Python 3.13+)
+[12:32:53] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe -c "import sys,struct;print('PYINFO|%d.%d.%d|%d|%s' % (sys.version_info[0],sys.version_info[1],sys.version_info[2],struct.calcsize('P')*8,sys.executable));import venv,ensurepip,ssl,sqlite3;print('PYMODS|OK')"
+[12:32:54]     PYINFO|3.14.7|64|C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe
+[12:32:54]     PYMODS|OK
+[12:32:54]    exit=0 timedOut=False stalled=False seconds=0.4
+[12:32:54]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.14-64\python.exe - version 3.14.7 is too new (project pins numpy<2, which has no wheels for Python 3.13+)
+[12:32:54] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe -c "import sys,struct;print('PYINFO|%d.%d.%d|%d|%s' % (sys.version_info[0],sys.version_info[1],sys.version_info[2],struct.calcsize('P')*8,sys.executable));import venv,ensurepip,ssl,sqlite3;print('PYMODS|OK')"
+[12:32:54]     PYINFO|3.11.9|64|C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe
+[12:32:56]     PYMODS|OK
+[12:32:56]    exit=0 timedOut=False stalled=False seconds=1.8
+[12:32:56]          candidate C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe -> Python 3.11.9
+[12:32:56]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python311\python.exe - file not found
+[12:32:56]          skipped C:\Program Files\Python311\python.exe - file not found
+[12:32:56]          skipped C:\Python311\python.exe - file not found
+[12:32:56]          skipped C:\Users\MUHAMMAD BILAL\AppData\Local\Programs\Python\Python312\python.exe - file not found
+[12:32:56]          skipped C:\Program Files\Python312\python.exe - file not found
+[12:32:56]          skipped C:\Python312\python.exe - file not found
+[12:32:56]          skipped F:\YT\YT AUTOMATION\tools\python\python.exe - file not found
+[12:32:56]   [OK]   Found Python 3.11.9: C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe
+[12:32:56]          -> step finished: OK in 00:06
+[12:32:56] [ 3/13] Visual C++ Runtime
+[12:32:56]   [OK]   Visual C++ Runtime 14.50.35719 present
+[12:32:56]          -> step finished: OK in 00:00
+[12:32:56] [ 4/13] FFmpeg Detection & Installation
+[12:32:56] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe -version
+[12:32:57]     ffmpeg version 9.0.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+[12:32:57]     built with gcc 16.1.0 (Rev2, Built by MSYS2 project)
+[12:32:57]     configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-lcms2 --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-libsnappy --enable-zlib --enable-librist --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-libbluray --enable-libcaca --enable-libdvdnav --enable-libdvdread --enable-sdl2 --enable-libaribb24 --enable-libaribcaption --enable-libdav1d --enable-libdavs2 --enable-libopenjpeg --enable-libquirc --enable-libuavs3d --enable-libxevd --enable-libzvbi --enable-liboapv --enable-libqrencode --enable-librav1e --enable-libsvtav1 --enable-libvvenc --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxeve --enable-libxvid --enable-libaom --enable-libjxl --enable-libsvtjpegxs --enable-libvpx --enable-mediafoundation --enable-libass --enable-frei0r --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-liblensfun --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-vulkan --enable-libplacebo --enable-opencl --enable-libcdio --enable-openal --enable-libgme --enable-libmodplug --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libshine --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libcodec2 --enable-libilbc --enable-libgsm --enable-liblc3 --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-ladspa --enable-libbs2b --enable-libflite --enable-libmysofa --enable-librubberband --enable-libsoxr --enable-chromaprint --enable-whisper
+[12:32:57]     libavutil      61.  1.101 / 61.  1.101
+[12:32:57]     libavcodec     63.  1.101 / 63.  1.101
+[12:32:57]     libavformat    63.  1.101 / 63.  1.101
+[12:32:57]     libavdevice    63.  1.101 / 63.  1.101
+[12:32:57]     libavfilter    12.  1.101 / 12.  1.101
+[12:32:57]     libswscale     10.  1.101 / 10.  1.101
+[12:32:57]     libswresample   7.  1.101 /  7.  1.101
+[12:32:57]     
+[12:32:57]     Exiting with exit code 0
+[12:32:57]    exit=0 timedOut=False stalled=False seconds=0.8
+[12:32:57]   [OK]   FFmpeg found in PATH: C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe
+[12:32:57]          -> step finished: OK in 00:00
+[12:32:57] [ 5/13] Virtual Environment
+[12:32:57]          Checking existing .venv...
+[12:32:57] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -c "import sys,ssl;print('VENV_OK|%d.%d' % sys.version_info[:2])"
+[12:32:57]     VENV_OK|3.13
+[12:32:57]    exit=0 timedOut=False stalled=False seconds=0.5
+[12:32:57] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -m pip --version
+[12:32:58]     pip 26.2.1 from F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pip (python 3.13)
+[12:32:58]     
+[12:32:58]    exit=0 timedOut=False stalled=False seconds=0.8
+[12:32:58]   [WARN] .venv is unusable (unsupported Python 3.13 in venv). Recreating it...
+[12:32:59]          Removed old .venv
+[12:32:59]          Creating virtual environment with C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe ...
+[12:32:59] >> C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\python.exe -m venv "F:\YT\YT AUTOMATION\.venv"
+[12:33:16]    exit=0 timedOut=False stalled=False seconds=17.3
+[12:33:16] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -c "import sys,ssl;print('VENV_OK|%d.%d' % sys.version_info[:2])"
+[12:33:17]     VENV_OK|3.11
+[12:33:17]    exit=0 timedOut=False stalled=False seconds=0.3
+[12:33:17] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -m pip --version
+[12:33:17]     pip 24.0 from F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pip (python 3.11)
+[12:33:17]     
+[12:33:18]    exit=0 timedOut=False stalled=False seconds=0.9
+[12:33:18]   [OK]   Virtual environment ready (Python 3.11)
+[12:33:18]          -> step finished: WARN in 00:20
+[12:33:18] [ 6/13] Python Dependencies
+[12:33:18]          requirements.txt lists 32 direct packages; pip will resolve dependencies and download wheels.
+[12:33:18]          First install downloads ~1-2 GB (PyTorch, OpenCV, SciPy...) - on slow links this can take 15-30 minutes.
+[12:33:18]          You will see "Collecting"/"Downloading" lines plus a live spinner, elapsed time and network speed.
+[12:33:18]   >> Upgrade pip / setuptools / wheel  (attempt 1/3)
+[12:33:18] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel --progress-bar off --no-warn-script-location --default-timeout 60 --retries 5
+[12:33:19]     Requirement already satisfied: pip in f:\yt\yt automation\.venv\lib\site-packages (24.0)
+[12:33:20]     Collecting pip
+[12:33:23]       Downloading pip-26.2.1-py3-none-any.whl.metadata (4.6 kB)
+[12:33:23]     Requirement already satisfied: setuptools in f:\yt\yt automation\.venv\lib\site-packages (65.5.0)
+[12:33:23]     Collecting setuptools
+[12:33:23]       Using cached setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+[12:33:23]     Collecting wheel
+[12:33:23]       Using cached wheel-0.48.0-py3-none-any.whl.metadata (2.3 kB)
+[12:33:24]     Collecting packaging>=24.0 (from wheel)
+[12:33:24]       Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+[12:33:24]     Downloading pip-26.2.1-py3-none-any.whl (1.8 MB)
+[12:33:55]     Using cached setuptools-84.0.0-py3-none-any.whl (818 kB)
+[12:33:55]     Using cached wheel-0.48.0-py3-none-any.whl (33 kB)
+[12:33:55]     Using cached packaging-26.3-py3-none-any.whl (129 kB)
+[12:33:55]     Installing collected packages: setuptools, pip, packaging, wheel
+[12:33:55]       Attempting uninstall: setuptools
+[12:33:55]         Found existing installation: setuptools 65.5.0
+[12:33:56]         Uninstalling setuptools-65.5.0:
+[12:33:56]           Successfully uninstalled setuptools-65.5.0
+[12:33:59]       Attempting uninstall: pip
+[12:34:00]         Found existing installation: pip 24.0
+[12:34:00]         Uninstalling pip-24.0:
+[12:34:00]           Successfully uninstalled pip-24.0
+[12:34:07]     Successfully installed packaging-26.3 pip-26.2.1 setuptools-84.0.0 wheel-0.48.0
+[12:34:07]    exit=0 timedOut=False stalled=False seconds=49.2
+[12:34:07]   [OK]   pip / setuptools / wheel upgraded
+[12:34:07]   >> Install requirements.txt  (attempt 1/3)
+[12:34:07] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -m pip install -r "F:\YT\YT AUTOMATION\requirements.txt" --progress-bar off --no-warn-script-location --default-timeout 60 --retries 5
+[12:34:09]     Collecting fastapi<1.0.0,>=0.110.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 8))
+[12:34:09]       Using cached fastapi-0.142.2-py3-none-any.whl.metadata (27 kB)
+[12:34:09]     Collecting uvicorn<1.0.0,>=0.28.0 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:09]       Using cached uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+[12:34:10]     Collecting starlette<1.0.0,>=0.36.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 10))
+[12:34:10]       Using cached starlette-0.52.1-py3-none-any.whl.metadata (6.3 kB)
+[12:34:10]     Collecting jinja2<4.0.0,>=3.1.2 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 11))
+[12:34:10]       Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+[12:34:10]     Collecting python-multipart>=0.0.9 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 12))
+[12:34:10]       Using cached python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+[12:34:10]     Collecting httpx<1.0.0,>=0.27.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 13))
+[12:34:10]       Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+[12:34:11]     Collecting pydantic<3.0.0,>=2.6.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 16))
+[12:34:11]       Using cached pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+[12:34:11]     Collecting pydantic-settings<3.0.0,>=2.2.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 17))
+[12:34:11]       Using cached pydantic_settings-2.15.0-py3-none-any.whl.metadata (3.9 kB)
+[12:34:12]     Collecting sqlalchemy<3.0.0,>=2.0.25 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 20))
+[12:34:13]       Downloading sqlalchemy-2.1.3-cp311-cp311-win_amd64.whl.metadata (9.9 kB)
+[12:34:13]     Collecting aiosqlite>=0.20.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 21))
+[12:34:13]       Using cached aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+[12:34:13]     Collecting asyncpg>=0.29.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 22))
+[12:34:14]       Downloading asyncpg-0.32.0-cp311-cp311-win_amd64.whl.metadata (4.5 kB)
+[12:34:14]     Collecting portalocker>=2.8.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 23))
+[12:34:14]       Using cached portalocker-4.4.0-py3-none-any.whl.metadata (10 kB)
+[12:34:14]     Collecting psycopg2-binary>=2.9.9 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 25))
+[12:34:14]       Downloading psycopg2_binary-2.9.13-cp311-cp311-win_amd64.whl.metadata (5.1 kB)
+[12:34:15]     Collecting cryptography>=42.0.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 28))
+[12:34:15]       Using cached cryptography-50.0.2-cp311-abi3-win_amd64.whl.metadata (4.4 kB)
+[12:34:15]     Collecting groq>=0.9.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 31))
+[12:34:15]       Using cached groq-1.7.0-py3-none-any.whl.metadata (16 kB)
+[12:34:15]     Collecting google-genai>=1.0.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 32))
+[12:34:15]       Using cached google_genai-2.28.0-py3-none-any.whl.metadata (56 kB)
+[12:34:16]     Collecting google-api-python-client>=2.115.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:34:16]       Using cached google_api_python_client-2.201.0-py3-none-any.whl.metadata (6.8 kB)
+[12:34:16]     Collecting google-auth-oauthlib>=1.2.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 34))
+[12:34:16]       Using cached google_auth_oauthlib-1.5.0-py3-none-any.whl.metadata (2.6 kB)
+[12:34:16]     Collecting google-auth-httplib2>=0.2.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 35))
+[12:34:16]       Using cached google_auth_httplib2-0.4.4-py3-none-any.whl.metadata (3.0 kB)
+[12:34:17]     Collecting google-auth<3.0.0,>=2.27.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 36))
+[12:34:17]       Using cached google_auth-2.60.0-py3-none-any.whl.metadata (6.0 kB)
+[12:34:17]     Collecting yt-dlp>=2024.3.10 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 39))
+[12:34:17]       Using cached yt_dlp-2026.8.19-py3-none-any.whl.metadata (183 kB)
+[12:34:17]     Collecting faster-whisper>=1.0.1 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:34:17]       Using cached faster_whisper-1.2.1-py3-none-any.whl.metadata (16 kB)
+[12:34:18]     Collecting torch>=2.1.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 41))
+[12:34:18]       Downloading torch-2.14.1-cp311-cp311-win_amd64.whl.metadata (38 kB)
+[12:34:18]     Collecting numpy<2.0.0,>=1.24.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 42))
+[12:34:19]       Downloading numpy-1.26.4-cp311-cp311-win_amd64.whl.metadata (61 kB)
+[12:34:19]     Collecting opencv-python-headless>=4.9.0.80 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 45))
+[12:34:19]       Downloading opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:34:20]     Collecting pillow>=10.2.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 46))
+[12:34:20]       Downloading pillow-12.3.0-cp311-cp311-win_amd64.whl.metadata (9.3 kB)
+[12:34:20]     Collecting scikit-learn>=1.4.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 47))
+[12:34:20]       Downloading scikit_learn-1.9.1-cp311-cp311-win_amd64.whl.metadata (9.3 kB)
+[12:34:21]     Collecting scipy>=1.11.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 48))
+[12:34:21]       Downloading scipy-1.17.1-cp311-cp311-win_amd64.whl.metadata (60 kB)
+[12:34:21]     Collecting typer<1.0.0,>=0.9.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 51))
+[12:34:21]       Downloading typer-0.27.3-py3-none-any.whl.metadata (16 kB)
+[12:34:22]     Collecting rich>=13.7.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 52))
+[12:34:22]       Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+[12:34:22]     Collecting sentry-sdk>=1.40.0 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 55))
+[12:34:22]       Downloading sentry_sdk-2.71.0-py3-none-any.whl.metadata (11 kB)
+[12:34:23]     Collecting psutil>=5.9.8 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 56))
+[12:34:23]       Downloading psutil-7.2.2-cp37-abi3-win_amd64.whl.metadata (22 kB)
+[12:34:23]     Collecting typing-extensions>=4.8.0 (from fastapi<1.0.0,>=0.110.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 8))
+[12:34:23]       Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+[12:34:23]     Collecting typing-inspection>=0.4.2 (from fastapi<1.0.0,>=0.110.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 8))
+[12:34:23]       Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+[12:34:24]     Collecting annotated-doc>=0.0.2 (from fastapi<1.0.0,>=0.110.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 8))
+[12:34:24]       Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+[12:34:24]     Collecting opentelemetry-api>=1.44.0 (from fastapi<1.0.0,>=0.110.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 8))
+[12:34:24]       Downloading opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+[12:34:24]     Collecting click>=7.0 (from uvicorn<1.0.0,>=0.28.0->uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:24]       Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+[12:34:25]     Collecting h11>=0.8 (from uvicorn<1.0.0,>=0.28.0->uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:25]       Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+[12:34:25]     Collecting anyio<5,>=3.6.2 (from starlette<1.0.0,>=0.36.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 10))
+[12:34:25]       Using cached anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+[12:34:25]     Collecting MarkupSafe>=2.0 (from jinja2<4.0.0,>=3.1.2->-r F:\YT\YT AUTOMATION\requirements.txt (line 11))
+[12:34:25]       Downloading markupsafe-3.0.4-cp311-cp311-win_amd64.whl.metadata (2.8 kB)
+[12:34:26]     Collecting certifi (from httpx<1.0.0,>=0.27.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 13))
+[12:34:26]       Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+[12:34:26]     Collecting httpcore==1.* (from httpx<1.0.0,>=0.27.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 13))
+[12:34:26]       Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+[12:34:26]     Collecting idna (from httpx<1.0.0,>=0.27.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 13))
+[12:34:26]       Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+[12:34:26]     Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.6.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 16))
+[12:34:26]       Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+[12:34:28]     Collecting pydantic-core==2.46.5 (from pydantic<3.0.0,>=2.6.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 16))
+[12:34:28]       Downloading pydantic_core-2.46.5-cp311-cp311-win_amd64.whl.metadata (6.7 kB)
+[12:34:28]     Collecting python-dotenv>=0.21.0 (from pydantic-settings<3.0.0,>=2.2.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 17))
+[12:34:28]       Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+[12:34:28]     Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.27.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 36))
+[12:34:28]       Downloading pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+[12:34:29]     Collecting shellingham>=1.3.0 (from typer<1.0.0,>=0.9.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 51))
+[12:34:29]       Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+[12:34:29]     Collecting colorama (from typer<1.0.0,>=0.9.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 51))
+[12:34:29]       Using cached colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+[12:34:29]     Collecting httptools>=0.8.0 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:30]       Downloading httptools-0.8.0-cp311-cp311-win_amd64.whl.metadata (3.7 kB)
+[12:34:30]     Collecting pyyaml>=5.1 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:30]       Downloading pyyaml-6.0.3-cp311-cp311-win_amd64.whl.metadata (2.4 kB)
+[12:34:30]     Collecting watchfiles>=0.20 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:30]       Using cached watchfiles-1.3.0-cp310-abi3-win_amd64.whl.metadata (5.0 kB)
+[12:34:33]     Collecting websockets>=13.0 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:34:33]       Downloading websockets-17.2-cp311-cp311-win_amd64.whl.metadata (6.5 kB)
+[12:35:24]     Collecting cffi>=2.0.0 (from cryptography>=42.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 28))
+[12:35:24]       Downloading cffi-2.1.1-cp311-cp311-win_amd64.whl.metadata (2.6 kB)
+[12:35:24]     Collecting distro<2,>=1.7.0 (from groq>=0.9.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 31))
+[12:35:25]       Downloading distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+[12:35:25]     Collecting sniffio (from groq>=0.9.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 31))
+[12:35:25]       Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+[12:35:28]     Collecting requests<3.0.0,>=2.28.1 (from google-genai>=1.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 32))
+[12:35:29]       Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+[12:35:29]     Collecting tenacity<9.2.0,>=8.2.3 (from google-genai>=1.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 32))
+[12:35:30]       Downloading tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+[12:35:30]     Collecting websockets>=13.0 (from uvicorn[standard]<1.0.0,>=0.28.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 9))
+[12:35:30]       Downloading websockets-16.1.1-cp311-cp311-win_amd64.whl.metadata (7.0 kB)
+[12:35:37]     Collecting charset_normalizer<4,>=2 (from requests<3.0.0,>=2.28.1->google-genai>=1.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 32))
+[12:35:37]       Downloading charset_normalizer-3.5.2-cp311-cp311-win_amd64.whl.metadata (47 kB)
+[12:35:38]     Collecting urllib3<3,>=1.26 (from requests<3.0.0,>=2.28.1->google-genai>=1.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 32))
+[12:35:38]       Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+[12:35:38]     Collecting httplib2<1.0.0,>=0.19.0 (from google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:39]       Downloading httplib2-0.32.0-py3-none-any.whl.metadata (2.2 kB)
+[12:35:40]     Collecting google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5 (from google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:41]       Downloading google_api_core-2.41.0-py3-none-any.whl.metadata (3.2 kB)
+[12:35:41]     Collecting uritemplate<5,>=3.0.1 (from google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:41]       Downloading uritemplate-4.2.0-py3-none-any.whl.metadata (2.6 kB)
+[12:35:42]     Collecting googleapis-common-protos<2.0.0,>=1.69.2 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:42]       Downloading googleapis_common_protos-1.75.5-py3-none-any.whl.metadata (8.5 kB)
+[12:35:45]     Collecting protobuf<8.0.0,>=6.33.5 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:45]       Downloading protobuf-7.36.2-cp310-abi3-win_amd64.whl.metadata (595 bytes)
+[12:35:46]     Collecting proto-plus<2.0.0,>=1.26.1 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:46]       Downloading proto_plus-1.29.0-py3-none-any.whl.metadata (2.2 kB)
+[12:35:46]     Collecting pyparsing<4,>=3.1 (from httplib2<1.0.0,>=0.19.0->google-api-python-client>=2.115.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 33))
+[12:35:46]       Downloading pyparsing-3.3.3-py3-none-any.whl.metadata (5.9 kB)
+[12:35:47]     Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib>=1.2.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 34))
+[12:35:47]       Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+[12:35:48]     Collecting ctranslate2<5,>=4.0 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:35:48]       Downloading ctranslate2-4.8.2-cp311-cp311-win_amd64.whl.metadata (11 kB)
+[12:35:49]     Collecting huggingface-hub>=0.21 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:35:49]       Downloading huggingface_hub-2.1.1-py3-none-any.whl.metadata (16 kB)
+[12:35:53]     Collecting tokenizers<1,>=0.13 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:35:53]       Downloading tokenizers-0.23.2-cp310-abi3-win_amd64.whl.metadata (10 kB)
+[12:36:01]     Collecting onnxruntime<2,>=1.14 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:01]       Downloading onnxruntime-1.30.0-cp311-cp311-win_amd64.whl.metadata (5.9 kB)
+[12:36:07]     Collecting av>=11 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:07]       Downloading av-18.1.0-cp311-abi3-win_amd64.whl.metadata (5.1 kB)
+[12:36:08]     Collecting tqdm (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:08]       Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+[12:36:10]     Collecting flatbuffers (from onnxruntime<2,>=1.14->faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:10]       Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+[12:36:10]     Requirement already satisfied: packaging in .\.venv\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40)) (26.3)
+[12:36:10]     Collecting huggingface-hub>=0.21 (from faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:10]       Downloading huggingface_hub-1.33.0-py3-none-any.whl.metadata (16 kB)
+[12:36:12]     Collecting filelock>=3.10.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:12]       Downloading filelock-4.0.12-py3-none-any.whl.metadata (2.0 kB)
+[12:36:14]     Collecting fsspec>=2023.5.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:14]       Downloading fsspec-2026.9.0-py3-none-any.whl.metadata (10 kB)
+[12:36:21]     Collecting hf-xet<2.0.0,>=1.6.0 (from huggingface-hub>=0.21->faster-whisper>=1.0.1->-r F:\YT\YT AUTOMATION\requirements.txt (line 40))
+[12:36:21]       Downloading hf_xet-1.7.0-cp38-abi3-win_amd64.whl.metadata (4.9 kB)
+[12:36:21]     Requirement already satisfied: setuptools>=77.0.3 in .\.venv\Lib\site-packages (from torch>=2.1.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 41)) (84.0.0)
+[12:36:22]     Collecting sympy>=1.13.3 (from torch>=2.1.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 41))
+[12:36:23]       Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+[12:36:25]     Collecting networkx>=2.5.1 (from torch>=2.1.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 41))
+[12:36:25]       Downloading networkx-3.6.1-py3-none-any.whl.metadata (6.8 kB)
+[12:36:26]     INFO: pip is looking at multiple versions of opencv-python-headless to determine which version is compatible with other requirements. This could take a while.
+[12:36:26]     Collecting opencv-python-headless>=4.9.0.80 (from -r F:\YT\YT AUTOMATION\requirements.txt (line 45))
+[12:36:26]       Downloading opencv_python_headless-4.14.0.94-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:36:27]       Downloading opencv_python_headless-4.13.0.92-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:36:28]       Downloading opencv_python_headless-4.13.0.90-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:36:30]       Downloading opencv_python_headless-4.12.0.88-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:36:31]       Downloading opencv_python_headless-4.11.0.86-cp37-abi3-win_amd64.whl.metadata (20 kB)
+[12:36:32]     Collecting joblib>=1.4.0 (from scikit-learn>=1.4.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 47))
+[12:36:32]       Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
+[12:36:34]     Collecting narwhals>=2.0.1 (from scikit-learn>=1.4.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 47))
+[12:36:34]       Downloading narwhals-2.26.0-py3-none-any.whl.metadata (15 kB)
+[12:36:36]     Collecting threadpoolctl>=3.5.0 (from scikit-learn>=1.4.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 47))
+[12:36:36]       Downloading threadpoolctl-3.7.0-py3-none-any.whl.metadata (24 kB)
+[12:36:37]     Collecting markdown-it-py>=2.2.0 (from rich>=13.7.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 52))
+[12:36:37]       Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+[12:36:38]     Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.7.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 52))
+[12:36:38]       Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+[12:36:40]     Collecting pycparser (from cffi>=2.0.0->cryptography>=42.0.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 28))
+[12:36:40]       Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+[12:36:42]     Collecting cloudpickle>=3.0 (from joblib>=1.4.0->scikit-learn>=1.4.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 47))
+[12:36:42]       Downloading cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
+[12:36:43]     Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.7.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 52))
+[12:36:43]       Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+[12:36:44]     Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.27.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 36))
+[12:36:45]       Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+[12:36:45]     Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=1.2.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 34))
+[12:36:45]       Downloading oauthlib-4.0.0-py3-none-any.whl.metadata (8.6 kB)
+[12:36:46]     Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch>=2.1.0->-r F:\YT\YT AUTOMATION\requirements.txt (line 41))
+[12:36:47]       Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+[12:36:47]     Using cached fastapi-0.142.2-py3-none-any.whl (144 kB)
+[12:36:47]     Using cached uvicorn-0.54.0-py3-none-any.whl (87 kB)
+[12:36:47]     Downloading starlette-0.52.1-py3-none-any.whl (74 kB)
+[12:36:51]     Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+[12:36:51]     Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+[12:36:51]     Using cached pydantic-2.13.5-py3-none-any.whl (472 kB)
+[12:36:52]     Downloading pydantic_core-2.46.5-cp311-cp311-win_amd64.whl (2.0 MB)
+[12:39:28]     Using cached pydantic_settings-2.15.0-py3-none-any.whl (69 kB)
+[12:39:28]     Downloading sqlalchemy-2.1.3-cp311-cp311-win_amd64.whl (2.4 MB)
+[12:40:25]     Downloading google_auth-2.60.0-py3-none-any.whl (264 kB)
+[12:40:26]     Downloading numpy-1.26.4-cp311-cp311-win_amd64.whl (15.8 MB)
+[12:41:44]     Downloading typer-0.27.3-py3-none-any.whl (123 kB)
+[12:41:44]     Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+[12:41:44]     Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+[12:41:44]     Using cached python_multipart-0.0.32-py3-none-any.whl (30 kB)
+[12:41:45]     Downloading aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+[12:41:45]     Downloading asyncpg-0.32.0-cp311-cp311-win_amd64.whl (610 kB)
+[12:41:46]     Downloading portalocker-4.4.0-py3-none-any.whl (129 kB)
+[12:41:47]     Downloading psycopg2_binary-2.9.13-cp311-cp311-win_amd64.whl (2.8 MB)
+[12:42:07]     Downloading cryptography-50.0.2-cp311-abi3-win_amd64.whl (3.8 MB)
+[12:42:25]     Downloading groq-1.7.0-py3-none-any.whl (143 kB)
+[12:42:25]     Downloading distro-1.9.0-py3-none-any.whl (20 kB)
+[12:42:26]     Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+[12:42:26]     Downloading google_genai-2.28.0-py3-none-any.whl (1.2 MB)
+[12:42:30]     Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+[12:42:30]     Downloading charset_normalizer-3.5.2-cp311-cp311-win_amd64.whl (214 kB)
+[12:42:31]     Using cached idna-3.20-py3-none-any.whl (69 kB)
+[12:42:31]     Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+[12:42:31]     Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+[12:42:32]     Downloading websockets-16.1.1-cp311-cp311-win_amd64.whl (180 kB)
+[12:42:32]     Downloading google_api_python_client-2.201.0-py3-none-any.whl (16.8 MB)
+[12:44:36]     Downloading google_auth_httplib2-0.4.4-py3-none-any.whl (9.5 kB)
+[12:44:36]     Downloading google_api_core-2.41.0-py3-none-any.whl (215 kB)
+[12:44:38]     Downloading googleapis_common_protos-1.75.5-py3-none-any.whl (307 kB)
+[12:44:41]     Downloading httplib2-0.32.0-py3-none-any.whl (93 kB)
+[12:44:42]     Downloading opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+[12:44:43]     Downloading proto_plus-1.29.0-py3-none-any.whl (50 kB)
+[12:44:43]     Downloading protobuf-7.36.2-cp310-abi3-win_amd64.whl (456 kB)
+[12:44:46]     Downloading pyparsing-3.3.3-py3-none-any.whl (126 kB)
+[12:44:48]     Downloading uritemplate-4.2.0-py3-none-any.whl (11 kB)
+[12:44:48]     Downloading google_auth_oauthlib-1.5.0-py3-none-any.whl (20 kB)
+[12:44:49]     Using cached yt_dlp-2026.8.19-py3-none-any.whl (3.2 MB)
+[12:44:49]     Downloading faster_whisper-1.2.1-py3-none-any.whl (1.1 MB)
+[12:44:54]     Downloading ctranslate2-4.8.2-cp311-cp311-win_amd64.whl (19.2 MB)
+[12:45:54]     Downloading onnxruntime-1.30.0-cp311-cp311-win_amd64.whl (14.3 MB)
+[12:47:45]     Downloading pyyaml-6.0.3-cp311-cp311-win_amd64.whl (158 kB)
+[12:47:47]     Downloading tokenizers-0.23.2-cp310-abi3-win_amd64.whl (2.9 MB)
+[12:48:00]     Downloading huggingface_hub-1.33.0-py3-none-any.whl (846 kB)
+[12:48:04]     Using cached click-8.5.0-py3-none-any.whl (125 kB)
+[12:48:04]     Downloading hf_xet-1.7.0-cp38-abi3-win_amd64.whl (3.8 MB)
+[12:48:20]     Downloading torch-2.14.1-cp311-cp311-win_amd64.whl (124.1 MB)
+[12:57:22]     Downloading opencv_python_headless-4.11.0.86-cp37-abi3-win_amd64.whl (39.4 MB)
+[13:00:03]     Downloading pillow-12.3.0-cp311-cp311-win_amd64.whl (7.2 MB)
+[13:01:04]     Downloading scikit_learn-1.9.1-cp311-cp311-win_amd64.whl (8.3 MB)
+[13:01:20]     Downloading scipy-1.17.1-cp311-cp311-win_amd64.whl (36.6 MB)
+[13:04:19]     Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+[13:04:21]     Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+[13:04:24]     Downloading sentry_sdk-2.71.0-py3-none-any.whl (534 kB)
+[13:04:25]     Downloading psutil-7.2.2-cp37-abi3-win_amd64.whl (137 kB)
+[13:04:25]     Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+[13:04:25]     Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+[13:04:25]     Downloading av-18.1.0-cp311-abi3-win_amd64.whl (27.6 MB)
+[13:05:16]     Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+[13:05:16]     Downloading cffi-2.1.1-cp311-cp311-win_amd64.whl (185 kB)
+[13:05:17]     Downloading filelock-4.0.12-py3-none-any.whl (111 kB)
+[13:05:20]     Downloading fsspec-2026.9.0-py3-none-any.whl (221 kB)
+[13:05:25]     Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+[13:05:26]     Downloading httptools-0.8.0-cp311-cp311-win_amd64.whl (90 kB)
+[13:05:29]     Downloading joblib-1.6.0-py3-none-any.whl (306 kB)
+[13:05:45]     Downloading cloudpickle-3.1.2-py3-none-any.whl (22 kB)
+[13:05:46]     Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+[13:05:50]     Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+[13:05:50]     Downloading markupsafe-3.0.4-cp311-cp311-win_amd64.whl (14 kB)
+[13:05:51]     Downloading narwhals-2.26.0-py3-none-any.whl (474 kB)
+[13:06:03]     Downloading networkx-3.6.1-py3-none-any.whl (2.1 MB)
+[13:06:25]     Downloading pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+[13:06:26]     Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+[13:06:27]     Using cached python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+[13:06:27]     Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+[13:06:27]     Downloading oauthlib-4.0.0-py3-none-any.whl (159 kB)
+[13:06:29]     Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+[13:06:29]     Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+[13:06:50]     Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+[13:06:52]     Downloading threadpoolctl-3.7.0-py3-none-any.whl (26 kB)
+[13:06:52]     Downloading tqdm-4.70.1-py3-none-any.whl (80 kB)
+[13:06:52]     Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+[13:06:52]     Using cached watchfiles-1.3.0-cp310-abi3-win_amd64.whl (290 kB)
+[13:06:53]     Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+[13:06:53]     Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+[13:06:53]     Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+[13:06:53]     Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+[13:06:58]     Installing collected packages: mpmath, flatbuffers, yt-dlp, websockets, urllib3, uritemplate, typing-extensions, threadpoolctl, tenacity, sympy, sniffio, shellingham, pyyaml, python-multipart, python-dotenv, pyparsing, pygments, pycparser, pyasn1, psycopg2-binary, psutil, protobuf, portalocker, pillow, oauthlib, numpy, networkx, narwhals, mdurl, MarkupSafe, idna, httptools, hf-xet, h11, fsspec, filelock, distro, colorama, cloudpickle, click, charset_normalizer, certifi, av, asyncpg, annotated-types, annotated-doc, aiosqlite, uvicorn, typing-inspection, tqdm, sqlalchemy, sentry-sdk, scipy, requests, pydantic-core, pyasn1-modules, proto-plus, opentelemetry-api, opencv-python-headless, onnxruntime, markdown-it-py, joblib, jinja2, httplib2, httpcore, googleapis-common-protos, ctranslate2, cffi, anyio, watchfiles, torch, starlette, scikit-learn, rich, requests-oauthlib, pydantic, httpx, cryptography, typer, pydantic-settings, huggingface-hub, groq, google-auth, fastapi, tokenizers, google-auth-oauthlib, google-auth-httplib2, google-api-core, google-genai, google-api-python-client, faster-whisper
+[13:11:30]     Successfully installed MarkupSafe-3.0.4 aiosqlite-0.22.1 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.15.1 asyncpg-0.32.0 av-18.1.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.2 click-8.5.0 cloudpickle-3.1.2 colorama-0.4.6 cryptography-50.0.2 ctranslate2-4.8.2 distro-1.9.0 fastapi-0.142.2 faster-whisper-1.2.1 filelock-4.0.12 flatbuffers-25.12.19 fsspec-2026.9.0 google-api-core-2.41.0 google-api-python-client-2.201.0 google-auth-2.60.0 google-auth-httplib2-0.4.4 google-auth-oauthlib-1.5.0 google-genai-2.28.0 googleapis-common-protos-1.75.5 groq-1.7.0 h11-0.16.0 hf-xet-1.7.0 httpcore-1.0.9 httplib2-0.32.0 httptools-0.8.0 httpx-0.28.1 huggingface-hub-1.33.0 idna-3.20 jinja2-3.1.6 joblib-1.6.0 markdown-it-py-4.2.0 mdurl-0.1.2 mpmath-1.3.0 narwhals-2.26.0 networkx-3.6.1 numpy-1.26.4 oauthlib-4.0.0 onnxruntime-1.30.0 opencv-python-headless-4.11.0.86 opentelemetry-api-1.45.1 pillow-12.3.0 portalocker-4.4.0 proto-plus-1.29.0 protobuf-7.36.2 psutil-7.2.2 psycopg2-binary-2.9.13 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 pydantic-settings-2.15.0 pygments-2.21.0 pyparsing-3.3.3 python-dotenv-1.2.4 python-multipart-0.0.32 pyyaml-6.0.3 requests-2.34.2 requests-oauthlib-2.0.0 rich-15.0.0 scikit-learn-1.9.1 scipy-1.17.1 sentry-sdk-2.71.0 shellingham-1.5.4 sniffio-1.3.1 sqlalchemy-2.1.3 starlette-0.52.1 sympy-1.14.0 tenacity-9.1.4 threadpoolctl-3.7.0 tokenizers-0.23.2 torch-2.14.1 tqdm-4.70.1 typer-0.27.3 typing-extensions-4.16.0 typing-inspection-0.4.4 uritemplate-4.2.0 urllib3-2.8.0 uvicorn-0.54.0 watchfiles-1.3.0 websockets-16.1.1 yt-dlp-2026.8.19
+[13:11:31]    exit=0 timedOut=False stalled=False seconds=2,243.6
+[13:11:31]   [OK]   requirements.txt installed
+[13:11:31]   >> Install shorts_engine (editable)  (attempt 1/3)
+[13:11:31] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -m pip install -e . --progress-bar off --no-warn-script-location --default-timeout 60 --retries 5
+[13:11:32]     Obtaining file:///F:/YT/YT%20AUTOMATION
+[13:11:32]       Installing build dependencies: started
+[13:11:38]       Installing build dependencies: finished with status 'done'
+[13:11:38]       Checking if build backend supports build_editable: started
+[13:11:40]       Checking if build backend supports build_editable: finished with status 'done'
+[13:11:40]       Getting requirements to build editable: started
+[13:11:42]       Getting requirements to build editable: finished with status 'done'
+[13:11:42]       Preparing editable metadata (pyproject.toml): started
+[13:11:43]       Preparing editable metadata (pyproject.toml): finished with status 'done'
+[13:11:43]     Requirement already satisfied: pydantic>=2.5.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.13.5)
+[13:11:43]     Requirement already satisfied: pydantic-settings>=2.1.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.15.0)
+[13:11:43]     Requirement already satisfied: cryptography>=42.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (50.0.2)
+[13:11:43]     Requirement already satisfied: sqlalchemy>=2.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.1.3)
+[13:11:43]     Requirement already satisfied: aiosqlite>=0.20.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.22.1)
+[13:11:43]     Requirement already satisfied: opencv-python-headless>=4.8.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (4.11.0.86)
+[13:11:43]     Requirement already satisfied: pillow>=10.2.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (12.3.0)
+[13:11:43]     Requirement already satisfied: scikit-learn>=1.4.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.9.1)
+[13:11:43]     Requirement already satisfied: numpy>=1.24.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.26.4)
+[13:11:43]     Requirement already satisfied: torch>=2.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.14.1)
+[13:11:43]     Requirement already satisfied: faster-whisper>=1.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.2.1)
+[13:11:43]     Requirement already satisfied: yt-dlp>=2024.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2026.8.19)
+[13:11:43]     Requirement already satisfied: httpx>=0.27.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.28.1)
+[13:11:43]     Requirement already satisfied: google-genai>=1.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.28.0)
+[13:11:43]     Requirement already satisfied: google-api-python-client>=2.100.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.201.0)
+[13:11:43]     Requirement already satisfied: google-auth-oauthlib>=1.1.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.5.0)
+[13:11:43]     Requirement already satisfied: google-auth-httplib2>=0.2.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.4.4)
+[13:11:43]     Requirement already satisfied: google-auth<3,>=2.14.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.60.0)
+[13:11:43]     Requirement already satisfied: sentry-sdk>=1.40.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (2.71.0)
+[13:11:43]     Requirement already satisfied: fastapi>=0.100.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.142.2)
+[13:11:43]     Requirement already satisfied: uvicorn>=0.20.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.54.0)
+[13:11:43]     Requirement already satisfied: jinja2>=3.1.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (3.1.6)
+[13:11:43]     Requirement already satisfied: python-multipart>=0.0.6 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.0.32)
+[13:11:43]     Requirement already satisfied: typer>=0.9.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (0.27.3)
+[13:11:43]     Requirement already satisfied: rich>=13.0.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (15.0.0)
+[13:11:43]     Requirement already satisfied: psutil>=5.9.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (7.2.2)
+[13:11:43]     Requirement already satisfied: groq>=0.9.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.7.0)
+[13:11:43]     Requirement already satisfied: scipy>=1.11.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (1.17.1)
+[13:11:43]     Requirement already satisfied: portalocker>=2.8.0 in .\.venv\Lib\site-packages (from shorts-engine==0.1.0) (4.4.0)
+[13:11:58]     Collecting watchdog>=4.0.0 (from shorts-engine==0.1.0)
+[13:11:59]       Downloading watchdog-6.0.0-py3-none-win_amd64.whl.metadata (44 kB)
+[13:11:59]     Requirement already satisfied: pyasn1-modules>=0.2.1 in .\.venv\Lib\site-packages (from google-auth<3,>=2.14.0->shorts-engine==0.1.0) (0.4.2)
+[13:11:59]     Requirement already satisfied: cffi>=2.0.0 in .\.venv\Lib\site-packages (from cryptography>=42.0.0->shorts-engine==0.1.0) (2.1.1)
+[13:11:59]     Requirement already satisfied: pycparser in .\.venv\Lib\site-packages (from cffi>=2.0.0->cryptography>=42.0.0->shorts-engine==0.1.0) (3.0)
+[13:11:59]     Requirement already satisfied: starlette>=0.46.0 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.52.1)
+[13:11:59]     Requirement already satisfied: typing-extensions>=4.8.0 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (4.16.0)
+[13:11:59]     Requirement already satisfied: typing-inspection>=0.4.2 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.4.4)
+[13:11:59]     Requirement already satisfied: annotated-doc>=0.0.2 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (0.0.5)
+[13:11:59]     Requirement already satisfied: opentelemetry-api>=1.44.0 in .\.venv\Lib\site-packages (from fastapi>=0.100.0->shorts-engine==0.1.0) (1.45.1)
+[13:11:59]     Requirement already satisfied: ctranslate2<5,>=4.0 in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (4.8.2)
+[13:11:59]     Requirement already satisfied: huggingface-hub>=0.21 in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (1.33.0)
+[13:11:59]     Requirement already satisfied: tokenizers<1,>=0.13 in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (0.23.2)
+[13:11:59]     Requirement already satisfied: onnxruntime<2,>=1.14 in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (1.30.0)
+[13:11:59]     Requirement already satisfied: av>=11 in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (18.1.0)
+[13:11:59]     Requirement already satisfied: tqdm in .\.venv\Lib\site-packages (from faster-whisper>=1.0.0->shorts-engine==0.1.0) (4.70.1)
+[13:11:59]     Requirement already satisfied: pyyaml<7,>=5.3 in .\.venv\Lib\site-packages (from ctranslate2<5,>=4.0->faster-whisper>=1.0.0->shorts-engine==0.1.0) (6.0.3)
+[13:11:59]     Requirement already satisfied: flatbuffers in .\.venv\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (25.12.19)
+[13:11:59]     Requirement already satisfied: packaging in .\.venv\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (26.3)
+[13:11:59]     Requirement already satisfied: protobuf>=4.25.8 in .\.venv\Lib\site-packages (from onnxruntime<2,>=1.14->faster-whisper>=1.0.0->shorts-engine==0.1.0) (7.36.2)
+[13:11:59]     Requirement already satisfied: click<9.0.0,>=8.4.2 in .\.venv\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (8.5.0)
+[13:11:59]     Requirement already satisfied: filelock>=3.10.0 in .\.venv\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (4.0.12)
+[13:11:59]     Requirement already satisfied: fsspec>=2023.5.0 in .\.venv\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (2026.9.0)
+[13:11:59]     Requirement already satisfied: hf-xet<2.0.0,>=1.6.0 in .\.venv\Lib\site-packages (from huggingface-hub>=0.21->faster-whisper>=1.0.0->shorts-engine==0.1.0) (1.7.0)
+[13:11:59]     Requirement already satisfied: anyio in .\.venv\Lib\site-packages (from httpx>=0.27.0->shorts-engine==0.1.0) (4.15.1)
+[13:11:59]     Requirement already satisfied: certifi in .\.venv\Lib\site-packages (from httpx>=0.27.0->shorts-engine==0.1.0) (2026.7.22)
+[13:11:59]     Requirement already satisfied: httpcore==1.* in .\.venv\Lib\site-packages (from httpx>=0.27.0->shorts-engine==0.1.0) (1.0.9)
+[13:11:59]     Requirement already satisfied: idna in .\.venv\Lib\site-packages (from httpx>=0.27.0->shorts-engine==0.1.0) (3.20)
+[13:11:59]     Requirement already satisfied: h11>=0.16 in .\.venv\Lib\site-packages (from httpcore==1.*->httpx>=0.27.0->shorts-engine==0.1.0) (0.16.0)
+[13:11:59]     Requirement already satisfied: httplib2<1.0.0,>=0.19.0 in .\.venv\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (0.32.0)
+[13:11:59]     Requirement already satisfied: google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5 in .\.venv\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (2.41.0)
+[13:11:59]     Requirement already satisfied: uritemplate<5,>=3.0.1 in .\.venv\Lib\site-packages (from google-api-python-client>=2.100.0->shorts-engine==0.1.0) (4.2.0)
+[13:11:59]     Requirement already satisfied: googleapis-common-protos<2.0.0,>=1.69.2 in .\.venv\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (1.75.5)
+[13:11:59]     Requirement already satisfied: proto-plus<2.0.0,>=1.26.1 in .\.venv\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (1.29.0)
+[13:11:59]     Requirement already satisfied: requests<3.0.0,>=2.33.0 in .\.venv\Lib\site-packages (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (2.34.2)
+[13:11:59]     Requirement already satisfied: pyparsing<4,>=3.1 in .\.venv\Lib\site-packages (from httplib2<1.0.0,>=0.19.0->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (3.3.3)
+[13:11:59]     Requirement already satisfied: charset_normalizer<4,>=2 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.33.0->google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (3.5.2)
+[13:11:59]     Requirement already satisfied: urllib3<3,>=1.26 in .\.venv\Lib\site-packages (from requests<3.0.0,>=2.33.0->google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client>=2.100.0->shorts-engine==0.1.0) (2.8.0)
+[13:11:59]     Requirement already satisfied: requests-oauthlib>=0.7.0 in .\.venv\Lib\site-packages (from google-auth-oauthlib>=1.1.0->shorts-engine==0.1.0) (2.0.0)
+[13:11:59]     Requirement already satisfied: tenacity<9.2.0,>=8.2.3 in .\.venv\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (9.1.4)
+[13:11:59]     Requirement already satisfied: websockets<17.0,>=13.0.0 in .\.venv\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (16.1.1)
+[13:11:59]     Requirement already satisfied: distro<2,>=1.7.0 in .\.venv\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (1.9.0)
+[13:11:59]     Requirement already satisfied: sniffio in .\.venv\Lib\site-packages (from google-genai>=1.0.0->shorts-engine==0.1.0) (1.3.1)
+[13:11:59]     Requirement already satisfied: annotated-types>=0.6.0 in .\.venv\Lib\site-packages (from pydantic>=2.5.0->shorts-engine==0.1.0) (0.8.0)
+[13:11:59]     Requirement already satisfied: pydantic-core==2.46.5 in .\.venv\Lib\site-packages (from pydantic>=2.5.0->shorts-engine==0.1.0) (2.46.5)
+[13:11:59]     Requirement already satisfied: MarkupSafe>=2.0 in .\.venv\Lib\site-packages (from jinja2>=3.1.0->shorts-engine==0.1.0) (3.0.4)
+[13:11:59]     Requirement already satisfied: pyasn1<0.7.0,>=0.6.1 in .\.venv\Lib\site-packages (from pyasn1-modules>=0.2.1->google-auth<3,>=2.14.0->shorts-engine==0.1.0) (0.6.4)
+[13:11:59]     Requirement already satisfied: python-dotenv>=0.21.0 in .\.venv\Lib\site-packages (from pydantic-settings>=2.1.0->shorts-engine==0.1.0) (1.2.4)
+[13:11:59]     Requirement already satisfied: oauthlib>=3.0.0 in .\.venv\Lib\site-packages (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=1.1.0->shorts-engine==0.1.0) (4.0.0)
+[13:11:59]     Requirement already satisfied: markdown-it-py>=2.2.0 in .\.venv\Lib\site-packages (from rich>=13.0.0->shorts-engine==0.1.0) (4.2.0)
+[13:11:59]     Requirement already satisfied: pygments<3.0.0,>=2.13.0 in .\.venv\Lib\site-packages (from rich>=13.0.0->shorts-engine==0.1.0) (2.21.0)
+[13:11:59]     Requirement already satisfied: mdurl~=0.1 in .\.venv\Lib\site-packages (from markdown-it-py>=2.2.0->rich>=13.0.0->shorts-engine==0.1.0) (0.1.2)
+[13:11:59]     Requirement already satisfied: joblib>=1.4.0 in .\.venv\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (1.6.0)
+[13:11:59]     Requirement already satisfied: narwhals>=2.0.1 in .\.venv\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (2.26.0)
+[13:11:59]     Requirement already satisfied: threadpoolctl>=3.5.0 in .\.venv\Lib\site-packages (from scikit-learn>=1.4.0->shorts-engine==0.1.0) (3.7.0)
+[13:11:59]     Requirement already satisfied: cloudpickle>=3.0 in .\.venv\Lib\site-packages (from joblib>=1.4.0->scikit-learn>=1.4.0->shorts-engine==0.1.0) (3.1.2)
+[13:11:59]     Requirement already satisfied: setuptools>=77.0.3 in .\.venv\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (84.0.0)
+[13:11:59]     Requirement already satisfied: sympy>=1.13.3 in .\.venv\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (1.14.0)
+[13:11:59]     Requirement already satisfied: networkx>=2.5.1 in .\.venv\Lib\site-packages (from torch>=2.0.0->shorts-engine==0.1.0) (3.6.1)
+[13:11:59]     Requirement already satisfied: mpmath<1.4,>=1.1.0 in .\.venv\Lib\site-packages (from sympy>=1.13.3->torch>=2.0.0->shorts-engine==0.1.0) (1.3.0)
+[13:11:59]     Requirement already satisfied: colorama in .\.venv\Lib\site-packages (from tqdm->faster-whisper>=1.0.0->shorts-engine==0.1.0) (0.4.6)
+[13:11:59]     Requirement already satisfied: shellingham>=1.3.0 in .\.venv\Lib\site-packages (from typer>=0.9.0->shorts-engine==0.1.0) (1.5.4)
+[13:12:00]     Downloading watchdog-6.0.0-py3-none-win_amd64.whl (79 kB)
+[13:12:02]     Building wheels for collected packages: shorts-engine
+[13:12:02]       Building editable for shorts-engine (pyproject.toml): started
+[13:12:03]       Building editable for shorts-engine (pyproject.toml): finished with status 'done'
+[13:12:03]       Created wheel for shorts-engine: filename=shorts_engine-0.1.0-0.editable-py3-none-any.whl size=7140 sha256=47a02d0fb6a7d42313c676358943dc4d6a15d38e16e5e7809e5c7ff0eada7500
+[13:12:03]       Stored in directory: C:\Users\MUHAMMAD BILAL\AppData\Local\Temp\pip-ephem-wheel-cache-gqci464k\wheels\be\70\8d\6221ab821768d53cdd1ee708ac8b6d4727c0f2fdb8b5f49f67
+[13:12:03]     Successfully built shorts-engine
+[13:12:03]     Installing collected packages: watchdog, shorts-engine
+[13:12:04]     Successfully installed shorts-engine-0.1.0 watchdog-6.0.0
+[13:12:04]    exit=0 timedOut=False stalled=False seconds=33.7
+[13:12:04]   [OK]   shorts_engine installed in editable mode
+[13:12:04]          No NVIDIA GPU detected - using CPU PyTorch (re-run with -GPU to force a CUDA install).
+[13:12:04]          -> step finished: OK in 38:46
+[13:12:04] [ 7/13] Environment Configuration (.env)
+[13:12:04]          .env exists (5973 bytes) - checking encoding and scanning for insecure placeholder secrets...
+[13:12:04]   [OK]   .env contains no placeholder secrets - your values were preserved untouched
+[13:12:04]   +-----------------------------------------------------------------+
+[13:12:04]   |  ACTION REQUIRED: add at least one free AI API key to .env       |
+[13:12:04]   |   GROQ_API_KEYS       https://console.groq.com/keys              |
+[13:12:04]   |   GEMINI_API_KEYS     https://aistudio.google.com/app/apikey    |
+[13:12:04]   |   OPENROUTER_API_KEYS https://openrouter.ai/keys                 |
+[13:12:04]   +-----------------------------------------------------------------+
+[13:12:04]          File: F:\YT\YT AUTOMATION\.env
+[13:12:04]          -> step finished: OK in 00:00
+[13:12:04] [ 8/13] Folders, Assets & Launchers
+[13:12:05]   [OK]   Created: tools\ffmpeg
+[13:12:05]   [OK]   Created: tools\ffmpeg\bin
+[13:12:05]   [OK]   Created: tools\launchers
+[13:12:05]   [OK]   Launcher: tools\launchers\run_dashboard.bat
+[13:12:05]   [OK]   Launcher: tools\launchers\run_worker.bat
+[13:12:05]          -> step finished: OK in 00:00
+[13:12:05] [ 9/13] Database Initialisation
+[13:12:05]          Running setup_environment.py ...
+[13:12:05] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe "F:\YT\YT AUTOMATION\setup_environment.py"
+[13:12:05]     
+[13:12:05]     ==============================================================================
+[13:12:05]          *** YOUTUBE SHORTS AUTOMATION - ENVIRONMENT SETUP & BOOTSTRAP ***
+[13:12:05]     ==============================================================================
+[13:12:05]     
+[13:12:05]     [1/7] Checking Python version...
+[13:12:05]       [OK] Python 3.11.9 (Recommended version)
+[13:12:05]     
+[13:12:05]     [2/7] Checking FFmpeg & FFprobe media tools...
+[13:12:05]       [OK] ffmpeg found:  C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WinGet\Links\ffmpeg.EXE
+[13:12:05]       [OK] ffprobe found: C:\Users\MUHAMMAD BILAL\AppData\Local\Microsoft\WinGet\Links\ffprobe.EXE
+[13:12:05]     
+[13:12:05]     [3/7] Initializing storage and asset directory structure...
+[13:12:05]       [OK] Directory verified: storage
+[13:12:05]       [OK] Directory verified: storage\downloads
+[13:12:05]       [OK] Directory verified: storage\outputs
+[13:12:05]       [OK] Directory verified: storage\temp
+[13:12:05]       [OK] Directory verified: storage\thumbnails
+[13:12:05]       [OK] Directory verified: storage\models
+[13:12:05]       [OK] Directory verified: storage\logs
+[13:12:05]       [OK] Directory verified: storage\config
+[13:12:05]       [OK] Directory verified: assets
+[13:12:05]       [OK] Directory verified: assets\sfx_library
+[13:12:05]     
+[13:12:05]     [4/7] Checking environment configuration (.env)...
+[13:12:05]       [OK] Existing '.env' found (5973 bytes). Preserving your settings.
+[13:12:05]     
+[13:12:05]     [5/7] Checking core Python dependencies...
+[13:12:06]       [OK] FastAPI
+[13:12:07]       [OK] Uvicorn
+[13:12:07]       [OK] Pydantic
+[13:12:07]       [OK] SQLAlchemy
+[13:12:07]       [OK] HTTPX
+[13:12:11]       [OK] Faster-Whisper
+[13:12:11]       [OK] Typer
+[13:12:11]       [OK] Rich
+[13:12:11]     
+[13:12:11]     [6/7] Initializing database schema & admin account...
+[13:12:11]       [ERROR] Database initialization failed: error parsing value for field "GEMINI_API_KEYS" from source "DotEnvSettingsSource"
+[13:12:11]       Please check that all dependencies are installed ('pip install -r requirements.txt')
+[13:12:11]     
+[13:12:11]     ==============================================================================
+[13:12:11]                     *** SETUP & VERIFICATION COMPLETED ***
+[13:12:11]     ==============================================================================
+[13:12:11]     Your YouTube Shorts Automation environment is ready!
+[13:12:11]     
+[13:12:11]     Next Steps to Run the Platform:
+[13:12:11]     ------------------------------------------------------------------------------
+[13:12:11]     1. Launch the Operator Dashboard:
+[13:12:11]          python run.py dashboard
+[13:12:11]        Then open your browser at:
+[13:12:11]          http://127.0.0.1:8000/
+[13:12:11]        Default Login:
+[13:12:11]          Username: admin
+[13:12:11]          Password: AdminPass12345!
+[13:12:11]     
+[13:12:11]     2. Start the Background Rendering Worker (in a separate terminal):
+[13:12:11]          python run.py worker
+[13:12:11]     
+[13:12:11]     3. Run Automated Healthcheck & Test Suite:
+[13:12:11]          python -m pytest tests -q
+[13:12:11]     
+[13:12:11]     4. Ingest & Process a Test Video via CLI:
+[13:12:11]          python run.py process --video "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
+[13:12:11]     
+[13:12:11]     For complete documentation, see: SETUP_GUIDE.md
+[13:12:11]     ==============================================================================
+[13:12:11]     
+[13:12:11]    exit=0 timedOut=False stalled=False seconds=6.7
+[13:12:11]   [OK]   Database initialised via setup_environment.py
+[13:12:12]          runtime_settings.json is valid
+[13:12:12]          -> step finished: OK in 00:07
+[13:12:12] [10/13] Port Availability
+[13:12:13]   [OK]   Port 8000 is free
+[13:12:13]          -> step finished: OK in 00:01
+[13:12:13] [11/13] Import Verification & Self-Repair
+[13:12:13]          Importing 27 modules (PyTorch and Faster-Whisper take longest, 5-30 s)...
+[13:12:13] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe "F:\YT\YT AUTOMATION\tools\_tmp\verify_imports.py" fastapi uvicorn starlette jinja2 httpx pydantic pydantic_settings sqlalchemy cryptography numpy cv2 PIL scipy sklearn yt_dlp groq google.genai googleapiclient google_auth_oauthlib typer rich psutil onnxruntime ctranslate2 torch faster_whisper shorts_engine
+[13:12:14]     IMPORT|fastapi|OK|0.77
+[13:12:15]     IMPORT|uvicorn|OK|0.14
+[13:12:15]     IMPORT|starlette|OK|0.00
+[13:12:15]     IMPORT|jinja2|OK|0.13
+[13:12:15]     IMPORT|httpx|OK|0.17
+[13:12:15]     IMPORT|pydantic|OK|0.00
+[13:12:15]     IMPORT|pydantic_settings|OK|0.09
+[13:12:15]     IMPORT|sqlalchemy|OK|0.29
+[13:12:15]     IMPORT|cryptography|OK|0.00
+[13:12:15]     IMPORT|numpy|OK|0.17
+[13:12:16]     IMPORT|cv2|OK|0.41
+[13:12:16]     IMPORT|PIL|OK|0.01
+[13:12:16]     IMPORT|scipy|OK|0.08
+[13:12:24]     IMPORT|sklearn|OK|7.66
+[13:12:24]     IMPORT|yt_dlp|OK|0.53
+[13:12:24]     IMPORT|groq|OK|0.11
+[13:12:25]     IMPORT|google.genai|OK|0.53
+[13:12:25]     IMPORT|googleapiclient|OK|0.01
+[13:12:25]     IMPORT|google_auth_oauthlib|OK|0.44
+[13:12:25]     IMPORT|typer|OK|0.13
+[13:12:25]     IMPORT|rich|OK|0.00
+[13:12:25]     IMPORT|psutil|OK|0.00
+[13:12:26]     IMPORT|onnxruntime|OK|0.22
+[13:12:26]     IMPORT|ctranslate2|OK|0.02
+[13:12:30]     IMPORT|torch|OK|4.44
+[13:12:30]     IMPORT|faster_whisper|OK|0.16
+[13:12:30]     IMPORT|shorts_engine|OK|0.00
+[13:12:31]    exit=0 timedOut=False stalled=False seconds=17.7
+[13:12:31]   [OK]   All 27 critical modules import correctly
+[13:12:31] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe -c "import torch;print('TORCHINFO|%s|%s' % (torch.__version__, torch.cuda.is_available()))"
+[13:12:35]     TORCHINFO|2.14.1+cpu|False
+[13:12:35]    exit=0 timedOut=False stalled=False seconds=3.8
+[13:12:35]          PyTorch 2.14.1+cpu, CUDA available: False
+[13:12:35]   [OK]   FFmpeg is available
+[13:12:35]          -> step finished: OK in 00:21
+[13:12:35] [12/13] Live Server Smoke Test
+[13:12:35]          Starting the real dashboard (python run.py dashboard) on port 8000 to prove it boots...
+[13:12:35] >> F:\YT\YT AUTOMATION\.venv\Scripts\python.exe "F:\YT\YT AUTOMATION\run.py" dashboard
+[13:12:36]     Traceback (most recent call last):
+[13:12:36]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\base.py", line 608, in __call__
+[13:12:36]         field_value = self.prepare_field_value(field_name, field, field_value, value_is_complex)
+[13:12:36]                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:36]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\providers\env.py", line 150, in prepare_field_value
+[13:12:36]         value = self.decode_complex_value(field_name, field, value)
+[13:12:36]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:36]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\base.py", line 208, in decode_complex_value
+[13:12:36]         return json.loads(value)
+[13:12:36]                ^^^^^^^^^^^^^^^^^
+[13:12:36]       File "C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\Lib\json\__init__.py", line 346, in loads
+[13:12:36]         return _default_decoder.decode(s)
+[13:12:36]                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:36]       File "C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\Lib\json\decoder.py", line 337, in decode
+[13:12:36]         obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+[13:12:36]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:36]       File "C:\Users\MUHAMMAD BILAL\AppData\Local\Python\pythoncore-3.11-64\Lib\json\decoder.py", line 355, in raw_decode
+[13:12:36]         raise JSONDecodeError("Expecting value", s, err.value) from None
+[13:12:36]     json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+[13:12:36]     
+[13:12:36]     The above exception was the direct cause of the following exception:
+[13:12:36]     
+[13:12:36]     Traceback (most recent call last):
+[13:12:36]       File "F:\YT\YT AUTOMATION\run.py", line 30, in <module>
+[13:12:36]         from cli import app  # noqa: E402
+[13:12:38]         ^^^^^^^^^^^^^^^^^^^
+[13:12:38]       File "F:\YT\YT AUTOMATION\cli.py", line 23, in <module>
+[13:12:38]         from shorts_engine.config.settings import settings
+[13:12:38]       File "F:\YT\YT AUTOMATION\shorts_engine\config\settings.py", line 588, in <module>
+[13:12:38]         settings = PipelineSettings()
+[13:12:38]                    ^^^^^^^^^^^^^^^^^^
+[13:12:38]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\main.py", line 262, in __init__
+[13:12:38]         super().__init__(**__pydantic_self__.__class__._settings_build_values(sources, init_kwargs))
+[13:12:38]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:38]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\main.py", line 498, in _settings_build_values
+[13:12:38]         source_state = source()
+[13:12:38]                        ^^^^^^^^
+[13:12:38]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\providers\dotenv.py", line 123, in __call__
+[13:12:38]         data: dict[str, Any] = super().__call__()
+[13:12:38]                                ^^^^^^^^^^^^^^^^^^
+[13:12:38]       File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\base.py", line 610, in __call__
+[13:12:38]         raise SettingsError(
+[13:12:38]     pydantic_settings.exceptions.SettingsError: error parsing value for field "GEMINI_API_KEYS" from source "DotEnvSettingsSource"
+[13:12:39]    exit=1 timedOut=False stalled=False seconds=3.5
+[13:12:39]   [WARN] Dashboard exited during startup (exit 1): pydantic_settings.exceptions.SettingsError: error parsing value for field "GEMINI_API_KEYS" from source "DotEnvSettingsSource"
+[13:12:39]          |   File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\main.py", line 262, in __init__
+[13:12:39]          |     super().__init__(**__pydantic_self__.__class__._settings_build_values(sources, init_kwargs))
+[13:12:39]          |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[13:12:39]          |   File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\main.py", line 498, in _settings_build_values
+[13:12:39]          |     source_state = source()
+[13:12:39]          |                    ^^^^^^^^
+[13:12:39]          |   File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\providers\dotenv.py", line 123, in __...
+[13:12:39]          |     data: dict[str, Any] = super().__call__()
+[13:12:39]          |                            ^^^^^^^^^^^^^^^^^^
+[13:12:39]          |   File "F:\YT\YT AUTOMATION\.venv\Lib\site-packages\pydantic_settings\sources\base.py", line 610, in __call__
+[13:12:39]          |     raise SettingsError(
+[13:12:39]          | pydantic_settings.exceptions.SettingsError: error parsing value for field "GEMINI_API_KEYS" from source "DotEnvSett...
+[13:12:39]   [HINT] Check storage\logs and run:  .\.venv\Scripts\python.exe run.py dashboard  to see the full error.
+[13:12:39]          -> step finished: WARN in 00:03
+[13:12:39] [13/13] Setup Summary & Next Steps
+[13:12:39]          -> step finished: OK in 00:00
+[13:12:39] Setup finished. Errors: 0  Warnings: 3  Elapsed: 39:53
