@@ -5,9 +5,9 @@ Supports both 1-click Google OAuth redirect (/oauth2callback) and manual code pa
 
 import logging
 import urllib.parse
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 

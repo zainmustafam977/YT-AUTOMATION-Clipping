@@ -3,8 +3,6 @@ Tests for Component 2: Multi-Platform Resilient Syndication Engine
 (YouTube Shorts, TikTok Content Posting API v2, Instagram Reels Graph API)
 """
 
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy import create_engine
@@ -13,10 +11,10 @@ from sqlalchemy.pool import StaticPool
 
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, Channel, PlatformPublishLog
-from shorts_engine.services.publishing.base import BasePlatformPublisher, PlatformPublishResult
+from shorts_engine.services.publishing.base import PlatformPublishResult
 from shorts_engine.services.publishing.tiktok import TikTokPublisher
 from shorts_engine.services.publishing.instagram import InstagramReelsPublisher
-from shorts_engine.services.publishing.manager import MultiPlatformSyndicator, YouTubePlatformAdapter
+from shorts_engine.services.publishing.manager import MultiPlatformSyndicator
 
 
 @pytest.fixture

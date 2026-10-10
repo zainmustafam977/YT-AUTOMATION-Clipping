@@ -1,5 +1,4 @@
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 from shorts_engine.services.ingestion.downloader import IngestionService
 
 

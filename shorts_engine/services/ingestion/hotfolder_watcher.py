@@ -5,7 +5,6 @@ verifies byte stability & Win32 non-exclusive file lock release, and automatical
 registers them as SourceVideo records via LocalVideoIngestionService.
 """
 
-import os
 import time
 import shutil
 import asyncio

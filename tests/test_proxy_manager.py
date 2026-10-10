@@ -14,9 +14,6 @@ import httpx
 
 from shorts_engine.services.ingestion.proxy_manager import (
     ProxyManager,
-    get_next_proxy,
-    handle_429_rate_limit,
-    get_proxy_status,
 )
 
 

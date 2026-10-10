@@ -14,10 +14,8 @@ Verifies:
 
 import os
 import logging
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from shorts_engine.services.quality_gate.recovery import ClipRecoveryService

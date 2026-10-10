@@ -2,12 +2,10 @@
 Tests for Component 4: Machine Learning Viral Score Predictor (ViralPredictor)
 """
 
-import pytest
 import numpy as np
 from unittest.mock import MagicMock
 
 from shorts_engine.services.analytics.predictor import ViralPredictor
-from shorts_engine.db.models import Clip, ClipCandidate, ClipStatus
 
 
 def test_feature_extraction_dimensions():

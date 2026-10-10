@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from shorts_engine.services.monitoring.alerter import PipelineAlerter
 
 

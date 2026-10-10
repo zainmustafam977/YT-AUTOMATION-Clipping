@@ -1,6 +1,5 @@
 from pathlib import Path
 import yaml
-import pytest
 
 
 def test_ci_workflow_has_timeout_minutes_on_all_jobs():

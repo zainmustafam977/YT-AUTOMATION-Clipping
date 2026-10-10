@@ -4,7 +4,7 @@ and last_seen_video_id write verification.
 """
 
 import json
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -38,7 +38,8 @@ def _make_approved_clip(db):
     db.add(cand)
     db.flush()
 
-    import tempfile, pathlib
+    import tempfile
+    import pathlib
     tmp = pathlib.Path(tempfile.mktemp(suffix=".mp4"))
     tmp.write_bytes(b"\x00" * 1024)  # non-empty placeholder
 

@@ -1,5 +1,4 @@
-import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 import typer
 from sqlalchemy import create_engine

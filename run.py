@@ -19,7 +19,7 @@ def _init_sentry() -> None:
                 dsn=settings.SENTRY_DSN,
                 traces_sample_rate=0.1,
                 environment=settings.ENV,
-                release=f"shorts-engine@2.0.0",
+                release="shorts-engine@2.0.0",
             )
     except Exception:
         pass  # Never let Sentry init crash the application

@@ -11,18 +11,16 @@ Enforces:
 - Manual calibration support via POST /api/quota/calibrate.
 """
 
-import json
 import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import QuotaLedger, PublishJob, PublishLog
+from shorts_engine.db.models import QuotaLedger
 
 logger = logging.getLogger(__name__)
 

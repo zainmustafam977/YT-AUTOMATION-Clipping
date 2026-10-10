@@ -8,7 +8,6 @@ Unit and integration tests for Phase 3:
 
 import json
 from unittest.mock import MagicMock, patch
-import pytest
 from pydantic import BaseModel, Field
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -16,17 +15,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shorts_engine.config.settings import settings
-from shorts_engine.config.logging_config import reload_runtime_settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import User, UserRole
 from shorts_engine.dashboard.app import create_dashboard_app
-from shorts_engine.dashboard.routes import settings as settings_route
-from shorts_engine.dashboard.auth import get_current_user, require_operator, require_viewer, require_admin, verify_csrf
+from shorts_engine.dashboard.auth import get_current_user, require_operator, require_viewer, verify_csrf
 from shorts_engine.services.llm.router import LLMRouter
-from shorts_engine.services.clip_selection.prompts import CandidateSegmentsResponse, CandidateSegmentSchema
 from shorts_engine.services.clip_selection.selector import ClipSelectionService
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
-from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier, SemanticVerificationSchema
+from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier
 
 
 class DummySchema(BaseModel):

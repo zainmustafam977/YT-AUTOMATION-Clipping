@@ -6,7 +6,6 @@ and Two-Tier Analytics Ingestion with graceful scope degradation.
 from unittest.mock import MagicMock
 from shorts_engine.services.ab_testing.title_generator import (
     TitleGenerator,
-    TitleArchetype,
     TitleVariantSet,
 )
 from shorts_engine.services.ab_testing.analytics_ingestion import (

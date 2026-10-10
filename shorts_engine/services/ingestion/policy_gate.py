@@ -195,7 +195,7 @@ class PolicyGate:
         - 'two_tier': if authenticated, allows download with SENSITIVE_CONTENT badge; if unauthenticated, fails fast with POLICY_RESTRICTED (0 retry burns).
         """
         mode = (policy_mode or getattr(settings, "INGESTION_POLICY_MODE", "two_tier")).lower().strip()
-        has_auth = self_has_auth = auth_available if auth_available is not None else cls.has_vault_authentication()
+        has_auth = auth_available if auth_available is not None else cls.has_vault_authentication()
 
         result = PolicyResult(video_id=video_id)
 

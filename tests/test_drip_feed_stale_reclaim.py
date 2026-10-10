@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 import pytest
@@ -7,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shorts_engine.db.models import (
-    Base, Channel, SourceVideo, ClipCandidate, Clip, ClipStatus, PublishLog
+    Base, Channel, SourceVideo, ClipCandidate, Clip, ClipStatus
 )
 from shorts_engine.db.security import encrypt_secret
 from shorts_engine.services.publishing.drip_feed import (

@@ -19,7 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Channel, User, ChannelCredential, PendingOAuthMismatch
+from shorts_engine.db.models import Channel, User, PendingOAuthMismatch
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
 
 import re

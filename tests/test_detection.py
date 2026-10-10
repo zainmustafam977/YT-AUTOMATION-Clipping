@@ -5,9 +5,8 @@ and new-video idempotency.
 
 import hashlib
 import hmac
-import time
 import xml.etree.ElementTree as ET
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

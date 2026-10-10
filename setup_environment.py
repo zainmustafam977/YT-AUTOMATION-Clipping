@@ -170,7 +170,6 @@ def check_python_dependencies():
 def initialize_database_and_admin(root_dir: Path):
     print("\n[6/7] Initializing database schema & admin account...")
     try:
-        from shorts_engine.config.settings import settings
         from shorts_engine.db.session import init_db, SessionLocal
         from shorts_engine.db.models import User, UserRole
         from shorts_engine.dashboard.auth import hash_password
@@ -198,10 +197,10 @@ def initialize_database_and_admin(root_dir: Path):
                 )
                 db.add(new_admin)
                 db.commit()
-                print(f"  [OK] Successfully created default administrator:")
+                print("  [OK] Successfully created default administrator:")
                 print(f"         Username: {default_user}")
                 print(f"         Password: {default_pass}")
-                print(f"         Role:     admin")
+                print("         Role:     admin")
     except Exception as e:
         print(f"  [ERROR] Database initialization failed: {e}")
         print("  Please check that all dependencies are installed ('pip install -r requirements.txt')")

@@ -4,8 +4,6 @@ Tests for expanded 8-category SFX library, procedural audio synthesis fallback, 
 
 import wave
 import logging
-from pathlib import Path
-from unittest.mock import patch
 
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.captioning.sfx_mapper import (
@@ -13,7 +11,6 @@ from shorts_engine.services.captioning.sfx_mapper import (
     KEYWORD_SFX_MAP,
     generate_synthetic_sfx,
     resolve_sfx_path,
-    SFX_MISSING_ASSET_ALERT_COUNT,
 )
 
 

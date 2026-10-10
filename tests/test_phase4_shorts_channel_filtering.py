@@ -6,8 +6,7 @@ Unit and integration tests for Phase 4:
 - YouTube channel clickable links on /channels and / (Status)
 """
 
-from unittest.mock import MagicMock, patch
-from pathlib import Path
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

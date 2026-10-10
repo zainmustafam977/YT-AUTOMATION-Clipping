@@ -14,12 +14,10 @@ from unittest.mock import patch, MagicMock
 from shorts_engine.db.models import ClipStatus
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
 from shorts_engine.services.quality_gate.render_inspector import RenderInspector
-from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
 from shorts_engine.services.clip_selection.boundaries import BoundarySnapper
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
 from shorts_engine.services.reframing.detector import DetectedFace
-from shorts_engine.services.llm.router import LLMRouter
 
 
 @pytest.fixture(scope="module")

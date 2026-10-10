@@ -1,6 +1,5 @@
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
-import pytest
 from shorts_engine.services.ab_testing.analytics_ingestion import AnalyticsIngestionService
 
 

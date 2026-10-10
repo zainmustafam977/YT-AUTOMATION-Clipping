@@ -1,6 +1,4 @@
-import os
 import sqlite3
-import gzip
 import pytest
 from pathlib import Path
 from shorts_engine.services.storage.backup_manager import DatabaseBackupManager

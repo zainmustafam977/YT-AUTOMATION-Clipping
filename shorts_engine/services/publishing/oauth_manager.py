@@ -37,7 +37,7 @@ from shorts_engine.db.models import (
     generate_uuid,
 )
 from shorts_engine.db.security import encrypt_secret, decrypt_secret
-from shorts_engine.services.publishing.quota import QuotaTracker, CHANNELS_LIST_COST_UNITS
+from shorts_engine.services.publishing.quota import QuotaTracker
 
 logger = logging.getLogger(__name__)
 

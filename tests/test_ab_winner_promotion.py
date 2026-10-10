@@ -3,8 +3,7 @@ Unit & Integration Tests for Component 4: Bayesian Multi-Armed Bandit A/B Winner
 (Conjugate Beta-Binomial Updating, Velocity Scoring, 95% Confidence Gate, Circuit Breaker Rollback)
 """
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, Channel, PublishLog
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer
-from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip, check_and_promote_ab_winners
+from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip
 
 
 @pytest.fixture

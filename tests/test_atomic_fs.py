@@ -1,14 +1,11 @@
 import os
-import sys
 import json
 import time
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 def test_fs_is_strict_leaf_module():
     """Verify that shorts_engine.utils.fs imports only standard library, zero project imports."""
-    import importlib
     import shorts_engine.utils.fs as fs_mod
 
     # Inspect module globals and imported modules

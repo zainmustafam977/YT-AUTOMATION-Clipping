@@ -4,9 +4,9 @@ Tests for PostgreSQL dialect detection, connection pooling configuration, and M3
 
 from pathlib import Path
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool, QueuePool
+from sqlalchemy.pool import StaticPool
 
-from shorts_engine.db.session import is_postgres, engine
+from shorts_engine.db.session import is_postgres
 
 
 def test_dialect_detection():

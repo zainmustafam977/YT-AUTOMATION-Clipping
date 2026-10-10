@@ -7,8 +7,6 @@ Unit tests validating the 100% Zero-Cost Resilient Architecture:
 - Zero-cost viral thumbnail generator with HDR pop & safe-zone typography
 """
 
-import json
-import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PIL import Image

@@ -2,7 +2,7 @@
 Tests for decoupled worker queue locking, CUDA cache flushing, and job execution.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

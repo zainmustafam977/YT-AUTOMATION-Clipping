@@ -5,7 +5,7 @@ Unit and Integration Tests for Content Calendar Routes:
 - Tests /api/calendar/reschedule/{clip_id} drag-and-drop endpoint
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

@@ -3,9 +3,7 @@ Unit and integration tests for Multi-Key LLM Routing, API Quota Tracker, and Pre
 """
 
 import json
-import time
 from unittest.mock import MagicMock, patch
-import pytest
 from pydantic import BaseModel, Field
 from fastapi.testclient import TestClient
 
@@ -21,8 +19,6 @@ from shorts_engine.db.models import (
     SourceVideo,
     SourceVideoStatus,
     ClipCandidate,
-    Clip,
-    ClipStatus,
 )
 
 
@@ -283,7 +279,6 @@ def test_settings_key_management_methods():
 def test_settings_keys_endpoints():
     from shorts_engine.services.llm.quota_tracker import hash_api_key
     from shorts_engine.dashboard.auth import require_operator, verify_csrf
-    import httpx
 
     app = create_dashboard_app()
     mock_op = User(

@@ -1,6 +1,4 @@
 import pytest
-from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -8,8 +6,6 @@ from shorts_engine.db.session import Base
 from shorts_engine.services.publishing.quota import (
     QuotaTracker,
     get_pacific_day_bounds,
-    UPLOAD_COST_UNITS,
-    CHANNELS_LIST_COST_UNITS,
 )
 from shorts_engine.db.models import QuotaLedger
 

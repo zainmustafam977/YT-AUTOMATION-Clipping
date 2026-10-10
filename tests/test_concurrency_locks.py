@@ -7,7 +7,6 @@ Tests for Phase 1: Concurrency Protection & Pipeline Queue Hardening.
 - Test logging is isolated to shorts_engine_test.log
 """
 
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +14,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import is_test_environment, get_log_file_path, TEST_LOG_FILE_PATH
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus, ClipCandidate, Clip, ClipStatus, User, UserRole

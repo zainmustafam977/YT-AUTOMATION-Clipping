@@ -6,25 +6,23 @@ AI title generator, and publishing outbox history.
 
 import json
 import logging
-import os
 import shutil
 import time
-import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from shorts_engine.dashboard.auth import require_operator, require_viewer, get_csrf_token
+from shorts_engine.dashboard.auth import require_operator, require_viewer
 from shorts_engine.dashboard.routes.queue import get_db
 from shorts_engine.db.models import (
     Clip, ClipStatus, ClipCandidate, SourceVideo, Channel, User, PublishLog,
-    PublishJob, PublishJobStatus, QuotaLedger
+    PublishJob
 )
 from shorts_engine.services.publishing.client import YouTubePublisher
 from shorts_engine.services.publishing.metadata import ShortsMetadata

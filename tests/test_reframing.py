@@ -5,7 +5,7 @@ Unit tests for reframing, smoothing, and active speaker selection.
 from shorts_engine.services.reframing.detector import DetectedFace
 from shorts_engine.services.reframing.smoothing import CropSmoother
 from shorts_engine.services.reframing.active_speaker import ActiveSpeakerSelector
-from shorts_engine.services.reframing.cropper import VideoReframer, CropPlan
+from shorts_engine.services.reframing.cropper import VideoReframer
 
 
 def test_crop_smoother_clamping():

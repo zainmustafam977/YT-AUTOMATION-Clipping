@@ -1,13 +1,10 @@
-import os
 import sys
 import time
 import pytest
-from pathlib import Path
 from shorts_engine.services.execution.watchdog import (
     SubprocessWatchdog,
     SubprocessTimeoutError,
     SubprocessExecutionError,
-    ExecutionResult,
 )
 
 

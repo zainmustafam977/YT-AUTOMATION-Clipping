@@ -7,9 +7,6 @@ Verifies:
 4. Preview proxy necessity detection for incompatible codecs (HEVC, ProRes, AV1, MKV).
 """
 
-import os
-import time
-import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -19,7 +16,7 @@ from shorts_engine.services.ingestion.local_loader import (
     LocalVideoIngestionService,
     is_preview_proxy_needed,
 )
-from shorts_engine.db.models import SourceVideo, SourceVideoStatus
+from shorts_engine.db.models import SourceVideo
 
 
 # ---------------------------------------------------------------------------

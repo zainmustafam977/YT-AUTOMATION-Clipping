@@ -11,17 +11,15 @@ Unit tests validating all architectural enhancements from the log audit:
 
 import time
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from starlette.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
 from shorts_engine.services.llm.router import LLMRouter
 from shorts_engine.services.clip_selection.selector import ClipSelectionService
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
 from shorts_engine.services.ingestion.downloader import IngestionService
-from shorts_engine.services.rendering.compositor import get_best_video_encoder, VideoCompositor
+from shorts_engine.services.rendering.compositor import get_best_video_encoder
 from shorts_engine.orchestration.runner import PipelineResult
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.auth import create_session_token, generate_csrf_token, SESSION_COOKIE_NAME

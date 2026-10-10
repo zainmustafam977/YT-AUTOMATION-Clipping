@@ -1,5 +1,4 @@
 import logging
-import pytest
 from unittest.mock import MagicMock
 from shorts_engine.services.monitoring.analytics_sync import YouTubeAnalyticsSync
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog, ClipCandidate, SourceVideo

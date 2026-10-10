@@ -4,7 +4,7 @@ no-op when notification channels are unconfigured.
 """
 
 import json
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from shorts_engine.services.monitoring.alerter import PipelineAlerter
 
 

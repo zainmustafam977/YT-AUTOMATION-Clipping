@@ -1,6 +1,4 @@
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier

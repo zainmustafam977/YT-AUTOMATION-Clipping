@@ -10,22 +10,15 @@ Unit and failure-injection tests for production reliability enhancements:
 - Technical Quality Gate duration bounds clamping
 """
 
-import os
-import gc
 import json
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
-import pytest
+from unittest.mock import patch, MagicMock
 
-from shorts_engine.services.ingestion.downloader import IngestionService, VideoDownloadResult
+from shorts_engine.services.ingestion.downloader import IngestionService
 from shorts_engine.services.llm.router import LLMRouter
 from shorts_engine.services.clip_selection.boundaries import BoundarySnapper
-from shorts_engine.services.clip_selection.selector import ClipSelectionService, SelectedClip
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
-from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
 from shorts_engine.orchestration.runner import PipelineRunner
-from shorts_engine.db.models import SourceVideo, SourceVideoStatus, Channel, Clip, ClipStatus
+from shorts_engine.db.models import SourceVideo, SourceVideoStatus, Channel
 
 
 # ---------------------------------------------------------------------------

@@ -1,12 +1,8 @@
-import os
-import json
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from shorts_engine.services.quality_gate.recovery import ClipRecoveryService, TrimmerProtocol
+from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
 from shorts_engine.db.models import Clip, ClipCandidate, SourceVideo
-from shorts_engine.services.execution.watchdog import ExecutionResult
 
 
 def test_recovery_service_decoupled_from_rendering():

@@ -5,8 +5,6 @@ Also verifies that Basic Auth is enforced on protected routes.
 """
 
 import json
-import pytest
-from base64 import b64encode
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

@@ -7,8 +7,6 @@ Unit and Integration Tests for DripFeedDaemon and Background Publishing:
 """
 
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -16,8 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, PublishLog
-from shorts_engine.services.publishing.drip_feed import check_and_publish_due_clips, build_clip_metadata, DripFeedDaemon
-from shorts_engine.config.settings import settings
+from shorts_engine.services.publishing.drip_feed import check_and_publish_due_clips, build_clip_metadata
 
 
 @pytest.fixture

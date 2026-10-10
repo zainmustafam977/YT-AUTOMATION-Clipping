@@ -28,8 +28,6 @@ from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.routes import status as status_route
 from shorts_engine.dashboard.routes import queue as queue_route
 from shorts_engine.dashboard.routes import channels as channels_route
-from shorts_engine.dashboard.routes import settings as settings_route
-from shorts_engine.dashboard.routes import logs as logs_route
 from shorts_engine.dashboard.auth import get_current_user, require_operator, require_viewer, require_admin, verify_csrf
 
 

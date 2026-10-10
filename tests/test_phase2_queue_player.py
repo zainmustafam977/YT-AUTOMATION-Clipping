@@ -10,14 +10,12 @@ Tests for Phase 2:
 """
 
 import json
-from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus, ClipCandidate, Clip, ClipStatus, User, UserRole
 from shorts_engine.dashboard.app import create_dashboard_app

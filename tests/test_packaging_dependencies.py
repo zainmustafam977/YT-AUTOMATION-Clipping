@@ -1,6 +1,5 @@
 import tomllib
 from pathlib import Path
-import pytest
 
 
 def test_pyproject_toml_contains_all_core_requirements():

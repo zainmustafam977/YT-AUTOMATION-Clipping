@@ -5,7 +5,6 @@ Netscape format at storage/harvester_cookies.txt.
 Supports headless Playwright with high-fidelity HTTP fallback.
 """
 
-import os
 import time
 import logging
 from pathlib import Path

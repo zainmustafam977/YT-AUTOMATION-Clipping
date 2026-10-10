@@ -8,18 +8,14 @@ Comprehensive unit and integration tests for Phase 3 Studio-Grade Architecture:
 - Runtime Settings Hot-Reload & HTMX Interactivity
 """
 
-import json
 import uuid
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from starlette.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
 from shorts_engine.services.storage.path_manager import slugify, PathManager
 from shorts_engine.services.captioning.templates import (
-    CaptionStyleTemplate,
     BUILTIN_TEMPLATES,
     hex_to_ass_color,
     ass_to_hex_color,

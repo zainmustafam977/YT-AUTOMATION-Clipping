@@ -18,7 +18,7 @@ import random
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from googleapiclient.errors import HttpError
 import google.oauth2.credentials
@@ -35,12 +35,10 @@ from shorts_engine.db.models import (
     PublishJobStatus,
     PublishLog,
     AuditLog,
-    generate_uuid,
 )
 from shorts_engine.db.security import decrypt_secret
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager, DEFAULT_SCOPES
-from shorts_engine.services.publishing.quota import QuotaTracker, UPLOAD_COST_UNITS
-from shorts_engine.services.publishing.metadata import ShortsMetadata
+from shorts_engine.services.publishing.quota import QuotaTracker
 
 logger = logging.getLogger(__name__)
 
@@ -469,7 +467,7 @@ class PublishOrchestrator:
                     backoff_sec *= 2.0
                 else:
                     raise
-            except (IOError, OSError) as e:
+            except (IOError, OSError):
                 retry_count += 1
                 if retry_count > max_retries:
                     raise

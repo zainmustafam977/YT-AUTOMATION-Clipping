@@ -3,10 +3,8 @@ Unit & Integration Tests for Component 3: Studio-Grade Audio Mastering & Sidecha
 (80Hz HPF, Voice Gate, Sidechain Ducking, EBU R128 Loudnorm, Music Library Manager)
 """
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 
 from shorts_engine.services.audio.mastering import AudioMasteringEngine
 from shorts_engine.services.audio.music_library import MusicLibraryManager

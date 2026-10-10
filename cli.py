@@ -7,9 +7,7 @@ and WebSub subscription management.
 
 import os
 import sys
-import json
 import getpass
-import logging
 from pathlib import Path
 from typing import Optional
 import typer
@@ -23,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
 from shorts_engine.db.session import init_db, SessionLocal
-from shorts_engine.db.models import Channel, SourceVideo, Clip, ClipStatus, PublishLog
+from shorts_engine.db.models import Channel, SourceVideo, Clip, ClipStatus
 from shorts_engine.services.publishing.quota import QuotaTracker
 from shorts_engine.orchestration.runner import PipelineRunner
 
@@ -344,7 +342,7 @@ def cmd_watch(
     init_db()
     console.print("[bold cyan]Starting RSS watch loop...[/bold cyan]")
     console.print(f"  Interval: {interval or settings.RSS_POLL_INTERVAL_MINUTES} minutes")
-    console.print(f"  Press Ctrl+C to stop.\n")
+    console.print("  Press Ctrl+C to stop.\n")
 
     from shorts_engine.services.detection.detector import DetectionService
     from shorts_engine.services.monitoring.alerter import PipelineAlerter

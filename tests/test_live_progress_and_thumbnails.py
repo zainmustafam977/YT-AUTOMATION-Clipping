@@ -5,14 +5,13 @@ Unit and integration tests for:
 3. Manual video processing channel auto-resolution & caption preset passing
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from shorts_engine.services.telemetry.progress_tracker import JobProgressTracker, job_progress_tracker
+from shorts_engine.services.telemetry.progress_tracker import JobProgressTracker
 from shorts_engine.dashboard.app import app
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus, User
+from shorts_engine.db.models import User
 
 
 def test_job_progress_tracker_lifecycle():

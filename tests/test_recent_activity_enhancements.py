@@ -11,14 +11,13 @@ Tests for Recent Ingestion & Pipeline Activity Enhancements:
 
 import json
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import (
     Channel,
@@ -44,7 +43,6 @@ from shorts_engine.dashboard.auth import (
 from shorts_engine.orchestration.runner import (
     PipelineRunner,
     get_video_lock,
-    release_video_lock,
     register_cancellation,
     is_video_cancelled,
     clear_cancellation,

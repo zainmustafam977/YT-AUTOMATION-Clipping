@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 import pytest
 
 from shorts_engine.services.quality_gate.render_inspector import RenderInspector

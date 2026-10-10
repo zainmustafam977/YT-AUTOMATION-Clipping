@@ -4,7 +4,6 @@ Tests for Component 3: B-Roll Stock Footage Integration (BrollClient & VideoComp
 
 import json
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from shorts_engine.services.broll.client import BrollClient

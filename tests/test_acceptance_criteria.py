@@ -6,8 +6,6 @@ Acceptance Criteria Tests: explicitly verifies the three named scenarios from Se
 """
 
 import pytest
-import subprocess
-from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from shorts_engine.db.models import (

@@ -13,17 +13,14 @@ Tests for Phase 5:
 import csv
 import io
 import json
-import threading
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import (
     Channel,
@@ -39,7 +36,6 @@ from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.routes import status as status_route
 from shorts_engine.dashboard.routes import queue as queue_route
 from shorts_engine.dashboard.routes import channels as channels_route
-from shorts_engine.dashboard.routes import logs as logs_route
 from shorts_engine.dashboard.auth import (
     get_current_user,
     require_operator,
@@ -47,7 +43,7 @@ from shorts_engine.dashboard.auth import (
     require_admin,
     verify_csrf,
 )
-from shorts_engine.orchestration.runner import get_video_lock, release_video_lock
+from shorts_engine.orchestration.runner import get_video_lock
 
 
 @pytest.fixture

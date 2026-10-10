@@ -1,6 +1,4 @@
 import zipfile
-from pathlib import Path
-import pytest
 
 from tools.build_dist_bundle import should_exclude_file, create_distribution_bundle
 

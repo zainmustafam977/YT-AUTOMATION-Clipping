@@ -2,7 +2,6 @@
 Unit tests for captioning, ASS subtitle generation, contrast sampling, and SFX cues.
 """
 
-from pathlib import Path
 import numpy as np
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator, format_ass_timestamp

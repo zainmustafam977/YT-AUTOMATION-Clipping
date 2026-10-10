@@ -12,12 +12,10 @@ import time
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 from shorts_engine.services.ingestion.oauth_flow import (
     YouTubeDeviceOAuth,
     GOOGLE_DEVICE_CODE_URL,
-    GOOGLE_TOKEN_URL,
     GOOGLE_REVOKE_URL,
 )
 

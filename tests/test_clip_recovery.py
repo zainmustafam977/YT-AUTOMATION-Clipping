@@ -9,11 +9,9 @@ Unit and integration tests for:
 
 import json
 from datetime import datetime, timedelta
-import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, UserRole
+from shorts_engine.db.models import Clip, ClipStatus, SourceVideo, SourceVideoStatus, User, UserRole
 from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
 from shorts_engine.dashboard.routes.status import build_recent_videos_payload
 

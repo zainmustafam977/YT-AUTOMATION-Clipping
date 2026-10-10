@@ -9,12 +9,10 @@ Verifies:
 """
 
 import io
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from shorts_engine.dashboard.app import app

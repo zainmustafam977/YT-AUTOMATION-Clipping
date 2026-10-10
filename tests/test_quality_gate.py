@@ -3,10 +3,8 @@ Unit and integration tests for two-tier Quality Gate and Multimodal Render Inspe
 """
 
 import subprocess
-from pathlib import Path
 from shorts_engine.db.models import ClipStatus
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
-from shorts_engine.services.quality_gate.render_inspector import RenderInspector
 from shorts_engine.services.quality_gate.semantic_check import SemanticVerifier
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
 

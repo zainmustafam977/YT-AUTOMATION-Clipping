@@ -56,6 +56,27 @@ python_files = ["test_*.py"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "frontend",
+    "scratch",
+    "tools",
+    "storage",
+    "dist",
+    "build",
+    "*.egg-info",
+    "in progress dev",
+    "docs",
+    "tests",
+    "scripts",
+    "patch.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]
 
 [tool.setuptools.packages.find]
 where = ["."]

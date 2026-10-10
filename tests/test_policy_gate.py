@@ -10,7 +10,7 @@ Verifies:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool

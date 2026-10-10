@@ -4,9 +4,7 @@ Pytest configuration and test isolation fixtures.
 
 import json
 import pytest
-from pathlib import Path
 from datetime import date
-from shorts_engine.config.settings import settings
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +18,6 @@ def isolate_quota_state(monkeypatch, tmp_path):
         json.dumps({"date": date.today().isoformat(), "used_units": 0}),
         encoding="utf-8",
     )
-    from shorts_engine.services.publishing import quota
     from shorts_engine.services.publishing.quota import QuotaTracker
 
     orig_init = QuotaTracker.__init__

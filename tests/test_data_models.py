@@ -11,12 +11,10 @@ from shorts_engine.db.models import (
     Channel,
     SourceVideo,
     SourceVideoStatus,
-    Transcript,
     ClipCandidate,
     Clip,
     ClipStatus,
     PublishLog,
-    SFXLibrary,
 )
 
 

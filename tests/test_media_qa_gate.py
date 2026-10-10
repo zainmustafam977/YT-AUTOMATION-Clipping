@@ -1,7 +1,6 @@
-import pytest
 from pathlib import Path
 from unittest.mock import patch
-from shorts_engine.services.quality.media_qa import MediaQAGate, QAResult
+from shorts_engine.services.quality.media_qa import MediaQAGate
 
 
 def test_media_qa_missing_file():

@@ -1,8 +1,5 @@
-import threading
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-import pytest
-from shorts_engine.services.publishing.quota import QuotaTracker, UPLOAD_COST_UNITS
+from shorts_engine.services.publishing.quota import QuotaTracker
 
 
 def test_concurrent_record_publish_accumulates_correctly(tmp_path):

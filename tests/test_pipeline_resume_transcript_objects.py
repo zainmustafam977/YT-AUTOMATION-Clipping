@@ -5,7 +5,6 @@ into typed WordSegment objects citing exact fields without silent 0.0 defaults,
 and supports both object-like (.word) and dict-like (['word']) access.
 """
 
-import json
 import pytest
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
 

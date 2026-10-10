@@ -6,7 +6,6 @@ and database persistence on SourceVideo.
 """
 
 import json
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 from sqlalchemy import create_engine
@@ -14,9 +13,9 @@ from sqlalchemy.orm import sessionmaker
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base, ensure_schema_upgrades
-from shorts_engine.db.models import Channel, SourceVideo, SourceVideoStatus
+from shorts_engine.db.models import Channel, SourceVideo
 from shorts_engine.orchestration.runner import PipelineRunner
-from shorts_engine.services.clip_selection.selector import ClipSelectionService, SelectedClip
+from shorts_engine.services.clip_selection.selector import ClipSelectionService
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
 from shorts_engine.services.reframing.cropper import CropPlan
 from shorts_engine.services.rendering.compositor import VideoCompositor
