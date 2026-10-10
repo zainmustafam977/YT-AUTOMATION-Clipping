@@ -26,6 +26,8 @@ from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.monitoring.alerter import PipelineAlerter
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +278,19 @@ class WorkerRunner:
             channel = video.channel
 
             logger.info(f"Worker {self.worker_id} processing clip {clip.id} (range {cand.start_ms}-{cand.end_ms}ms)")
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="rendering",
+                    level="INFO",
+                    title="Worker Render Started",
+                    message=f"Worker {self.worker_id} started rendering clip {clip.id[:8]} ({cand.start_ms//1000}s - {cand.end_ms//1000}s)...",
+                    stage_progress_pct=25.0,
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={clip.id}",
+                ))
+            except Exception:
+                pass
 
             # Transcript words
             words = []
@@ -396,6 +411,19 @@ class WorkerRunner:
             clip.rendered_path = str(rendered_file)
             clip.status = ClipStatus.QUALITY_CHECK
             db.commit()
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="rendering",
+                    level="SUCCESS",
+                    title="Worker Render Completed",
+                    message=f"Worker {self.worker_id} rendered clip {clip.id[:8]} ({Path(clip.rendered_path).name}).",
+                    stage_progress_pct=85.0,
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={clip.id}",
+                ))
+            except Exception:
+                pass
 
             # Quality Check
             seg_words = [w.word for w in words if (w.start >= cand.start_ms / 1000.0 - 0.5 and w.end <= cand.end_ms / 1000.0 + 0.5)] if words else []
@@ -418,6 +446,18 @@ class WorkerRunner:
                             "error": qa_res.summary,
                         })
                         db.commit()
+                        try:
+                            global_event_bus.publish_sync(PlatformEvent(
+                                category="quality_gate",
+                                level="WARNING",
+                                title="Media QA Gate Flagged",
+                                message=f"Media QA flagged clip {clip.id[:8]}: {qa_res.summary}",
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                action_url=f"/queue?clip={clip.id}",
+                            ))
+                        except Exception:
+                            pass
                         return False
                 except Exception as qa_err:
                     logger.warning("MediaQAGate inspection exception (continuing to semantic gate): %s", qa_err)
@@ -438,11 +478,38 @@ class WorkerRunner:
             clip.quality_check_result = json.dumps(q_report)
             db.commit()
 
+            try:
+                q_level = "SUCCESS" if next_status == ClipStatus.APPROVED else ("WARNING" if next_status == ClipStatus.WAITING_APPROVAL else "ERROR")
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="quality_gate",
+                    level=q_level,
+                    title=f"Quality Gate: {next_status.value}",
+                    message=f"Worker evaluated clip {clip.id[:8]}: {next_status.value}.",
+                    stage_progress_pct=100.0,
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={clip.id}",
+                ))
+            except Exception:
+                pass
+
             logger.info(f"Worker {self.worker_id} completed clip {clip.id} -> {next_status}")
             return True
 
         except Exception as e:
             logger.exception(f"Worker error on clip {clip_id}: {e}")
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="rendering",
+                    level="ERROR",
+                    title="Worker Render Failed",
+                    message=f"Worker failed on clip {clip_id[:8]}: {str(e)[:250]}",
+                    entity_id=clip_id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={clip_id}",
+                ))
+            except Exception:
+                pass
             db.rollback()
             try:
                 failed_clip = db.query(Clip).filter_by(id=clip_id).first()

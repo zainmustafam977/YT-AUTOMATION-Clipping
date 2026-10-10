@@ -214,3 +214,99 @@ def test_api_events_stream_initial_greeting():
         full_output = "\n".join(lines)
         assert "event: ping" in full_output
         assert "connected" in full_output
+
+
+def test_stage_event_emission_transcription():
+    """Verifies that transcription stage events are properly published and tracked."""
+    global_event_bus.clear()
+    
+    # Simulate transcription events
+    global_event_bus.publish_sync(PlatformEvent(
+        category="transcription",
+        level="INFO",
+        title="Transcription Started",
+        message="Extracting audio and starting Whisper...",
+        stage_progress_pct=5.0,
+        entity_id="test_vid_1",
+        entity_type="video",
+    ))
+    global_event_bus.publish_sync(PlatformEvent(
+        category="transcription",
+        level="SUCCESS",
+        title="Transcription Completed",
+        message="Transcribed 42 words.",
+        stage_progress_pct=100.0,
+        entity_id="test_vid_1",
+        entity_type="video",
+    ))
+
+    events = global_event_bus.get_history(category="transcription", entity_id="test_vid_1")
+    assert len(events) == 2
+    assert events[0].title == "Transcription Started"
+    assert events[0].stage_progress_pct == 5.0
+    assert events[1].title == "Transcription Completed"
+    assert events[1].level == "SUCCESS"
+    assert events[1].stage_progress_pct == 100.0
+
+
+def test_stage_event_emission_rendering():
+    """Verifies that rendering stage events are properly published and tracked."""
+    global_event_bus.clear()
+
+    global_event_bus.publish_sync(PlatformEvent(
+        category="rendering",
+        level="INFO",
+        title="FFmpeg Encoding Started",
+        message="Encoding clip_abc (30.0s) with libx264...",
+        stage_progress_pct=10.0,
+        entity_id="clip_abc",
+        entity_type="clip",
+    ))
+    global_event_bus.publish_sync(PlatformEvent(
+        category="rendering",
+        level="SUCCESS",
+        title="FFmpeg Encoding Completed",
+        message="Master render completed.",
+        stage_progress_pct=100.0,
+        entity_id="clip_abc",
+        entity_type="clip",
+    ))
+
+    events = global_event_bus.get_history(category="rendering", entity_id="clip_abc")
+    assert len(events) == 2
+    assert events[0].title == "FFmpeg Encoding Started"
+    assert events[1].title == "FFmpeg Encoding Completed"
+    assert events[1].level == "SUCCESS"
+
+
+def test_stage_event_emission_publishing():
+    """Verifies that publishing stage events are properly published and tracked."""
+    global_event_bus.clear()
+
+    global_event_bus.publish_sync(PlatformEvent(
+        category="publishing",
+        level="INFO",
+        title="Publishing Clip Started",
+        message="Starting YouTube upload for clip clip_xyz...",
+        stage_progress_pct=20.0,
+        entity_id="clip_xyz",
+        entity_type="clip",
+    ))
+    global_event_bus.publish_sync(PlatformEvent(
+        category="publishing",
+        level="SUCCESS",
+        title="Clip Published",
+        message="Clip clip_xyz successfully published! YouTube ID: yt_12345",
+        stage_progress_pct=100.0,
+        entity_id="clip_xyz",
+        entity_type="clip",
+        action_url="https://youtube.com/shorts/yt_12345",
+    ))
+
+    events = global_event_bus.get_history(category="publishing", entity_id="clip_xyz")
+    assert len(events) == 2
+    assert events[0].title == "Publishing Clip Started"
+    assert events[0].stage_progress_pct == 20.0
+    assert events[1].title == "Clip Published"
+    assert events[1].level == "SUCCESS"
+    assert events[1].action_url == "https://youtube.com/shorts/yt_12345"

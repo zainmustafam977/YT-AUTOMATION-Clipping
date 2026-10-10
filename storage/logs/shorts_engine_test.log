@@ -46897,3 +46897,136 @@ ValueError: Invalid OAuth credentials format in database (Expecting value: line 
 2026-10-03 13:55:16 [INFO] [google_auth_httplib2] Refreshing credentials due to a 401 response. Attempt 1/2.
 2026-10-03 13:55:17 [WARNING] [shorts_engine.services.publishing.oauth_manager] Could not fetch channel identity via API (likely offline/mock): ('invalid_client: The OAuth client was not found.', {'error': 'invalid_client', 'error_description': 'The OAuth client was not found.'})
 2026-10-03 13:55:17 [INFO] [httpx] HTTP Request: GET http://testserver/oauth2callback?code=4/0A_good_code&state=chan_test_99 "HTTP/1.1 303 See Other"
+2026-10-10 16:42:21 [INFO] [shorts_engine.services.execution.win32_job] Win32 Job Object initialized successfully with KILL_ON_JOB_CLOSE.
+2026-10-10 16:42:22 [INFO] [httpx] HTTP Request: POST http://testserver/api/events/publish "HTTP/1.1 200 OK"
+2026-10-10 16:42:22 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/history?category=quota "HTTP/1.1 200 OK"
+2026-10-10 16:42:22 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/stream?max_ticks=1 "HTTP/1.1 200 OK"
+2026-10-10 16:42:50 [INFO] [shorts_engine.services.execution.win32_job] Win32 Job Object initialized successfully with KILL_ON_JOB_CLOSE.
+2026-10-10 16:42:50 [INFO] [httpx] HTTP Request: GET http://testserver/api/thumbnails/mock_nonexistent_id "HTTP/1.1 200 OK"
+2026-10-10 16:42:50 [INFO] [httpx] HTTP Request: GET http://testserver/api/thumbnails/dQw4w9WgXcQ "HTTP/1.1 307 Temporary Redirect"
+2026-10-10 16:42:50 [INFO] [shorts_engine.dashboard.routes.status] Operator 'test_admin' triggered manual video processing: 'TWnkNyW78Nk' (channel_id=dc7a7850-ffeb-40d8-bffd-c9fb3ae53ff1, dry_run=True, force=True, caption_preset=cyberpunk_neon, overrides={})
+2026-10-10 16:42:50 [INFO] [shorts_engine.services.transcription.aligner] Running forced alignment on 3 words against dummy.wav
+2026-10-10 16:42:53 [INFO] [shorts_engine.services.rendering.hwaccel] No active hardware encoder detected. Using multi-threaded CPU libx264.
+2026-10-10 16:42:53 [INFO] [shorts_engine.services.rendering.compositor] Executing FFmpeg render for synthetic_short.mp4 (encoder: libx264, crf: 18, preset: medium, bitrate: 320k, fps: 30, timeout: 180.0s)...
+2026-10-10 16:42:54 [INFO] [shorts_engine.services.rendering.compositor] Render completed successfully: C:\Users\ZACODEC\AppData\Local\Temp\pytest-of-ZACODEC\pytest-8\test_render_synthetic_short_an0\synthetic_short.mp4
+2026-10-10 16:42:54 [INFO] [httpx] HTTP Request: GET http://testserver/api/publish/overview "HTTP/1.1 200 OK"
+2026-10-10 16:42:54 [INFO] [shorts_engine.dashboard.routes.publish] Operator 'operator1' scheduled clip clip-sched for 2026-10-12T11:42:54.929486+00:00
+2026-10-10 16:42:54 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:42:54 [INFO] [shorts_engine.services.publishing.client] [DRY-RUN] Simulating YouTube Shorts upload for clip clip-dry-123...
+2026-10-10 16:42:54 [INFO] [shorts_engine.services.publishing.quota] Quota ledger recorded 1600 units for 'youtube.videos.insert' (channel: None, job: None)
+2026-10-10 16:42:54 [INFO] [shorts_engine.services.publishing.client] Successfully published clip clip-dry-123 — YouTube ID: dry_run_clip-dry (dry_run=True)
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:42:55 [INFO] [shorts_engine.services.publishing.client] Initiating live YouTube upload for clip clip-live-no-token...
+2026-10-10 16:42:55 [ERROR] [shorts_engine.dashboard.routes.publish] Publishing execution failed for clip clip-live-no-token: No OAuth token configured for channel 'Debateks' (clip clip-live-no-token). Please click 'Connect Channel' in the Publishing Studio or enable DRY_RUN_PUBLISHING.
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\dashboard\routes\publish.py", line 397, in execute_publish
+    result = publisher.publish_clip(
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 279, in publish_clip
+    raise ValueError(
+ValueError: No OAuth token configured for channel 'Debateks' (clip clip-live-no-token). Please click 'Connect Channel' in the Publishing Studio or enable DRY_RUN_PUBLISHING.
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:42:55 [INFO] [shorts_engine.dashboard.routes.publish] Directly ingested external video my_viral_video.mp4 as clip None
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/direct-upload "HTTP/1.1 200 OK"
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/direct-upload "HTTP/1.1 400 Bad Request"
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: GET http://testserver/publish "HTTP/1.1 307 Temporary Redirect"
+2026-10-10 16:42:55 [INFO] [httpx] HTTP Request: GET http://testserver/queue?studio=open "HTTP/1.1 200 OK"
+2026-10-10 16:42:56 [INFO] [shorts_engine.services.publishing.client] Initiating live YouTube upload for clip clip-corrupt-token...
+2026-10-10 16:42:56 [ERROR] [shorts_engine.dashboard.routes.publish] Publishing execution failed for clip clip-corrupt-token: Invalid OAuth credentials format in database (Expecting value: line 1 column 1 (char 0)). Please authorize the channel via Google OAuth consent screen in Publishing Studio.
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 34, in _build_youtube_client
+    token_data = json.loads(oauth_token_json)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\dashboard\routes\publish.py", line 397, in execute_publish
+    result = publisher.publish_clip(
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 285, in publish_clip
+    client = _build_youtube_client(decrypted_token)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 36, in _build_youtube_client
+    raise ValueError(
+ValueError: Invalid OAuth credentials format in database (Expecting value: line 1 column 1 (char 0)). Please authorize the channel via Google OAuth consent screen in Publishing Studio.
+2026-10-10 16:42:56 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:57:09 [INFO] [shorts_engine.services.execution.win32_job] Win32 Job Object initialized successfully with KILL_ON_JOB_CLOSE.
+2026-10-10 16:57:10 [INFO] [httpx] HTTP Request: POST http://testserver/api/events/publish "HTTP/1.1 200 OK"
+2026-10-10 16:57:10 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/history?category=quota "HTTP/1.1 200 OK"
+2026-10-10 16:57:10 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/stream?max_ticks=1 "HTTP/1.1 200 OK"
+2026-10-10 16:57:50 [INFO] [shorts_engine.services.execution.win32_job] Win32 Job Object initialized successfully with KILL_ON_JOB_CLOSE.
+2026-10-10 16:57:51 [INFO] [httpx] HTTP Request: POST http://testserver/api/events/publish "HTTP/1.1 200 OK"
+2026-10-10 16:57:51 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/history?category=quota "HTTP/1.1 200 OK"
+2026-10-10 16:57:51 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/stream?max_ticks=1 "HTTP/1.1 200 OK"
+2026-10-10 16:57:52 [INFO] [shorts_engine.services.transcription.aligner] Running forced alignment on 3 words against dummy.wav
+2026-10-10 16:57:53 [INFO] [shorts_engine.services.rendering.hwaccel] No active hardware encoder detected. Using multi-threaded CPU libx264.
+2026-10-10 16:57:53 [INFO] [shorts_engine.services.rendering.compositor] Executing FFmpeg render for synthetic_short.mp4 (encoder: libx264, crf: 18, preset: medium, bitrate: 320k, fps: 30, timeout: 180.0s)...
+2026-10-10 16:57:54 [INFO] [shorts_engine.services.rendering.compositor] Render completed successfully: C:\Users\ZACODEC\AppData\Local\Temp\pytest-of-ZACODEC\pytest-10\test_render_synthetic_short_an0\synthetic_short.mp4
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: GET http://testserver/api/publish/overview "HTTP/1.1 200 OK"
+2026-10-10 16:57:55 [INFO] [shorts_engine.dashboard.routes.publish] Operator 'operator1' scheduled clip clip-sched for 2026-10-12T11:57:55.125297+00:00
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:57:55 [INFO] [shorts_engine.services.publishing.client] [DRY-RUN] Simulating YouTube Shorts upload for clip clip-dry-123...
+2026-10-10 16:57:55 [INFO] [shorts_engine.services.publishing.quota] Quota ledger recorded 1600 units for 'youtube.videos.insert' (channel: None, job: None)
+2026-10-10 16:57:55 [INFO] [shorts_engine.services.publishing.client] Successfully published clip clip-dry-123 — YouTube ID: dry_run_clip-dry (dry_run=True)
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:57:55 [INFO] [shorts_engine.services.publishing.client] Initiating live YouTube upload for clip clip-live-no-token...
+2026-10-10 16:57:55 [ERROR] [shorts_engine.dashboard.routes.publish] Publishing execution failed for clip clip-live-no-token: No OAuth token configured for channel 'Debateks' (clip clip-live-no-token). Please click 'Connect Channel' in the Publishing Studio or enable DRY_RUN_PUBLISHING.
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\dashboard\routes\publish.py", line 412, in execute_publish
+    result = publisher.publish_clip(
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 307, in publish_clip
+    raise ValueError(
+ValueError: No OAuth token configured for channel 'Debateks' (clip clip-live-no-token). Please click 'Connect Channel' in the Publishing Studio or enable DRY_RUN_PUBLISHING.
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:57:55 [INFO] [shorts_engine.dashboard.routes.publish] Directly ingested external video my_viral_video.mp4 as clip None
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/direct-upload "HTTP/1.1 200 OK"
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/direct-upload "HTTP/1.1 400 Bad Request"
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: GET http://testserver/publish "HTTP/1.1 307 Temporary Redirect"
+2026-10-10 16:57:55 [INFO] [httpx] HTTP Request: GET http://testserver/queue?studio=open "HTTP/1.1 200 OK"
+2026-10-10 16:57:56 [INFO] [shorts_engine.services.publishing.client] Initiating live YouTube upload for clip clip-corrupt-token...
+2026-10-10 16:57:56 [ERROR] [shorts_engine.dashboard.routes.publish] Publishing execution failed for clip clip-corrupt-token: Invalid OAuth credentials format in database (Expecting value: line 1 column 1 (char 0)). Please authorize the channel via Google OAuth consent screen in Publishing Studio.
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 36, in _build_youtube_client
+    token_data = json.loads(oauth_token_json)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ZACODEC\AppData\Local\Programs\Python\Python311\Lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\dashboard\routes\publish.py", line 412, in execute_publish
+    result = publisher.publish_clip(
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 313, in publish_clip
+    client = _build_youtube_client(decrypted_token)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\YT AUTOMATION CLIPPING\YT AUTOMATION\shorts_engine\services\publishing\client.py", line 38, in _build_youtube_client
+    raise ValueError(
+ValueError: Invalid OAuth credentials format in database (Expecting value: line 1 column 1 (char 0)). Please authorize the channel via Google OAuth consent screen in Publishing Studio.
+2026-10-10 16:57:56 [INFO] [httpx] HTTP Request: POST http://testserver/api/publish/execute "HTTP/1.1 200 OK"
+2026-10-10 16:57:56 [INFO] [httpx] HTTP Request: GET http://testserver/api/thumbnails/mock_nonexistent_id "HTTP/1.1 200 OK"
+2026-10-10 16:57:56 [INFO] [httpx] HTTP Request: GET http://testserver/api/thumbnails/dQw4w9WgXcQ "HTTP/1.1 307 Temporary Redirect"
+2026-10-10 16:57:56 [INFO] [shorts_engine.dashboard.routes.status] Operator 'test_admin' triggered manual video processing: 'TWnkNyW78Nk' (channel_id=dc7a7850-ffeb-40d8-bffd-c9fb3ae53ff1, dry_run=True, force=True, caption_preset=cyberpunk_neon, overrides={})
+2026-10-10 17:13:14 [INFO] [shorts_engine.services.execution.win32_job] Win32 Job Object initialized successfully with KILL_ON_JOB_CLOSE.
+2026-10-10 17:13:15 [INFO] [httpx] HTTP Request: POST http://testserver/api/events/publish "HTTP/1.1 200 OK"
+2026-10-10 17:13:15 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/history?category=quota "HTTP/1.1 200 OK"
+2026-10-10 17:13:15 [INFO] [httpx] HTTP Request: GET http://testserver/api/events/stream?max_ticks=1 "HTTP/1.1 200 OK"

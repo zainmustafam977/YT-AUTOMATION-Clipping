@@ -30,6 +30,8 @@ from shorts_engine.services.publishing.quota import QuotaTracker
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
 from shorts_engine.services.publishing.orchestrator import PublishOrchestrator
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -375,6 +377,19 @@ def execute_publish(
         clip.status = ClipStatus.APPROVED
         db.commit()
         logger.info("Operator '%s' scheduled clip %s for %s", current_user.username, clip.id, dt.isoformat())
+        try:
+            global_event_bus.publish_sync(PlatformEvent(
+                category="publishing",
+                level="INFO",
+                title="Clip Scheduled",
+                message=f"Clip {clip.id[:8]} scheduled for publication at {dt.isoformat()}.",
+                entity_id=clip.id,
+                entity_type="clip",
+                action_url=f"/queue?clip={clip.id}",
+                details={"scheduled_at": dt.isoformat()},
+            ))
+        except Exception:
+            pass
         return {
             "status": "scheduled",
             "clip_id": clip.id,

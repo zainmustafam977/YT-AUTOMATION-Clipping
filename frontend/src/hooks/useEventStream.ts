@@ -2,9 +2,19 @@
 import { useEffect, useRef } from 'react'
 
 export interface SseEvent {
-  event_type: string
-  payload: Record<string, unknown>
-  timestamp: string
+  event_type?: string
+  payload?: Record<string, unknown>
+  timestamp?: string
+  id?: string
+  category?: string
+  level?: string
+  title?: string
+  message?: string
+  stage_progress_pct?: number
+  entity_id?: string
+  entity_type?: string
+  action_url?: string
+  details?: Record<string, unknown>
 }
 
 export function useEventStream(

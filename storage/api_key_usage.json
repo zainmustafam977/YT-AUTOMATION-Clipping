@@ -1,11 +1,11 @@
 {
-  "date": "2026-10-06",
+  "date": "2026-10-10",
   "keys": {
     "gemini:d1b1abc4465cc69d": {
       "provider": "gemini",
       "key_masked": "AQ.Ab8RN...OwRQ",
       "key_hash": "d1b1abc4465cc69d",
-      "requests_today": 26,
+      "requests_today": 0,
       "total_requests": 192,
       "rate_limit_hits_today": 0,
       "last_latency_ms": 21999,
@@ -35,7 +35,7 @@
       "provider": "groq",
       "key_masked": "gsk_nRDl...STV8",
       "key_hash": "64498dad63b6035e",
-      "requests_today": 56,
+      "requests_today": 0,
       "total_requests": 508,
       "rate_limit_hits_today": 0,
       "last_latency_ms": 4055,

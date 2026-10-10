@@ -39,6 +39,8 @@ from shorts_engine.services.monitoring.alerter import PipelineAlerter
 from shorts_engine.services.worker.runner import claim_clip_by_id, reconcile_stale_claims
 from shorts_engine.orchestration.lifecycle import LifecycleManager
 from shorts_engine.services.detection.filter import is_existing_short
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 
 logger = logging.getLogger(__name__)
@@ -339,6 +341,18 @@ class PipelineRunner:
 
                 self.lifecycle.transition_video(video, SourceVideoStatus.DOWNLOADING)
                 try:
+                    global_event_bus.publish_sync(PlatformEvent(
+                        category="ingestion",
+                        level="INFO",
+                        title="Video Ingestion Started",
+                        message=f"Downloading source video {video_id} via yt-dlp...",
+                        stage_progress_pct=10.0,
+                        entity_id=video_id,
+                        entity_type="video",
+                    ))
+                except Exception:
+                    pass
+                try:
                     if is_local_file:
                         logger.info("Local video %s already present at %s; skipping YouTube download", video_id, video.downloaded_path)
                         # Ensure audio extraction for transcription
@@ -416,6 +430,18 @@ class PipelineRunner:
                                 "clips": [],
                             })
 
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="ingestion",
+                            level="SUCCESS",
+                            title="Video Ingestion Completed",
+                            message=f"Downloaded '{video.title}' ({video.duration_sec or 0}s).",
+                            stage_progress_pct=100.0,
+                            entity_id=video_id,
+                            entity_type="video",
+                        ))
+                    except Exception:
+                        pass
                     self.lifecycle.transition_video(video, SourceVideoStatus.TRANSCRIBING)
                 except Exception as e:
                     video.status = SourceVideoStatus.FAILED
@@ -439,6 +465,17 @@ class PipelineRunner:
                         detail=f"Ingestion failed: {e}",
                     )
                     self.alerter.alert("Ingestion Failed", str(e), level="ERROR", context={"video_id": video_id})
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="ingestion",
+                            level="ERROR",
+                            title="Video Ingestion Failed",
+                            message=f"Ingestion failed for video {video_id}: {str(e)[:250]}",
+                            entity_id=video_id,
+                            entity_type="video",
+                        ))
+                    except Exception:
+                        pass
                     raise
 
             if is_video_cancelled(video_id):
@@ -562,6 +599,18 @@ class PipelineRunner:
                         percent=65.0,
                         detail="Analyzing narrative hook-payoff pairs with AI...",
                     )
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="analysis",
+                            level="INFO",
+                            title="AI Clip Selection Started",
+                            message=f"Analyzing transcript with AI ({eff_provider}/{eff_model}) to select viral hooks...",
+                            stage_progress_pct=65.0,
+                            entity_id=video_id,
+                            entity_type="video",
+                        ))
+                    except Exception:
+                        pass
                     selected_clips: List[SelectedClip] = self.clip_selector.select_clips(
                         formatted_transcript,
                         min_clips=eff_min_clips,
@@ -593,6 +642,19 @@ class PipelineRunner:
                         percent=70.0,
                         detail=f"Selected {len(candidates)} viral candidates. Preparing rendering...",
                     )
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="analysis",
+                            level="SUCCESS",
+                            title="Viral Segments Selected",
+                            message=f"Selected {len(candidates)} viral candidates for video {video_id}.",
+                            stage_progress_pct=70.0,
+                            entity_id=video_id,
+                            entity_type="video",
+                            details={"candidates_count": len(candidates)},
+                        ))
+                    except Exception:
+                        pass
                 except Exception as e:
                     video.status = SourceVideoStatus.FAILED
                     video.error_message = str(e)
@@ -604,6 +666,17 @@ class PipelineRunner:
                         detail=f"Clip selection failed: {e}",
                     )
                     self.alerter.alert("Clip Selection Failed", str(e), level="ERROR", context={"video_id": video_id})
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="analysis",
+                            level="ERROR",
+                            title="Clip Selection Failed",
+                            message=f"Clip selection failed for video {video_id}: {str(e)[:250]}",
+                            entity_id=video_id,
+                            entity_type="video",
+                        ))
+                    except Exception:
+                        pass
                     raise
 
             # Step D: Process Each Selected Candidate
@@ -688,6 +761,20 @@ class PipelineRunner:
                             percent=cur_pct,
                             detail=f"Rendering clip {cand_idx}/{total_cands}: Face-tracking, subtitle burning & 320k mastering...",
                         )
+                        try:
+                            global_event_bus.publish_sync(PlatformEvent(
+                                category="rendering",
+                                level="INFO",
+                                title=f"Rendering Clip {cand_idx}/{total_cands}",
+                                message=f"Rendering clip {clip.id[:8]} ({cand.start_ms//1000}s - {cand.end_ms//1000}s): Face-tracking & subtitle burning...",
+                                stage_progress_pct=cur_pct,
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                action_url=f"/queue?clip={clip.id}",
+                                details={"video_id": video_id, "clip_index": cand_idx, "total_clips": total_cands},
+                            ))
+                        except Exception:
+                            pass
 
                         # Reframing crop plan
                         crop_plan = self.reframer.compute_crop_plan(
@@ -815,11 +902,38 @@ class PipelineRunner:
 
                         clip.status = ClipStatus.QUALITY_CHECK
                         self.db.commit()
+                        try:
+                            global_event_bus.publish_sync(PlatformEvent(
+                                category="rendering",
+                                level="SUCCESS",
+                                title=f"Clip {cand_idx}/{total_cands} Rendered",
+                                message=f"Finished rendering clip {clip.id[:8]}. Ready for Quality Gate.",
+                                stage_progress_pct=cur_pct,
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                action_url=f"/queue?clip={clip.id}",
+                                details={"video_id": video_id, "rendered_path": clip.rendered_path},
+                            ))
+                        except Exception:
+                            pass
                     except Exception as e:
                         logger.exception("Rendering failed for clip %s: %s", clip.id, e)
                         clip.status = ClipStatus.FAILED
                         clip.quality_check_result = json.dumps({"error": str(e)})
                         self.db.commit()
+                        try:
+                            global_event_bus.publish_sync(PlatformEvent(
+                                category="rendering",
+                                level="ERROR",
+                                title=f"Rendering Failed: Clip {cand_idx}/{total_cands}",
+                                message=f"Rendering failed for clip {clip.id[:8]}: {str(e)[:250]}",
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                action_url=f"/queue?clip={clip.id}",
+                                details={"video_id": video_id, "error": str(e)},
+                            ))
+                        except Exception:
+                            pass
                         continue
 
                 # D2: Quality Gate
@@ -840,6 +954,18 @@ class PipelineRunner:
                                     "error": qa_res.summary,
                                 })
                                 self.db.commit()
+                                try:
+                                    global_event_bus.publish_sync(PlatformEvent(
+                                        category="quality_gate",
+                                        level="WARNING",
+                                        title=f"Media QA Rejected Clip {clip.id[:8]}",
+                                        message=f"Clip {clip.id[:8]} failed media QA: {qa_res.summary}",
+                                        entity_id=clip.id,
+                                        entity_type="clip",
+                                        action_url=f"/queue?clip={clip.id}",
+                                    ))
+                                except Exception:
+                                    pass
                                 continue
                         except Exception as qa_ex:
                             logger.warning("MediaQAGate skipped on exception: %s", qa_ex)
@@ -865,6 +991,21 @@ class PipelineRunner:
                     clip.status = new_status
                     clip.quality_check_result = json.dumps(q_report)
                     self.db.commit()
+                    try:
+                        q_level = "SUCCESS" if new_status in (ClipStatus.APPROVED, ClipStatus.WAITING_APPROVAL) else "WARNING"
+                        score_val = getattr(cand, "score", 0.0) or 0.0
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="quality_gate",
+                            level=q_level,
+                            title=f"Quality Gate: {new_status.value}",
+                            message=f"Clip {clip.id[:8]} evaluated: {new_status.value} (Score: {score_val:.1f}).",
+                            entity_id=clip.id,
+                            entity_type="clip",
+                            action_url=f"/queue?clip={clip.id}",
+                            details={"video_id": video_id, "status": new_status.value, "quality_report": q_report},
+                        ))
+                    except Exception:
+                        pass
 
                 # D3: Publishing (if APPROVED)
                 self.db.refresh(clip)
@@ -901,6 +1042,19 @@ class PipelineRunner:
                     percent=100.0,
                     detail=f"Complete! All {len(candidates)} clips rendered & ready.",
                 )
+                try:
+                    global_event_bus.publish_sync(PlatformEvent(
+                        category="system",
+                        level="SUCCESS",
+                        title="Pipeline Complete",
+                        message=f"All {len(candidates)} clips for '{video.title}' have been processed.",
+                        stage_progress_pct=100.0,
+                        entity_id=video_id,
+                        entity_type="video",
+                        details={"clips_count": len(candidates)},
+                    ))
+                except Exception:
+                    pass
             else:
                 video.status = SourceVideoStatus.SEGMENTS_SELECTED
             self.db.commit()

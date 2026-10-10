@@ -13,6 +13,8 @@ from shorts_engine.services.reframing.cropper import CropPlan
 from shorts_engine.services.audio.mastering import AudioMasteringEngine
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 from shorts_engine.services.rendering.hwaccel import HardwareEncoderProber
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -697,6 +699,17 @@ class VideoCompositor:
 
         timeout_limit = max(180.0, duration_sec * 6.0)
         try:
+            global_event_bus.publish_sync(PlatformEvent(
+                category="rendering",
+                level="INFO",
+                title="Compositor Rendering Started",
+                message=f"Rendering short '{output_filename}' ({duration_sec:.1f}s) via FFmpeg ({encoder_name})...",
+                stage_progress_pct=20.0,
+                details={"filename": output_filename, "encoder": encoder_name, "duration_sec": duration_sec},
+            ))
+        except Exception:
+            pass
+        try:
             logger.info("Executing FFmpeg render for %s (encoder: %s, crf: %s, preset: %s, bitrate: %s, fps: %s, timeout: %0.1fs)...", output_filename, encoder_name, eff_crf, eff_preset, eff_audio_br, eff_fps, timeout_limit)
             result = SubprocessWatchdog.run(cmd, timeout_sec=timeout_limit, check=False, artifacts_to_cleanup=[output_path])
             if result.exit_code != 0:
@@ -704,6 +717,15 @@ class VideoCompositor:
                     global _CACHED_ENCODER
                     _CACHED_ENCODER = ("libx264", ["-preset", fallback_preset, "-crf", fallback_crf, "-profile:v", "high", "-level", "4.2"])
                     logger.warning("Hardware encoder %s failed. Cached libx264 for future renders. Retrying with CPU libx264...", encoder_name)
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="rendering",
+                            level="WARNING",
+                            title="Hardware Encoder Fallback",
+                            message=f"Encoder {encoder_name} failed. Retrying with CPU libx264 for {output_filename}.",
+                        ))
+                    except Exception:
+                        pass
                     if is_multi_input:
                         cmd_fallback = [
                             "ffmpeg",
@@ -756,9 +778,29 @@ class VideoCompositor:
 
                 if result.exit_code != 0:
                     logger.error("FFmpeg render failed:\n%s", result.stderr)
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="rendering",
+                            level="ERROR",
+                            title="Compositor Rendering Failed",
+                            message=f"FFmpeg render failed for {output_filename}: {result.stderr[-200:].strip()}",
+                        ))
+                    except Exception:
+                        pass
                     raise RuntimeError(f"FFmpeg render failed: {result.stderr[-400:]}")
 
             logger.info("Render completed successfully: %s", output_path)
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="rendering",
+                    level="SUCCESS",
+                    title="Compositor Rendering Completed",
+                    message=f"FFmpeg composite render finished: {output_path.name}",
+                    stage_progress_pct=100.0,
+                    details={"output_path": str(output_path)},
+                ))
+            except Exception:
+                pass
             return output_path
         finally:
             for tf in temp_files:

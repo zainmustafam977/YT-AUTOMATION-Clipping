@@ -40,12 +40,15 @@ export default function App() {
 
   const handleSseEvent = useCallback((ev: SseEvent) => {
     setSseConnected(true)
-    if (ev.event_type === 'pipeline_complete') {
-      addToast(`✅ Pipeline complete: ${ev.payload.video_id ?? ''}`, 'success')
+    if (ev.title) {
+      const type = (ev.level === 'SUCCESS') ? 'success' : (ev.level === 'ERROR' || ev.level === 'CRITICAL') ? 'error' : 'info'
+      addToast(`${ev.title}: ${ev.message ?? ''}`, type)
+    } else if (ev.event_type === 'pipeline_complete') {
+      addToast(`✅ Pipeline complete: ${ev.payload?.video_id ?? ''}`, 'success')
     } else if (ev.event_type === 'pipeline_failed') {
-      addToast(`❌ Pipeline failed: ${ev.payload.video_id ?? ''}`, 'error')
+      addToast(`❌ Pipeline failed: ${ev.payload?.video_id ?? ''}`, 'error')
     } else if (ev.event_type === 'clip_published') {
-      addToast(`🚀 Clip published: ${ev.payload.clip_id ?? ''}`, 'success')
+      addToast(`🚀 Clip published: ${ev.payload?.clip_id ?? ''}`, 'success')
     }
   }, [addToast])
 

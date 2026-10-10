@@ -14,6 +14,8 @@ from shorts_engine.config.settings import settings
 from shorts_engine.services.transcription.formatter import WordSegment, FormattedTranscript
 from shorts_engine.services.transcription.aligner import ForcedAligner
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -312,88 +314,180 @@ class TranscriptionService:
                 percent=5.0,
                 detail="Starting speech-to-text transcription with Whisper...",
             )
+        try:
+            global_event_bus.publish_sync(PlatformEvent(
+                category="transcription",
+                level="INFO",
+                title="Transcription Started",
+                message=f"Starting speech-to-text transcription for {video_id or audio_path.name} with Whisper...",
+                stage_progress_pct=5.0,
+                entity_id=video_id,
+                entity_type="video" if video_id else None,
+                details={"audio_file": audio_path.name, "language": language},
+            ))
+        except Exception:
+            pass
 
-        # Optional cloud whisper acceleration via Groq
-        if getattr(settings, "USE_GROQ_WHISPER", False):
-            if video_id:
-                job_progress_tracker.update_progress(
-                    video_id=video_id,
-                    stage="TRANSCRIBING",
-                    percent=20.0,
-                    detail="Executing high-speed cloud transcription via Groq LPU...",
-                )
-            groq_res = self._transcribe_with_groq(audio_path, language=language)
-            if groq_res is not None:
+        try:
+            # Optional cloud whisper acceleration via Groq
+            if getattr(settings, "USE_GROQ_WHISPER", False):
                 if video_id:
                     job_progress_tracker.update_progress(
                         video_id=video_id,
                         stage="TRANSCRIBING",
-                        percent=100.0,
-                        detail="Transcription completed successfully.",
+                        percent=20.0,
+                        detail="Executing high-speed cloud transcription via Groq LPU...",
                     )
-                return groq_res
-
-        eff_audio_path = audio_path
-        if apply_vad_mask:
-            masked_path = audio_path.with_name(f"{audio_path.stem}_vad_masked.wav")
-            eff_audio_path = self.vad_filter.mask_non_speech_audio(audio_path, masked_path)
-
-        logger.info("Transcribing %s with Silero VAD filter & Hallucination Shields...", audio_path.name)
-        shield_params = self.get_hallucination_shield_params()
-
-        segments, info = self.model.transcribe(
-            str(eff_audio_path),
-            language=language,
-            word_timestamps=True,
-            **shield_params,
-        )
-
-        total_dur = getattr(info, "duration", 0.0) or 1.0
-        raw_words = []
-        full_text_parts = []
-        for segment in segments:
-            full_text_parts.append(segment.text.strip())
-            if segment.words:
-                for w in segment.words:
-                    raw_words.append(
-                        WordSegment(
-                            word=w.word.strip(),
-                            start=w.start,
-                            end=w.end,
-                            probability=getattr(w, "probability", 1.0),
+                try:
+                    global_event_bus.publish_sync(PlatformEvent(
+                        category="transcription",
+                        level="INFO",
+                        title="Cloud Whisper Invoked",
+                        message=f"Executing high-speed cloud transcription via Groq LPU for {audio_path.name}...",
+                        stage_progress_pct=20.0,
+                        entity_id=video_id,
+                        entity_type="video" if video_id else None,
+                    ))
+                except Exception:
+                    pass
+                groq_res = self._transcribe_with_groq(audio_path, language=language)
+                if groq_res is not None:
+                    if video_id:
+                        job_progress_tracker.update_progress(
+                            video_id=video_id,
+                            stage="TRANSCRIBING",
+                            percent=100.0,
+                            detail="Transcription completed successfully.",
                         )
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="transcription",
+                            level="SUCCESS",
+                            title="Transcription Completed",
+                            message=f"Transcribed {len(groq_res.words)} words via Groq Cloud in ~2s ({groq_res.language}).",
+                            stage_progress_pct=100.0,
+                            entity_id=video_id,
+                            entity_type="video" if video_id else None,
+                            details={"words_count": len(groq_res.words), "language": groq_res.language, "provider": "groq"},
+                        ))
+                    except Exception:
+                        pass
+                    return groq_res
+
+            eff_audio_path = audio_path
+            if apply_vad_mask:
+                masked_path = audio_path.with_name(f"{audio_path.stem}_vad_masked.wav")
+                eff_audio_path = self.vad_filter.mask_non_speech_audio(audio_path, masked_path)
+
+            logger.info("Transcribing %s with Silero VAD filter & Hallucination Shields...", audio_path.name)
+            shield_params = self.get_hallucination_shield_params()
+
+            segments, info = self.model.transcribe(
+                str(eff_audio_path),
+                language=language,
+                word_timestamps=True,
+                **shield_params,
+            )
+
+            total_dur = getattr(info, "duration", 0.0) or 1.0
+            raw_words = []
+            full_text_parts = []
+            last_emitted_pct = 5.0
+            for segment in segments:
+                full_text_parts.append(segment.text.strip())
+                if segment.words:
+                    for w in segment.words:
+                        raw_words.append(
+                            WordSegment(
+                                word=w.word.strip(),
+                                start=w.start,
+                                end=w.end,
+                                probability=getattr(w, "probability", 1.0),
+                            )
+                        )
+                if video_id and total_dur > 0:
+                    cur_end = segment.end or 0.0
+                    pct = min(95.0, max(5.0, round((cur_end / total_dur) * 90.0 + 5.0, 1)))
+                    job_progress_tracker.update_progress(
+                        video_id=video_id,
+                        stage="TRANSCRIBING",
+                        percent=pct,
+                        detail=f"Transcribing: {pct}% ({int(cur_end)}s / {int(total_dur)}s)",
                     )
-            if video_id and total_dur > 0:
-                cur_end = segment.end or 0.0
-                pct = min(95.0, max(5.0, round((cur_end / total_dur) * 90.0 + 5.0, 1)))
+                    if pct - last_emitted_pct >= 25.0:
+                        last_emitted_pct = pct
+                        try:
+                            global_event_bus.publish_sync(PlatformEvent(
+                                category="transcription",
+                                level="INFO",
+                                title="Transcribing Audio",
+                                message=f"Whisper transcribing: {pct:.0f}% ({int(cur_end)}s / {int(total_dur)}s)",
+                                stage_progress_pct=pct,
+                                entity_id=video_id,
+                                entity_type="video" if video_id else None,
+                            ))
+                        except Exception:
+                            pass
+
+            if video_id:
                 job_progress_tracker.update_progress(
                     video_id=video_id,
                     stage="TRANSCRIBING",
-                    percent=pct,
-                    detail=f"Transcribing: {pct}% ({int(cur_end)}s / {int(total_dur)}s)",
+                    percent=95.0,
+                    detail="Running forced phoneme alignment pass (+/-50ms precision)...",
                 )
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="transcription",
+                    level="INFO",
+                    title="Phoneme Alignment",
+                    message="Running forced phoneme alignment pass (+/-50ms precision)...",
+                    stage_progress_pct=95.0,
+                    entity_id=video_id,
+                    entity_type="video" if video_id else None,
+                ))
+            except Exception:
+                pass
 
-        if video_id:
-            job_progress_tracker.update_progress(
-                video_id=video_id,
-                stage="TRANSCRIBING",
-                percent=95.0,
-                detail="Running forced phoneme alignment pass (+/-50ms precision)...",
+            # Apply forced alignment pass to eliminate cross-attention drift
+            aligned_words = self.aligner.align(audio_path, raw_words)
+
+            if video_id:
+                job_progress_tracker.update_progress(
+                    video_id=video_id,
+                    stage="TRANSCRIBING",
+                    percent=100.0,
+                    detail=f"Transcription complete ({len(aligned_words)} words aligned).",
+                )
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="transcription",
+                    level="SUCCESS",
+                    title="Transcription Completed",
+                    message=f"Transcribed & aligned {len(aligned_words)} words ({info.language or 'en'}).",
+                    stage_progress_pct=100.0,
+                    entity_id=video_id,
+                    entity_type="video" if video_id else None,
+                    details={"words_count": len(aligned_words), "language": info.language},
+                ))
+            except Exception:
+                pass
+
+            return FormattedTranscript(
+                words=aligned_words,
+                language=info.language or "en",
+                full_text=" ".join(full_text_parts),
             )
-
-        # Apply forced alignment pass to eliminate cross-attention drift
-        aligned_words = self.aligner.align(audio_path, raw_words)
-
-        if video_id:
-            job_progress_tracker.update_progress(
-                video_id=video_id,
-                stage="TRANSCRIBING",
-                percent=100.0,
-                detail=f"Transcription complete ({len(aligned_words)} words aligned).",
-            )
-
-        return FormattedTranscript(
-            words=aligned_words,
-            language=info.language or "en",
-            full_text=" ".join(full_text_parts),
-        )
+        except Exception as e:
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="transcription",
+                    level="ERROR",
+                    title="Transcription Failed",
+                    message=f"Transcription failed for {video_id or audio_path.name}: {str(e)[:250]}",
+                    entity_id=video_id,
+                    entity_type="video" if video_id else None,
+                ))
+            except Exception:
+                pass
+            raise

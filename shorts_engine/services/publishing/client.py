@@ -17,6 +17,8 @@ from shorts_engine.db.models import Clip, ClipStatus, PublishLog
 from shorts_engine.db.security import decrypt_secret
 from shorts_engine.services.publishing.quota import QuotaTracker
 from shorts_engine.services.publishing.metadata import ShortsMetadata
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +230,18 @@ class YouTubePublisher:
         can_pub, remaining_quota, quota_reason = self.quota_tracker.can_publish(db=self.db)
         if not can_pub:
             logger.warning("YouTube quota exhausted for clip %s: %s", clip.id, quota_reason)
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="WARNING",
+                    title="Publishing Halted: Quota Exhausted",
+                    message=f"Upload halted for clip {clip.id[:8]}: {quota_reason}",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url="/settings",
+                ))
+            except Exception:
+                pass
             return {
                 "success": False,
                 "quota_exhausted": True,
@@ -256,6 +270,20 @@ class YouTubePublisher:
 
         clip.status = ClipStatus.PUBLISHING
         self.db.commit()
+
+        try:
+            global_event_bus.publish_sync(PlatformEvent(
+                category="publishing",
+                level="INFO",
+                title="Publishing Clip Started",
+                message=f"Starting YouTube upload for clip {clip.id[:8]} ({'DRY RUN' if is_dry_run else 'LIVE'})...",
+                stage_progress_pct=20.0,
+                entity_id=clip.id,
+                entity_type="clip",
+                action_url=f"/queue?clip={clip.id}",
+            ))
+        except Exception:
+            pass
 
         youtube_video_id: Optional[str] = None
         status_label = "SUCCESS"
@@ -299,6 +327,20 @@ class YouTubePublisher:
                     publish_log.status = "RECLAIMED"
                     publish_log.published_at = datetime.utcnow()
                     self.db.commit()
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="publishing",
+                            level="SUCCESS",
+                            title="Clip Reclaimed & Published",
+                            message=f"Reclaimed existing upload for clip {clip.id[:8]} (YouTube ID: {existing_yt_id}).",
+                            stage_progress_pct=100.0,
+                            entity_id=clip.id,
+                            entity_type="clip",
+                            action_url=f"https://youtube.com/shorts/{existing_yt_id}",
+                            details={"youtube_video_id": existing_yt_id, "reclaimed": True},
+                        ))
+                    except Exception:
+                        pass
                     return {
                         "success": True,
                         "youtube_video_id": existing_yt_id,
@@ -314,6 +356,18 @@ class YouTubePublisher:
                     logger.warning("Cannot publish clip %s: %s", clip.id, reason)
                     publish_log.status = "QUOTA_EXHAUSTED"
                     self.db.commit()
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="publishing",
+                            level="WARNING",
+                            title="Publishing Halted: Quota Exhausted",
+                            message=f"Upload halted for clip {clip.id[:8]}: {reason}",
+                            entity_id=clip.id,
+                            entity_type="clip",
+                            action_url="/settings",
+                        ))
+                    except Exception:
+                        pass
                     return {
                         "success": False,
                         "quota_exhausted": True,
@@ -342,6 +396,21 @@ class YouTubePublisher:
                 "Successfully published clip %s — YouTube ID: %s (dry_run=%s)",
                 clip.id, youtube_video_id, is_dry_run,
             )
+            try:
+                yt_link = f"https://youtube.com/shorts/{youtube_video_id}" if not is_dry_run else f"/queue?clip={clip.id}"
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="SUCCESS",
+                    title="Clip Published",
+                    message=f"Clip {clip.id[:8]} published successfully! YouTube ID: {youtube_video_id}",
+                    stage_progress_pct=100.0,
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url=yt_link,
+                    details={"youtube_video_id": youtube_video_id, "dry_run": is_dry_run},
+                ))
+            except Exception:
+                pass
             return {
                 "success": True,
                 "youtube_video_id": youtube_video_id,
@@ -353,6 +422,18 @@ class YouTubePublisher:
             publish_log.status = "FAILED"
             publish_log.error_message = str(e)
             self.db.commit()
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="ERROR",
+                    title="Publishing Failed",
+                    message=f"Publishing failed for clip {clip.id[:8]}: {str(e)[:250]}",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={clip.id}",
+                ))
+            except Exception:
+                pass
             raise
 
     def update_video_title(

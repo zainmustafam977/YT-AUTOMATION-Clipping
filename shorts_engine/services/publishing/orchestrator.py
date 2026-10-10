@@ -39,6 +39,8 @@ from shorts_engine.db.models import (
 from shorts_engine.db.security import decrypt_secret
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager, DEFAULT_SCOPES
 from shorts_engine.services.publishing.quota import QuotaTracker
+from shorts_engine.services.events.bus import global_event_bus
+from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +209,18 @@ class PublishOrchestrator:
             guard_ok, guard_err = self.oauth_manager.verify_identity_before_upload(job, db)
             if not guard_ok:
                 logger.warning("Pre-upload identity guard blocked job %s: %s", job.id, guard_err)
+                try:
+                    global_event_bus.publish_sync(PlatformEvent(
+                        category="auth",
+                        level="WARNING",
+                        title="Publishing Blocked: Identity Guard",
+                        message=f"Identity guard blocked job {job.id}: {guard_err}",
+                        entity_id=job.clip_id,
+                        entity_type="clip",
+                        action_url="/publish",
+                    ))
+                except Exception:
+                    pass
                 return {
                     "success": False,
                     "status": PublishJobStatus.PAUSED_NEEDS_ATTENTION.value,
@@ -220,6 +234,18 @@ class PublishOrchestrator:
             job.status = PublishJobStatus.PAUSED_NEEDS_ATTENTION.value
             job.last_error = quota_reason
             db.commit()
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="quota",
+                    level="WARNING",
+                    title="Publishing Blocked: Quota Limit",
+                    message=f"Daily quota reached for job {job.id}: {quota_reason}",
+                    entity_id=job.clip_id,
+                    entity_type="clip",
+                    action_url="/settings",
+                ))
+            except Exception:
+                pass
             return {
                 "success": False,
                 "status": PublishJobStatus.PAUSED_NEEDS_ATTENTION.value,
@@ -234,6 +260,20 @@ class PublishOrchestrator:
         if clip:
             clip.status = ClipStatus.PUBLISHING
         db.commit()
+
+        try:
+            global_event_bus.publish_sync(PlatformEvent(
+                category="publishing",
+                level="INFO",
+                title="Publishing Clip Started",
+                message=f"Uploading clip {job.clip_id[:8]} to YouTube ({'DRY RUN' if is_dry_run else 'LIVE'})...",
+                stage_progress_pct=25.0,
+                entity_id=job.clip_id,
+                entity_type="clip",
+                action_url=f"/queue?clip={job.clip_id}",
+            ))
+        except Exception:
+            pass
 
         audit = AuditLog(
             actor="system",
@@ -266,6 +306,20 @@ class PublishOrchestrator:
                 if existing_yt_id:
                     logger.info("Found existing upload for clip %s: %s. Reclaiming.", job.clip_id, existing_yt_id)
                     youtube_video_id = existing_yt_id
+                    try:
+                        global_event_bus.publish_sync(PlatformEvent(
+                            category="publishing",
+                            level="SUCCESS",
+                            title="Clip Reclaimed & Published",
+                            message=f"Reclaimed existing upload for clip {job.clip_id[:8]} (YouTube ID: {existing_yt_id}).",
+                            stage_progress_pct=100.0,
+                            entity_id=job.clip_id,
+                            entity_type="clip",
+                            action_url=f"https://youtube.com/shorts/{existing_yt_id}",
+                            details={"youtube_video_id": existing_yt_id, "reclaimed": True},
+                        ))
+                    except Exception:
+                        pass
                 else:
                     # Execute resumable upload
                     youtube_video_id = self._upload_resumable(
@@ -320,6 +374,22 @@ class PublishOrchestrator:
             db.add(audit_success)
             db.commit()
 
+            try:
+                yt_url = f"https://youtube.com/shorts/{youtube_video_id}" if not is_dry_run else None
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="SUCCESS",
+                    title="Clip Published",
+                    message=f"Clip {job.clip_id[:8]} successfully published! YouTube ID: {youtube_video_id}",
+                    stage_progress_pct=100.0,
+                    entity_id=job.clip_id,
+                    entity_type="clip",
+                    action_url=yt_url or f"/queue?clip={job.clip_id}",
+                    details={"youtube_video_id": youtube_video_id, "dry_run": is_dry_run},
+                ))
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "status": "PUBLISHED",
@@ -353,6 +423,19 @@ class PublishOrchestrator:
             db.add(audit_err)
             db.commit()
 
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="ERROR",
+                    title="Publishing HTTP Error",
+                    message=f"YouTube API Error ({status_code}) for clip {job.clip_id[:8]}: {err_str[:200]}",
+                    entity_id=job.clip_id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={job.clip_id}",
+                ))
+            except Exception:
+                pass
+
             action = (
                 "Wait for daily quota reset" if is_quota_error
                 else "Reconnect channel authorization" if is_auth_error
@@ -382,6 +465,19 @@ class PublishOrchestrator:
             )
             db.add(audit_err)
             db.commit()
+
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="publishing",
+                    level="ERROR",
+                    title="Publishing Failed",
+                    message=f"Publishing failed for clip {job.clip_id[:8]}: {str(e)[:250]}",
+                    entity_id=job.clip_id,
+                    entity_type="clip",
+                    action_url=f"/queue?clip={job.clip_id}",
+                ))
+            except Exception:
+                pass
 
             return {
                 "success": False,

@@ -1938,6 +1938,66 @@
                 el.textContent = text;
             }
         }
+
+        // Reactive live progress handler for SSE PlatformEvents
+        window.updatePipelineStatus = function(event) {
+            if (!event) return;
+            var vid = (event.entity_type === 'video') ? event.entity_id : (event.details && event.details.video_id);
+            if (!vid && event.details && event.details.video_id) {
+                vid = event.details.video_id;
+            }
+            if (!vid && event.entity_id && document.getElementById("video-row-" + event.entity_id)) {
+                vid = event.entity_id;
+            }
+            if (!vid) return;
+
+            var row = document.getElementById("video-row-" + vid);
+            if (!row) return;
+
+            var statusCell = row.cells[2];
+            if (!statusCell) return;
+
+            // Check if progress pct is provided
+            if (typeof event.stage_progress_pct === 'number' && event.stage_progress_pct >= 0) {
+                var pct = Math.max(0, Math.min(100, Math.round(event.stage_progress_pct)));
+                var bar = statusCell.querySelector(".progress-bar");
+                if (bar) {
+                    bar.style.width = pct + "%";
+                    bar.textContent = pct + "%";
+                }
+                var stageDetail = statusCell.querySelector(".text-info");
+                if (stageDetail) {
+                    stageDetail.textContent = event.title || event.message || "";
+                }
+            }
+
+            // Status Badge & Stepper update
+            if (event.level === 'ERROR' || event.level === 'CRITICAL') {
+                var badge = statusCell.querySelector(".badge");
+                if (badge) {
+                    badge.className = "badge bg-danger text-nowrap";
+                    badge.textContent = "FAILED";
+                }
+                row.setAttribute("data-status", "FAILED");
+            } else if (event.category === 'system' && event.level === 'SUCCESS' && event.stage_progress_pct === 100) {
+                var badge = statusCell.querySelector(".badge");
+                if (badge) {
+                    badge.className = "badge bg-success text-nowrap";
+                    badge.textContent = "✓ PROCESSED";
+                }
+                var progressEl = statusCell.querySelector(".progress");
+                if (progressEl) progressEl.remove();
+                row.setAttribute("data-status", "DONE");
+            } else if (['ingestion', 'transcription', 'analysis', 'rendering'].indexOf(event.category) !== -1) {
+                var badge = statusCell.querySelector(".badge");
+                if (badge && !badge.classList.contains("bg-danger")) {
+                    var stageName = event.category.toUpperCase();
+                    badge.className = "badge bg-warning text-dark text-nowrap";
+                    badge.innerHTML = '<span class="spinner-grow spinner-grow-sm" role="status"></span> ' + stageName;
+                    row.setAttribute("data-status", stageName);
+                }
+            }
+        };
     })();
 
     // Drag-and-Drop Ingestion
