@@ -139,6 +139,7 @@
         <div class="collapse navbar-collapse" id="navbarMain">
             <div class="navbar-nav ms-auto align-items-lg-center pt-2 pt-lg-0 gap-1">
                 <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">Status</a>
+                <a class="nav-link {% if '/visibility' in request.url.path %}active{% endif %}" href="/visibility">Visibility</a>
                 <a class="nav-link {% if '/queue' in request.url.path %}active{% endif %}" href="/queue">Review Queue</a>
                 <a class="nav-link {% if '/calendar' in request.url.path %}active{% endif %}" href="/calendar">Calendar</a>
                 <a class="nav-link {% if '/dead-letter' in request.url.path %}active{% endif %}" href="/dead-letter">Dead-Letter</a>

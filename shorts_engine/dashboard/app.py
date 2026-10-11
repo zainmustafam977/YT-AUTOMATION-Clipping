@@ -23,6 +23,7 @@ from shorts_engine.dashboard.routes import (
     ingestion as ingestion_route,
     oauth as oauth_route,
     publish as publish_route,
+    visibility as visibility_route,
 )
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
@@ -157,6 +158,7 @@ def create_dashboard_app() -> FastAPI:
     app.include_router(ingestion_route.router, tags=["Ingestion"])
     app.include_router(oauth_route.router, tags=["OAuth"])
     app.include_router(publish_route.router, tags=["Publishing"])
+    app.include_router(visibility_route.router, tags=["Visibility"])
 
     # Mount pre-compiled React 19 SPA static assets
     from pathlib import Path

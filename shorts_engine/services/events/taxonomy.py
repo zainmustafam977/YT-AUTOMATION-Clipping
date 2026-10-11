@@ -143,4 +143,29 @@ def emit_platform_event(
     except Exception as bus_err:
         logger.warning("Failed to broadcast PlatformEvent to event bus: %s", bus_err)
 
+    # 3. Webhook Alert Dispatch on Critical Telemetry Events
+    try:
+        from shorts_engine.services.monitoring.alerter import pipeline_alerter
+        if event_name == STAGE_QUARANTINED:
+            pipeline_alerter.alert_quarantined_job(
+                job_id=entity_id or event_data.get("job_id", "unknown"),
+                stage=event_data.get("stage", "UNKNOWN"),
+                last_error=event_data.get("last_error", message),
+                attempt_count=event_data.get("attempt_count", 0),
+            )
+        elif event_name == CHANNEL_HEALTH and (event_data.get("status") == "needs_reauth" or "invalid_grant" in str(event_data.get("error", ""))):
+            pipeline_alerter.alert_channel_needs_reauth(
+                channel_id=entity_id or event_data.get("channel_id", "unknown"),
+                channel_name=event_data.get("channel_name", entity_id or "channel"),
+                error=str(event_data.get("error", "OAuth refresh token invalidated")),
+            )
+        elif event_name == QUOTA_LOW:
+            pipeline_alerter.alert_quota_low(
+                remaining_units=event_data.get("remaining_units", 0),
+                spent_units=event_data.get("spent_units", 0),
+                limit=event_data.get("limit", 10000),
+            )
+    except Exception as alert_err:
+        logger.debug("Failed to dispatch alert webhook: %s", alert_err)
+
     return persisted_log

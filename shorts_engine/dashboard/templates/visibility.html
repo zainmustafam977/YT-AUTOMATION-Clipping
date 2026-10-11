@@ -1,0 +1,460 @@
+{% extends "base.html" %}
+
+{% block title %}System Visibility & Health{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-4">
+    <div class="col-md-7">
+        <h2 class="h3 fw-bold mb-1 text-light d-flex align-items-center gap-2">
+            <span style="color:#00e5ff;">📡</span> System Visibility & Operational Health
+        </h2>
+        <p class="text-muted small mb-0">
+            Real-time telemetry derived from pipeline jobs, event bus, and quota ledger. Zero silent failures.
+        </p>
+    </div>
+    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end align-items-center gap-2">
+        <span class="badge bg-dark border border-secondary text-light px-2 py-1 small" id="live-indicator">
+            <span class="spinner-grow spinner-grow-sm text-success me-1" role="status" style="width:0.55rem;height:0.55rem;"></span>
+            Live (3s)
+        </span>
+        <button class="btn btn-sm btn-outline-info" onclick="fetchVisibilityUpdate(true)" title="Force reload data">
+            🔄 Refresh
+        </button>
+        <button class="btn btn-sm btn-outline-warning" id="checkAlertsBtn" onclick="triggerAlertEvaluation()" title="Evaluate thresholds and trigger webhook if crossed">
+            🚨 Check Threshold Alerts
+        </button>
+    </div>
+</div>
+
+<!-- ── Top KPI Stat Cards ──────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <!-- 1. Oldest Pending Job -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card {% if snapshot.queue.total_pending > 10 %}warning{% endif %} h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">Oldest Pending Age</div>
+            <div class="stat-number my-1" id="kpi-oldest-age" style="font-size: 1.6rem;">
+                {{ snapshot.queue.overall_oldest_age_human }}
+            </div>
+            <div class="small text-muted d-flex justify-content-between align-items-center">
+                <span>Total Pending:</span>
+                <span class="badge bg-secondary" id="kpi-total-pending">{{ snapshot.queue.total_pending }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Running Jobs -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card success h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">Active Running</div>
+            <div class="stat-number my-1 text-success" id="kpi-running-count" style="font-size: 1.6rem;">
+                {{ snapshot.running_count }}
+            </div>
+            <div class="small text-muted">
+                Workers executing
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Quarantined Jobs -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card {% if snapshot.quarantined_count > 0 %}danger{% endif %} h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">Quarantined (DLQ)</div>
+            <div class="stat-number my-1 {% if snapshot.quarantined_count > 0 %}text-danger{% else %}text-muted{% endif %}" id="kpi-quarantined-count" style="font-size: 1.6rem;">
+                {{ snapshot.quarantined_count }}
+            </div>
+            <div class="small text-muted">
+                Require operator triage
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Quota Remaining Today -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card {% if snapshot.quota.is_low %}danger{% else %}info{% endif %} h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">Quota Remaining</div>
+            <div class="stat-number my-1 {% if snapshot.quota.is_low %}text-danger{% else %}text-info{% endif %}" id="kpi-quota-remaining" style="font-size: 1.6rem;">
+                {{ "{:,}".format(snapshot.quota.remaining_units) }}
+            </div>
+            <div class="small text-muted d-flex justify-content-between">
+                <span>Used: {{ snapshot.quota.used_pct }}%</span>
+                <span>/ {{ "{:,}".format(snapshot.quota.daily_limit) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Media Root Disk -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card {% if snapshot.disk.is_critical %}danger{% endif %} h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">Media Root Disk</div>
+            <div class="stat-number my-1 {% if snapshot.disk.is_critical %}text-danger{% endif %}" id="kpi-disk-pct" style="font-size: 1.6rem;">
+                {{ snapshot.disk.percent_used }}%
+            </div>
+            <div class="small text-muted d-flex justify-content-between">
+                <span>Free:</span>
+                <span id="kpi-disk-free">{{ snapshot.disk.free_gb }} GB</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. 24h Jobs Success Rate -->
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card stat-card success h-100 p-3">
+            <div class="text-muted small text-uppercase fw-semibold">24h Success Rate</div>
+            <div class="stat-number my-1 text-success" id="kpi-jobs-rate" style="font-size: 1.6rem;">
+                {{ snapshot.jobs_24h.success_rate_pct }}%
+            </div>
+            <div class="small text-muted d-flex justify-content-between">
+                <span>✅ {{ snapshot.jobs_24h.succeeded_jobs }}</span>
+                <span>❌ {{ snapshot.jobs_24h.failed_jobs }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Queue Depth Per Stage Breakdown ─────────────────────────────────── -->
+<div class="card bg-dark-subtle border-secondary-subtle mb-4 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="d-flex align-items-center gap-2">
+            <span>📊</span> <span>Queue Depths by Stage</span>
+        </span>
+        <span class="badge bg-secondary" id="total-pending-badge">{{ snapshot.queue.total_pending }} Total Pending</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-2" id="stage-depths-container">
+            {% if snapshot.queue.stages %}
+                {% for stage_name, info in snapshot.queue.stages.items() %}
+                <div class="col-md-3 col-sm-6">
+                    <div class="p-2 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-primary text-uppercase me-2">{{ stage_name }}</span>
+                            <span class="small text-muted">Oldest: {{ info.oldest_age_human }}</span>
+                        </div>
+                        <span class="badge bg-light text-dark fw-bold px-2 py-1">{{ info.depth }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-muted small py-2 text-center">
+                    Queue is completely clear. No jobs pending.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- ── Active Running Jobs Table ────────────────────────────────────── -->
+    <div class="col-lg-6">
+        <div class="card bg-dark-subtle border-secondary-subtle h-100 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center gap-2">
+                    <span>⚡</span> <span>Active Running Jobs</span>
+                </span>
+                <span class="badge bg-success" id="running-table-count">{{ snapshot.running_count }} Active</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Stage</th>
+                                <th>Entity / ID</th>
+                                <th>Lock / Worker</th>
+                                <th>Runtime</th>
+                                <th>Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody id="running-jobs-tbody">
+                            {% if snapshot.running_jobs %}
+                                {% for job in snapshot.running_jobs %}
+                                <tr>
+                                    <td><span class="badge bg-info text-dark fw-bold text-uppercase">{{ job.stage }}</span></td>
+                                    <td>
+                                        <div class="fw-semibold text-light text-truncate" style="max-width: 140px;" title="{{ job.id }}">
+                                            {{ job.id[:8] }}...
+                                        </div>
+                                        <small class="text-muted">{{ job.entity_type or 'job' }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="text-light small text-truncate" style="max-width: 120px;" title="{{ job.locked_by }}">
+                                            {{ job.locked_by or 'worker' }}
+                                        </div>
+                                    </td>
+                                    <td><span class="badge bg-dark border border-secondary">{{ job.runtime_human }}</span></td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2" style="min-width: 80px;">
+                                            <div class="progress flex-grow-1" style="height: 6px;">
+                                                <div class="progress-bar bg-success" style="width: {{ job.progress_pct }}%;"></div>
+                                            </div>
+                                            <small class="text-muted">{{ job.progress_pct|int }}%</small>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No active running jobs at this moment.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Quarantined Dead-Letter Jobs Table ───────────────────────────── -->
+    <div class="col-lg-6">
+        <div class="card bg-dark-subtle border-secondary-subtle h-100 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center gap-2">
+                    <span class="text-danger">🛑</span> <span>Quarantined Jobs (Dead-Letter)</span>
+                </span>
+                <span class="badge {% if snapshot.quarantined_count > 0 %}bg-danger{% else %}bg-secondary{% endif %}" id="quarantined-table-count">
+                    {{ snapshot.quarantined_count }}
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead>
+                            <tr>
+                                <th>Stage</th>
+                                <th>Job ID</th>
+                                <th>Tries</th>
+                                <th>Failure Reason (last_error)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="quarantined-jobs-tbody">
+                            {% if snapshot.quarantined_jobs %}
+                                {% for job in snapshot.quarantined_jobs %}
+                                <tr>
+                                    <td><span class="badge bg-danger text-uppercase">{{ job.stage }}</span></td>
+                                    <td><code class="text-warning small" title="{{ job.id }}">{{ job.id[:8] }}...</code></td>
+                                    <td><span class="badge bg-secondary">{{ job.attempt_count }}</span></td>
+                                    <td>
+                                        <div class="text-danger-emphasis small text-truncate" style="max-width: 200px;" title="{{ job.last_error }}">
+                                            {{ job.last_error }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <a href="/dead-letter" class="btn btn-sm btn-outline-warning py-0 px-2 small" style="font-size:0.75rem;">Inspect</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No quarantined jobs. Pipeline is healthy.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Channel Token Health & Last Successful Publish ─────────────────── -->
+<div class="card bg-dark-subtle border-secondary-subtle mb-4 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="d-flex align-items-center gap-2">
+            <span>📺</span> <span>Channel OAuth Token Health & Publishing Activity</span>
+        </span>
+        <a href="/channels" class="btn btn-sm btn-outline-light py-0 px-2 small">Manage Channels →</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                <thead>
+                    <tr>
+                        <th>Channel</th>
+                        <th>Token Health</th>
+                        <th>Last Verified</th>
+                        <th>Last Successful Publish</th>
+                        <th>Video Title</th>
+                        <th>Error Details</th>
+                    </tr>
+                </thead>
+                <tbody id="channels-visibility-tbody">
+                    {% if snapshot.channels %}
+                        {% for ch in snapshot.channels %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold text-light">{{ ch.title or ch.name }}</div>
+                                <code class="text-muted small">{{ ch.youtube_channel_id }}</code>
+                            </td>
+                            <td>
+                                {% if ch.token_status == 'HEALTHY' %}
+                                    <span class="badge bg-success">HEALTHY</span>
+                                {% elif ch.token_status == 'NEEDS_REAUTH' %}
+                                    <span class="badge bg-danger animate-pulse">NEEDS REAUTH</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">NO CREDENTIALS</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="small text-muted">{{ ch.last_verified_at or 'Never' }}</span>
+                            </td>
+                            <td>
+                                {% if ch.last_publish %}
+                                    <span class="badge bg-dark border border-secondary text-light">
+                                        {{ ch.last_publish.published_at or 'Recently' }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">No publishes recorded</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ch.last_publish and ch.last_publish.title %}
+                                    <div class="text-truncate" style="max-width: 250px;">
+                                        {% if ch.last_publish.url %}
+                                            <a href="{{ ch.last_publish.url }}" target="_blank" class="text-info text-decoration-none">
+                                                {{ ch.last_publish.title }} ↗
+                                            </a>
+                                        {% else %}
+                                            <span class="text-light">{{ ch.last_publish.title }}</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ch.token_last_error %}
+                                    <span class="text-danger small" title="{{ ch.token_last_error }}">{{ ch.token_last_error[:40] }}...</span>
+                                {% else %}
+                                    <span class="text-success small">None</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No channels configured in database.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Real-Time Visibility Update Poller ──────────────────────────────────
+function fetchVisibilityUpdate(manualTrigger) {
+    fetch('/api/visibility/overview')
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function(data) {
+            updateVisibilityUI(data);
+            if (manualTrigger) {
+                window.showToast('Visibility data refreshed', 'info');
+            }
+        })
+        .catch(function(err) {
+            console.debug('Visibility poller error:', err);
+        });
+}
+
+function updateVisibilityUI(snapshot) {
+    if (!snapshot) return;
+
+    // Update KPIs
+    if (snapshot.queue) {
+        document.getElementById('kpi-oldest-age').innerText = snapshot.queue.overall_oldest_age_human || '0s';
+        document.getElementById('kpi-total-pending').innerText = snapshot.queue.total_pending || '0';
+        document.getElementById('total-pending-badge').innerText = (snapshot.queue.total_pending || 0) + ' Total Pending';
+
+        // Update stage breakdown
+        var stagesContainer = document.getElementById('stage-depths-container');
+        if (stagesContainer && snapshot.queue.stages) {
+            var html = '';
+            var keys = Object.keys(snapshot.queue.stages);
+            if (keys.length === 0) {
+                html = '<div class="col-12 text-muted small py-2 text-center">Queue is completely clear. No jobs pending.</div>';
+            } else {
+                keys.forEach(function(k) {
+                    var info = snapshot.queue.stages[k];
+                    html += '<div class="col-md-3 col-sm-6">' +
+                        '<div class="p-2 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">' +
+                            '<div>' +
+                                '<span class="badge bg-primary text-uppercase me-2">' + k + '</span>' +
+                                '<span class="small text-muted">Oldest: ' + (info.oldest_age_human || '0s') + '</span>' +
+                            '</div>' +
+                            '<span class="badge bg-light text-dark fw-bold px-2 py-1">' + info.depth + '</span>' +
+                        '</div>' +
+                    '</div>';
+                });
+            }
+            stagesContainer.innerHTML = html;
+        }
+    }
+
+    if (snapshot.running_count !== undefined) {
+        document.getElementById('kpi-running-count').innerText = snapshot.running_count;
+        document.getElementById('running-table-count').innerText = snapshot.running_count + ' Active';
+    }
+
+    if (snapshot.quarantined_count !== undefined) {
+        document.getElementById('kpi-quarantined-count').innerText = snapshot.quarantined_count;
+        document.getElementById('quarantined-table-count').innerText = snapshot.quarantined_count;
+    }
+
+    if (snapshot.quota) {
+        document.getElementById('kpi-quota-remaining').innerText = Number(snapshot.quota.remaining_units || 0).toLocaleString();
+    }
+
+    if (snapshot.disk) {
+        document.getElementById('kpi-disk-pct').innerText = snapshot.disk.percent_used + '%';
+        document.getElementById('kpi-disk-free').innerText = snapshot.disk.free_gb + ' GB';
+    }
+
+    if (snapshot.jobs_24h) {
+        document.getElementById('kpi-jobs-rate').innerText = snapshot.jobs_24h.success_rate_pct + '%';
+    }
+}
+
+// ── Threshold Evaluation Trigger ────────────────────────────────────────
+function triggerAlertEvaluation() {
+    var btn = document.getElementById('checkAlertsBtn');
+    btn.disabled = true;
+    btn.innerText = 'Evaluating...';
+
+    var tokenMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = tokenMeta ? tokenMeta.content : '';
+
+    fetch('/api/visibility/alerts/check', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+        }
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('Status ' + res.status);
+        return res.json();
+    })
+    .then(function(data) {
+        if (data.count > 0) {
+            window.showToast('Thresholds crossed! Dispatched alerts: ' + data.alerts_fired.join(', '), 'warning');
+        } else {
+            window.showToast('All system thresholds normal (disk < 80%, quota > 20%, tokens healthy).', 'success');
+        }
+        btn.disabled = false;
+        btn.innerText = '🚨 Check Threshold Alerts';
+    })
+    .catch(function(err) {
+        window.showToast('Error evaluating alerts: ' + err.message, 'danger');
+        btn.disabled = false;
+        btn.innerText = '🚨 Check Threshold Alerts';
+    });
+}
+
+// Start auto-poll every 3.5 seconds
+setInterval(fetchVisibilityUpdate, 3500);
+</script>
+{% endblock %}

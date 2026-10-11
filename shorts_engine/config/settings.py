@@ -288,11 +288,14 @@ class PipelineSettings(BaseSettings):
     MUSIC_LIBRARY_DIR: Path = Path("assets/music")
 
     # Monitoring & Alerting
+    ALERT_WEBHOOK_URL: Optional[str] = Field(default=None, description="Incoming Generic Alert Webhook URL")
     SLACK_WEBHOOK_URL: Optional[str] = Field(default=None, description="Incoming Slack Webhook URL")
     DISCORD_WEBHOOK_URL: Optional[str] = Field(default=None, description="Discord Webhook URL")
     TELEGRAM_BOT_TOKEN: Optional[str] = Field(default=None, description="Telegram Bot Token")
     TELEGRAM_CHAT_ID: Optional[str] = Field(default=None, description="Telegram Chat ID")
     SENTRY_DSN: Optional[str] = Field(default=None, description="Sentry DSN for error telemetry")
+    DISK_ALERT_THRESHOLD_PCT: float = Field(default=80.0, description="Disk usage alert threshold percentage")
+    QUOTA_REMAINING_ALERT_THRESHOLD_PCT: float = Field(default=20.0, description="Quota remaining alert threshold percentage")
 
     # Publishing & Quotas
     DRY_RUN_PUBLISHING: bool = Field(default=True, description="When true, simulates upload without calling YouTube API")
