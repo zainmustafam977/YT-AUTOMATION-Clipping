@@ -195,6 +195,7 @@ class DurableJobQueue:
 
             now = datetime.utcnow()
             job.heartbeat_at = now
+            job.locked_at = now
 
             if progress_pct is not None:
                 job.progress_pct = max(0.0, min(100.0, round(float(progress_pct), 1)))
@@ -280,6 +281,7 @@ class DurableJobQueue:
 
             now = datetime.utcnow()
             job.retry_count += 1
+            job.attempt_count = max(getattr(job, "attempt_count", 0) + 1, job.retry_count)
             job.error_message = str(error_message)[:2000]
 
             if job.retry_count < job.max_retries:
@@ -325,6 +327,72 @@ class DurableJobQueue:
                 pass
 
             return job
+        finally:
+            if should_close:
+                session.close()
+
+    def quarantine_job(
+        self,
+        job_id: str,
+        error_message: str,
+        db: Optional[Session] = None,
+    ) -> PipelineJob:
+        """
+        Immediately quarantines a job (0 retries burned or unrecoverable error).
+        The job is NEVER retried automatically.
+        """
+        session, should_close = self._get_session(db)
+        try:
+            job = session.query(PipelineJob).filter(PipelineJob.id == job_id).first()
+            if not job:
+                raise ValueError(f"Job {job_id} not found.")
+
+            now = datetime.utcnow()
+            job.status = PipelineJobStatus.QUARANTINED
+            job.error_message = str(error_message)[:2000]
+            job.locked_by = None
+            job.locked_at = None
+            job.completed_at = now
+            job.stage = "QUARANTINED"
+
+            session.commit()
+            session.refresh(job)
+            logger.error("Job %s immediately QUARANTINED: %s", job.id, error_message)
+
+            try:
+                global_event_bus.publish_sync(PlatformEvent(
+                    category="queue",
+                    level="ERROR",
+                    title="Job Quarantined",
+                    message=f"Job {job.id[:8]} ({job.job_type}) quarantined: {str(error_message)[:200]}",
+                    entity_id=job.id,
+                    entity_type="pipeline_job",
+                ))
+            except Exception:
+                pass
+
+            return job
+        finally:
+            if should_close:
+                session.close()
+
+    def get_quarantined_jobs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        db: Optional[Session] = None,
+    ) -> List[PipelineJob]:
+        """Queries all quarantined / dead-letter jobs with their error details."""
+        session, should_close = self._get_session(db)
+        try:
+            return (
+                session.query(PipelineJob)
+                .filter(PipelineJob.status.in_([PipelineJobStatus.QUARANTINED, PipelineJobStatus.DEAD_LETTER]))
+                .order_by(PipelineJob.updated_at.desc())
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
         finally:
             if should_close:
                 session.close()

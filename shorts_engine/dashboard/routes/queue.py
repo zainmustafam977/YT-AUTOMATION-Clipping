@@ -2020,3 +2020,34 @@ async def ingest_external_video(
         "source": "external",
         "channel_name": channel.name if channel else "Default Channel",
     }
+
+
+@router.get("/api/jobs/quarantined", summary="List quarantined jobs with their last error")
+def list_quarantined_jobs(
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    from shorts_engine.orchestration.stage_registry import get_quarantined_jobs
+    jobs = get_quarantined_jobs(db, limit=limit, offset=offset)
+    return {
+        "total": len(jobs),
+        "jobs": [
+            {
+                "id": j.id,
+                "job_type": j.job_type,
+                "entity_type": j.entity_type,
+                "entity_id": j.entity_id,
+                "stage": j.stage,
+                "attempt_count": getattr(j, "attempt_count", 0),
+                "retry_count": getattr(j, "retry_count", 0),
+                "last_error": j.last_error or j.error_message,
+                "status": str(j.status),
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+                "updated_at": j.updated_at.isoformat() if j.updated_at else None,
+                "completed_at": j.completed_at.isoformat() if j.completed_at else None,
+            }
+            for j in jobs
+        ],
+    }
+

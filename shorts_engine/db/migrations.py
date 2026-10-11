@@ -80,6 +80,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds pipeline_jobs table for transactional task queues, exponential backoff, and DLQ",
         upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all or ensure_schema_upgrades
     ),
+    Migration(
+        version="007_pipeline_jobs_attempt_count",
+        description="Adds attempt_count to pipeline_jobs for retry taxonomy and stage registry",
+        upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
+    ),
 ]
 
 

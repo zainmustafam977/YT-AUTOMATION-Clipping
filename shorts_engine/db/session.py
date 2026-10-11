@@ -241,6 +241,12 @@ def ensure_schema_upgrades(target_engine=None):
         if "pipeline_jobs" not in table_names:
             from shorts_engine.db.models import PipelineJob
             PipelineJob.__table__.create(eng, checkfirst=True)
+        else:
+            cols = [c["name"] for c in inspector.get_columns("pipeline_jobs")]
+            if "attempt_count" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE pipeline_jobs ADD COLUMN attempt_count INTEGER DEFAULT 0 NOT NULL"))
+                    conn.commit()
 
     except Exception as e:
         logger.error("Database schema upgrade failed: %s", e, exc_info=True)

@@ -136,6 +136,8 @@ class PipelineRunner:
         self.quality_gate = QualityGateManager()
         self.publisher = YouTubePublisher(db_session)
         self.alerter = PipelineAlerter()
+        from shorts_engine.orchestration.stage_registry import StageExecutor, PIPELINE
+        self.stage_executor = StageExecutor(pipeline=PIPELINE)
 
     def get_or_create_channel(self, channel_id_str: str = "default_channel", name: str = "Default Channel") -> Channel:
         channel = self.db.query(Channel).filter_by(youtube_channel_id=channel_id_str).first()

@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Enum as SQLEnum,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from shorts_engine.db.session import Base
 
 
@@ -62,8 +62,32 @@ class PipelineJobStatus(str, Enum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
+    DONE = "DONE"
     FAILED = "FAILED"
     DEAD_LETTER = "DEAD_LETTER"
+    QUARANTINED = "QUARANTINED"
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            val = self.value.lower()
+            oth = other.lower()
+            if (val in ("completed", "done") and oth in ("completed", "done")) or (val in ("dead_letter", "quarantined") and oth in ("dead_letter", "quarantined")):
+                return True
+            return val == oth
+        if isinstance(other, PipelineJobStatus):
+            val = self.value.lower()
+            oth = other.value.lower()
+            if (val in ("completed", "done") and oth in ("completed", "done")) or (val in ("dead_letter", "quarantined") and oth in ("dead_letter", "quarantined")):
+                return True
+            return val == oth
+        if isinstance(other, Enum):
+            if hasattr(other, "value") and isinstance(other.value, str):
+                return self.value.lower() == other.value.lower()
+            return False
+        return super().__eq__(other)
+
+    def __hash__(self):
+        return hash(self.value)
 
 
 class Channel(Base):
@@ -433,6 +457,7 @@ class PipelineJob(Base):
     result_json = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0, nullable=False)
+    attempt_count = Column(Integer, default=0, nullable=False)
     max_retries = Column(Integer, default=3, nullable=False)
     backoff_multiplier_sec = Column(Float, default=10.0, nullable=False)
     next_run_at = Column(DateTime, nullable=True, index=True)
@@ -442,6 +467,22 @@ class PipelineJob(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
+
+    @property
+    def last_error(self) -> Optional[str]:
+        return self.error_message
+
+    @last_error.setter
+    def last_error(self, val: Optional[str]) -> None:
+        self.error_message = val
+
+    @validates("status")
+    def validate_status(self, key, value):
+        if isinstance(value, str):
+            u = value.upper()
+            if u in PipelineJobStatus.__members__:
+                return PipelineJobStatus[u]
+        return value
 
 
 class QuotaLedger(Base):
