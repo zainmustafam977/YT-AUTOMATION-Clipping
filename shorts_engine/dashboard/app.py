@@ -100,7 +100,9 @@ def create_dashboard_app() -> FastAPI:
                 next_url = request.url.path
                 if request.url.query:
                     next_url += f"?{request.url.query}"
-                if request.url.path not in ("/login", "/logout", "/livez", "/readyz", "/healthz", "/metrics"):
+                if request.url.path not in (
+                    "/login", "/logout", "/livez", "/readyz", "/healthz", "/metrics", "/api/health", "/api/readiness", "/api/metrics/ai-tokens"
+                ):
                     return RedirectResponse(
                         url=f"/login?next={urllib.parse.quote_plus(next_url)}",
                         status_code=status.HTTP_303_SEE_OTHER,

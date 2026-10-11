@@ -42,6 +42,7 @@ def liveness_probe():
 
 
 @router.get("/readyz", summary="Deep Readiness Probe")
+@router.get("/api/readiness", summary="Standardized Dependency Readiness Probe")
 def readiness_probe(response: Response):
     """
     Kubernetes/container readiness probe.
@@ -153,6 +154,7 @@ def readiness_probe(response: Response):
 
 
 @router.get("/healthz", summary="Unified Health Status")
+@router.get("/api/health", summary="Standardized System Health Probe")
 def healthz_summary(response: Response):
     """
     Standard top-level healthcheck returning clean status and uptime.
@@ -162,6 +164,8 @@ def healthz_summary(response: Response):
     overall_status = "healthy" if res["is_ready"] else "unhealthy"
     return {
         "status": overall_status,
+        "is_ready": res["is_ready"],
         "uptime_seconds": res["uptime_seconds"],
         "checks": {k: v.get("status", "unknown") for k, v in res.get("checks", {}).items()},
+        "timestamp": time.time(),
     }

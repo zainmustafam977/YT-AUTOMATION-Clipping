@@ -25,6 +25,7 @@ import httpx
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import reload_runtime_settings
 from shorts_engine.services.llm.quota_tracker import usage_tracker, mask_api_key
+from shorts_engine.services.monitoring.token_tracker import token_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -241,31 +242,33 @@ class LLMRouter:
         schema: Type[T],
         temperature: float = 0.2,
         video_id: Optional[str] = None,
+        clip_id: Optional[str] = None,
+        stage: Optional[str] = None,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         reload_runtime_settings()
         provider_mode = self.provider
 
         # Explicit single provider mode
         if provider_mode == "groq":
-            res, meta = self._call_groq(prompt, schema, temperature=temperature, video_id=video_id)
+            res, meta = self._call_groq(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "gemini":
-            res, meta = self._call_gemini(prompt, schema, temperature=temperature, video_id=video_id)
+            res, meta = self._call_gemini(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "openrouter":
-            res, meta = self._call_openrouter(prompt, schema, temperature=temperature, video_id=video_id)
+            res, meta = self._call_openrouter(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "openai":
-            res, meta = self._call_openai(prompt, schema, temperature=temperature, video_id=video_id)
+            res, meta = self._call_openai(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
@@ -306,7 +309,15 @@ class LLMRouter:
         for idx, (p_name, call_fn, base_rank) in enumerate(sorted_tiers):
             is_failover = idx > 0
             logger.info("Executing LLM Tier %d provider: %s (failover=%s)...", idx + 1, p_name, is_failover)
-            res, meta = call_fn(prompt, schema, temperature=temperature, failover_triggered=is_failover, video_id=video_id)
+            res, meta = call_fn(
+                prompt,
+                schema,
+                temperature=temperature,
+                failover_triggered=is_failover,
+                video_id=video_id,
+                clip_id=clip_id,
+                stage=stage,
+            )
             if res is not None:
                 failover_trail.append({
                     "provider": p_name,
@@ -367,6 +378,9 @@ class LLMRouter:
         temperature: float = 0.2,
         failover_triggered: bool = False,
         video_id: Optional[str] = None,
+        clip_id: Optional[str] = None,
+        stage: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls Groq Chat Completions API with multi-key round-robin, permanent 404 fast-skip & retry delay."""
         if not self.groq_api_keys:
@@ -533,6 +547,24 @@ class LLMRouter:
                                 except (ValueError, TypeError, ZeroDivisionError):
                                     pass
 
+                        usage = data.get("usage", {})
+                        inp_tok = usage.get("prompt_tokens")
+                        out_tok = usage.get("completion_tokens")
+                        if inp_tok is None:
+                            inp_tok = int(len(prompt.split()) * 1.33)
+                        if out_tok is None:
+                            out_tok = int(len(clean_content.split()) * 1.33)
+
+                        tok_res = token_tracker.record_usage(
+                            provider="groq",
+                            model=target_model,
+                            input_tokens=inp_tok,
+                            output_tokens=out_tok,
+                            clip_id=clip_id,
+                            video_id=video_id,
+                            stage=stage,
+                        )
+
                         self.tracker.record_request(
                             "groq",
                             active_key,
@@ -551,6 +583,10 @@ class LLMRouter:
                             "failover": failover_triggered or is_key_failover,
                             "latency_ms": latency_ms,
                             "tokens_per_sec": tokens_per_sec,
+                            "input_tokens": inp_tok,
+                            "output_tokens": out_tok,
+                            "total_tokens": inp_tok + out_tok,
+                            "cost_usd": tok_res["cost_usd"],
                         }
                 except Exception as e:
                     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -579,6 +615,9 @@ class LLMRouter:
         temperature: float = 0.2,
         failover_triggered: bool = False,
         video_id: Optional[str] = None,
+        clip_id: Optional[str] = None,
+        stage: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls Google Gemini with client-side rate pacing (3.0s/key), retry delay parsing, and multi-key failover."""
         if not self.gemini_api_keys:
@@ -670,6 +709,24 @@ class LLMRouter:
                     else:
                         validated = parsed
 
+                    u_meta = getattr(response, "usage_metadata", None) if "response" in locals() and response else None
+                    inp_tok = getattr(u_meta, "prompt_token_count", None) if u_meta else None
+                    out_tok = getattr(u_meta, "candidates_token_count", None) if u_meta else None
+                    if inp_tok is None:
+                        inp_tok = int(len(prompt.split()) * 1.33)
+                    if out_tok is None:
+                        out_tok = int(len(str(raw_text).split()) * 1.33)
+
+                    tok_res = token_tracker.record_usage(
+                        provider="gemini",
+                        model=target_model,
+                        input_tokens=inp_tok,
+                        output_tokens=out_tok,
+                        clip_id=clip_id,
+                        video_id=video_id,
+                        stage=stage,
+                    )
+
                     self.tracker.record_request("gemini", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
 
                     return validated, {
@@ -680,6 +737,10 @@ class LLMRouter:
                         "failover": failover_triggered or is_key_failover,
                         "latency_ms": latency_ms,
                         "api": used_api,
+                        "input_tokens": inp_tok,
+                        "output_tokens": out_tok,
+                        "total_tokens": inp_tok + out_tok,
+                        "cost_usd": tok_res["cost_usd"],
                     }
                 except Exception as e:
                     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -803,6 +864,24 @@ class LLMRouter:
                                     validated = schema.model_validate(parsed)
                                 else:
                                     validated = parsed
+                                u_meta = getattr(response, "usage_metadata", None) if "response" in locals() and response else None
+                                inp_tok = getattr(u_meta, "prompt_token_count", None) if u_meta else None
+                                out_tok = getattr(u_meta, "candidates_token_count", None) if u_meta else None
+                                if inp_tok is None:
+                                    inp_tok = int(len(prompt.split()) * 1.33)
+                                if out_tok is None:
+                                    out_tok = int(len(str(raw_text).split()) * 1.33)
+
+                                tok_res = token_tracker.record_usage(
+                                    provider="gemini",
+                                    model=target_model,
+                                    input_tokens=inp_tok,
+                                    output_tokens=out_tok,
+                                    clip_id=clip_id,
+                                    video_id=video_id,
+                                    stage=stage,
+                                )
+
                                 self.tracker.record_request("gemini", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
                                 return validated, {
                                     "provider": "gemini",
@@ -812,6 +891,10 @@ class LLMRouter:
                                     "failover": failover_triggered or is_key_failover,
                                     "latency_ms": latency_ms,
                                     "api": used_api,
+                                    "input_tokens": inp_tok,
+                                    "output_tokens": out_tok,
+                                    "total_tokens": inp_tok + out_tok,
+                                    "cost_usd": tok_res["cost_usd"],
                                 }
                             except Exception as retry_503_err:
                                 last_error = retry_503_err
@@ -833,6 +916,9 @@ class LLMRouter:
         temperature: float = 0.2,
         failover_triggered: bool = False,
         video_id: Optional[str] = None,
+        clip_id: Optional[str] = None,
+        stage: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls OpenRouter Chat Completions API with multi-key round-robin, backup free slug failover, and retry delay."""
         if not self.openrouter_api_keys:
@@ -936,6 +1022,24 @@ class LLMRouter:
 
                         parsed = json.loads(clean_content)
                         validated = schema.model_validate(parsed)
+                        usage = data.get("usage", {})
+                        inp_tok = usage.get("prompt_tokens")
+                        out_tok = usage.get("completion_tokens")
+                        if inp_tok is None:
+                            inp_tok = int(len(prompt.split()) * 1.33)
+                        if out_tok is None:
+                            out_tok = int(len(clean_content.split()) * 1.33)
+
+                        tok_res = token_tracker.record_usage(
+                            provider="openrouter",
+                            model=target_model,
+                            input_tokens=inp_tok,
+                            output_tokens=out_tok,
+                            clip_id=clip_id,
+                            video_id=video_id,
+                            stage=stage,
+                        )
+
                         self.tracker.record_request("openrouter", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
 
                         return validated, {
@@ -945,6 +1049,10 @@ class LLMRouter:
                             "key_masked": mask_api_key(active_key),
                             "failover": failover_triggered or is_key_failover,
                             "latency_ms": latency_ms,
+                            "input_tokens": inp_tok,
+                            "output_tokens": out_tok,
+                            "total_tokens": inp_tok + out_tok,
+                            "cost_usd": tok_res["cost_usd"],
                         }
                 except Exception as e:
                     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -973,6 +1081,9 @@ class LLMRouter:
         temperature: float = 0.2,
         failover_triggered: bool = False,
         video_id: Optional[str] = None,
+        clip_id: Optional[str] = None,
+        stage: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls OpenAI Chat Completions API with multi-key round-robin & retry delay."""
         if not self.openai_api_keys:
@@ -1046,6 +1157,24 @@ class LLMRouter:
 
                     parsed = json.loads(clean_content)
                     validated = schema.model_validate(parsed)
+                    usage = data.get("usage", {})
+                    inp_tok = usage.get("prompt_tokens")
+                    out_tok = usage.get("completion_tokens")
+                    if inp_tok is None:
+                        inp_tok = int(len(prompt.split()) * 1.33)
+                    if out_tok is None:
+                        out_tok = int(len(clean_content.split()) * 1.33)
+
+                    tok_res = token_tracker.record_usage(
+                        provider="openai",
+                        model=self.openai_model,
+                        input_tokens=inp_tok,
+                        output_tokens=out_tok,
+                        clip_id=clip_id,
+                        video_id=video_id,
+                        stage=stage,
+                    )
+
                     self.tracker.record_request("openai", active_key, status="SUCCESS", latency_ms=latency_ms, model=self.openai_model)
 
                     return validated, {
@@ -1055,6 +1184,10 @@ class LLMRouter:
                         "key_masked": mask_api_key(active_key),
                         "failover": failover_triggered or is_key_failover,
                         "latency_ms": latency_ms,
+                        "input_tokens": inp_tok,
+                        "output_tokens": out_tok,
+                        "total_tokens": inp_tok + out_tok,
+                        "cost_usd": tok_res["cost_usd"],
                     }
             except Exception as e:
                 latency_ms = int((time.perf_counter() - t0) * 1000)

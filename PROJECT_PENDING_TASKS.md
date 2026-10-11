@@ -11,7 +11,7 @@ This document maintains the technical backlog and upcoming implementation packag
 | **Package 1: Durable Job Queue Architecture** | ✅ Completed | High | Transactional task queue, exponential backoff, DLQ, and crash recovery |
 | **Package 2: Multi-Worker Concurrency & Scaling** | ✅ Completed | High | PostgreSQL migration engine, dialect-aware DDL, and multi-node claim isolation |
 | **Package 3: Pipeline AI & Media Enhancements** | ✅ Completed | Medium | Dynamic subtitle styling, smart reframing, and automated A/B testing |
-| **Package 4: Observability & Health Dashboards** | ⏳ Backlog | Medium | Centralized metrics, Prometheus/Grafana or FastAPI real-time monitor |
+| **Package 4: Observability & Health Dashboards** | ✅ Completed | Medium | Centralized metrics, Prometheus/Grafana or FastAPI real-time monitor |
 
 ---
 
@@ -70,12 +70,19 @@ This document maintains the technical backlog and upcoming implementation packag
 ---
 
 ### Package 4: System Observability & Monitoring
-- **Goals & Requirements**:
-  1. **Structured Metrics**:
-     - Measure API quota utilization against YouTube daily cap (10,000 units/day) with proactive alerts at 85% usage.
-     - Track AI token costs per clip (Groq, Gemini, OpenRouter, OpenAI).
-  2. **Health Endpoints**:
-     - Standardize `/api/health` and `/api/readiness` endpoints checking DB connectivity, disk space (`storage/`), and FFmpeg binary availability.
+- **Status**: ✅ Completed
+- **Implemented Capabilities**:
+  1. **Standardized Health & Readiness Probes**:
+     - Standardized `/api/health` and `/api/readiness` endpoints with latency measurements, storage disk headroom checks (< 1.0 GB critical 503, < 3.0 GB warning), and FFmpeg/FFprobe binary path validations.
+     - Public monitoring whitelist in FastAPI auth middleware to allow scraper access without login redirects.
+  2. **Proactive YouTube API Quota Alerts**:
+     - Automated alert trigger at 85% daily cap (10,000 units/day) with WARNING dispatch to Slack, Discord, Telegram, and Sentry via `PipelineAlerter`.
+     - Escalation to CRITICAL at 100% cap and Pacific-day deduplication/cooldown.
+  3. **AI Token & Inference Cost Tracker**:
+     - Thread-safe `AITokenCostTracker` (`shorts_engine/services/monitoring/token_tracker.py`) tracking token volumes and estimated USD inference costs per clip, per provider (Groq, Gemini, OpenRouter, OpenAI), and per day.
+     - Integration across `LLMRouter` with usage extraction and per-call metadata.
+     - Structured endpoints: `GET /api/metrics/ai-tokens` and `GET /api/metrics/clips/{clip_id}/ai-tokens`.
+     - Standard Prometheus OpenMetrics exposition at `GET /metrics` (`shorts_youtube_quota_used_units`, `shorts_ai_tokens_total`, `shorts_ai_cost_usd_total`).
 
 ---
 

@@ -92,6 +92,62 @@ def prometheus_metrics():
     lines.append(f'shorts_configured_api_keys{{provider="openrouter"}} {len(settings.get_openrouter_keys())}')
     lines.append(f'shorts_configured_api_keys{{provider="openai"}} {len(settings.get_openai_keys())}')
 
+    # 6. YouTube API Quota Telemetry
+    try:
+        from shorts_engine.services.publishing.quota import QuotaTracker
+        quota_metrics = QuotaTracker().get_usage_metrics()
+        lines.append("\n# HELP shorts_youtube_quota_used_units YouTube Data API v3 daily quota units used")
+        lines.append("# TYPE shorts_youtube_quota_used_units gauge")
+        lines.append(f"shorts_youtube_quota_used_units {quota_metrics.get('used_units', 0)}")
+        lines.append("\n# HELP shorts_youtube_quota_daily_limit YouTube Data API v3 daily quota units cap")
+        lines.append("# TYPE shorts_youtube_quota_daily_limit gauge")
+        lines.append(f"shorts_youtube_quota_daily_limit {quota_metrics.get('daily_limit', 10000)}")
+        lines.append("\n# HELP shorts_youtube_quota_used_percent YouTube Data API v3 percentage of daily quota used")
+        lines.append("# TYPE shorts_youtube_quota_used_percent gauge")
+        lines.append(f"shorts_youtube_quota_used_percent {quota_metrics.get('pct', 0.0):.1f}")
+    except Exception:
+        pass
+
+    # 7. AI Token Consumption & Estimated Cost Telemetry
+    try:
+        from shorts_engine.services.monitoring.token_tracker import token_tracker
+        tok_summary = token_tracker.get_summary()
+        totals = tok_summary.get("totals", {})
+        lines.append("\n# HELP shorts_ai_tokens_total Total tokens consumed across AI providers")
+        lines.append("# TYPE shorts_ai_tokens_total gauge")
+        lines.append(f'shorts_ai_tokens_total{{type="all"}} {totals.get("total_tokens", 0)}')
+        lines.append(f'shorts_ai_tokens_total{{type="input"}} {totals.get("input_tokens", 0)}')
+        lines.append(f'shorts_ai_tokens_total{{type="output"}} {totals.get("output_tokens", 0)}')
+
+        lines.append("\n# HELP shorts_ai_cost_usd_total Estimated total expenditure on AI inference in USD")
+        lines.append("# TYPE shorts_ai_cost_usd_total gauge")
+        lines.append(f'shorts_ai_cost_usd_total {totals.get("estimated_cost_usd", 0.0):.6f}')
+
+        for prov, p_data in tok_summary.get("providers", {}).items():
+            lines.append(f'shorts_ai_tokens_total{{type="provider_total",provider="{prov}"}} {p_data.get("total_tokens", 0)}')
+            lines.append(f'shorts_ai_cost_usd_total{{provider="{prov}"}} {p_data.get("estimated_cost_usd", 0.0):.6f}')
+    except Exception:
+        pass
+
     lines.append("")  # trailing newline required by Prometheus specification
     body = "\n".join(lines)
     return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+@router.get("/api/metrics/ai-tokens", summary="AI Token Usage & Cost Metrics")
+def ai_token_metrics():
+    """
+    Returns structured JSON with lifetime and daily AI token usage and USD costs
+    partitioned across Groq, Gemini, OpenRouter, and OpenAI.
+    """
+    from shorts_engine.services.monitoring.token_tracker import token_tracker
+    return token_tracker.get_summary()
+
+
+@router.get("/api/metrics/clips/{clip_id}/ai-tokens", summary="Per-Clip AI Token Usage & Cost")
+def clip_ai_token_metrics(clip_id: str):
+    """
+    Returns AI token breakdown and estimated USD inference cost for a specific clip.
+    """
+    from shorts_engine.services.monitoring.token_tracker import token_tracker
+    return token_tracker.get_clip_cost(clip_id)

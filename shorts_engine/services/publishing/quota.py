@@ -45,6 +45,13 @@ def get_pacific_day_bounds() -> Tuple[datetime, datetime, str]:
 
 
 class QuotaTracker:
+    _alerted_thresholds = set()
+
+    @classmethod
+    def reset_alert_cooldown(cls) -> None:
+        """Clears alerted thresholds set for test isolation and cooldown reset."""
+        cls._alerted_thresholds.clear()
+
     def __init__(self, state_file: Optional[Path] = None):
         self.state_file = state_file or settings.STORAGE_DIR / "quota_state.json"
         self.daily_limit = getattr(settings, "DAILY_QUOTA_LIMIT", 10000)
@@ -104,7 +111,7 @@ class QuotaTracker:
         job_id: Optional[str] = None,
         db: Optional[Session] = None,
     ) -> int:
-        """Records video publish cost in the ledger."""
+        """Records video publish cost in the ledger and checks for quota threshold alerts."""
         self.record_usage(
             units=cost,
             operation="youtube.videos.insert",
@@ -112,6 +119,7 @@ class QuotaTracker:
             job_id=job_id,
             db=db,
         )
+        self.check_and_alert_quota(db=db)
         return self.get_used_units(db=db)
 
     def record_channels_list(
@@ -271,3 +279,73 @@ class QuotaTracker:
         else:
             with SessionLocal() as session:
                 return _cal(session)
+
+    def check_and_alert_quota(
+        self,
+        db: Optional[Session] = None,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Evaluates YouTube Data API quota utilization against the daily cap (10,000 units/day default).
+        Dispatches proactive alerts to PipelineAlerter:
+        - WARNING at >= 85% utilization (or configured settings.QUOTA_WARNING_THRESHOLD)
+        - CRITICAL at >= 100% utilization (quota exhausted)
+        Enforces Pacific-day deduplication so alerts are not repeatedly fired unless
+        utilization escalates from WARNING to CRITICAL or force=True.
+        """
+        metrics = self.get_usage_metrics(db=db)
+        pct = metrics.get("pct", 0.0)
+        warning_thresh = getattr(settings, "QUOTA_WARNING_THRESHOLD", 0.85) * 100.0
+
+        alert_needed = False
+        level = "INFO"
+        if pct >= 100.0 or metrics.get("remaining_units", 0) <= 0:
+            alert_needed = True
+            level = "CRITICAL"
+        elif pct >= warning_thresh:
+            alert_needed = True
+            level = "WARNING"
+
+        if not alert_needed and not force:
+            return {"alert_sent": False, "level": None, "metrics": metrics}
+
+        now_pt = datetime.now(PACIFIC_TZ)
+        today_pt_str = now_pt.strftime("%Y-%m-%d")
+        cooldown_key = f"{today_pt_str}:{level}"
+
+        if not force and cooldown_key in QuotaTracker._alerted_thresholds:
+            logger.debug("Quota alert for %s already sent today. Skipping duplicate.", cooldown_key)
+            return {"alert_sent": False, "level": level, "deduplicated": True, "metrics": metrics}
+
+        try:
+            from shorts_engine.services.monitoring.alerter import PipelineAlerter
+            alerter = PipelineAlerter()
+            title = f"YouTube Quota {level.capitalize()} ({pct:.1f}% Used)"
+            message = (
+                f"YouTube Data API v3 daily quota utilization reached {pct:.1f}% "
+                f"({metrics['used_units']}/{metrics['daily_limit']} units). "
+                f"Remaining units: {metrics['remaining_units']}. "
+                f"Uploads executed today: {metrics['uploads_today']}/{metrics['daily_upload_cap']}. "
+                f"Quota resets at midnight Pacific Time ({metrics['reset_at_iso']})."
+            )
+            context = {
+                "used_units": metrics["used_units"],
+                "daily_limit": metrics["daily_limit"],
+                "remaining_units": metrics["remaining_units"],
+                "pct": pct,
+                "uploads_today": metrics["uploads_today"],
+                "daily_upload_cap": metrics["daily_upload_cap"],
+                "reset_at_iso": metrics["reset_at_iso"],
+                "timezone": metrics["timezone"],
+            }
+            dispatched = alerter.alert(
+                title=title,
+                message=message,
+                level=level,
+                context=context,
+            )
+            QuotaTracker._alerted_thresholds.add(cooldown_key)
+            return {"alert_sent": True, "dispatched": dispatched, "level": level, "metrics": metrics}
+        except Exception as e:
+            logger.warning("Failed to dispatch quota alert: %s", e)
+            return {"alert_sent": False, "error": str(e), "metrics": metrics}
