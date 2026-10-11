@@ -40,14 +40,18 @@ class PipelineSettings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite:///./storage/shorts_automation.db")
     POSTGRES_PASSWORD: Optional[str] = Field(default=None, description="PostgreSQL password if using postgres")
 
-    # Security & Encryption (AES-256-GCM)
-    MASTER_ENCRYPTION_KEY: str = Field(
-        default="yt_shorts_dev_master_secret_key_32_bytes_min!",
-        description="Master key used to derive AES-256-GCM key for encrypting OAuth tokens and API secrets",
+    # Security & Encryption (Fernet via SECRETS_MASTER_KEY)
+    SECRETS_MASTER_KEY: Optional[str] = Field(
+        default=None,
+        description="Master key used by secretbox for Fernet symmetric encryption of OAuth tokens and API secrets",
     )
-    ENCRYPTION_SALT: str = Field(
-        default="yt_shorts_kdf_salt_2026_secure!",
-        description="Salt for PBKDF2 key derivation",
+    MASTER_ENCRYPTION_KEY: Optional[str] = Field(
+        default=None,
+        description="Legacy master key (deprecated, use SECRETS_MASTER_KEY)",
+    )
+    ENCRYPTION_SALT: Optional[str] = Field(
+        default=None,
+        description="Salt for PBKDF2 key derivation (legacy)",
     )
     ENFORCE_SECRET_ENTROPY: bool = Field(
         default=False,
@@ -473,10 +477,12 @@ class PipelineSettings(BaseSettings):
             "ytpassword_secret_change_me",
         }
         has_placeholders = (
-            self.MASTER_ENCRYPTION_KEY in placeholder_keys
-            or self.ENCRYPTION_SALT in placeholder_keys
+            (self.MASTER_ENCRYPTION_KEY is not None and self.MASTER_ENCRYPTION_KEY in placeholder_keys)
+            or (self.SECRETS_MASTER_KEY is not None and self.SECRETS_MASTER_KEY in placeholder_keys)
+            or (self.ENCRYPTION_SALT is not None and self.ENCRYPTION_SALT in placeholder_keys)
             or self.DASHBOARD_SECRET_KEY in placeholder_keys
-            or len(self.MASTER_ENCRYPTION_KEY) < 32
+            or (self.MASTER_ENCRYPTION_KEY is not None and len(self.MASTER_ENCRYPTION_KEY) < 32)
+            or (self.SECRETS_MASTER_KEY is not None and len(self.SECRETS_MASTER_KEY) < 32)
             or len(self.DASHBOARD_SECRET_KEY) < 32
         )
 

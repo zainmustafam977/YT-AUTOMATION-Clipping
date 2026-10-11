@@ -72,6 +72,8 @@ class Channel(Base):
     last_seen_video_id = Column(String(64), nullable=True)
     publish_target_channel_id = Column(String(64), nullable=True)
     human_review_required = Column(Boolean, default=True, nullable=False)
+    # Holds per-channel OAuth token material only (JSON string with refresh_token, access_token, etc.).
+    # Application-level OAuth client secrets must NEVER be stored in this column.
     encrypted_oauth_token = Column(Text, nullable=True)
     upload_defaults_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

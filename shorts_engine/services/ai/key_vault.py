@@ -126,36 +126,35 @@ class ApiKeyVault:
         self._fernet = self._init_fernet(fernet_key)
 
     def _init_fernet(self, explicit_key: Optional[Union[bytes, str]] = None) -> Fernet:
-        """Initializes or loads the 256-bit Fernet key from disk or parameter."""
+        """Initializes or loads the 256-bit Fernet key from parameter, disk, or secretbox."""
         if explicit_key:
             key_bytes = explicit_key.encode("utf-8") if isinstance(explicit_key, str) else explicit_key
             return Fernet(key_bytes)
 
-        # Check existing key file on disk
-        if self.vault_key_path.exists() and self.vault_key_path.stat().st_size > 0:
+        # Check existing key file on disk if explicitly present
+        if self.vault_key_path and self.vault_key_path.exists() and self.vault_key_path.stat().st_size > 0:
             try:
                 with open(self.vault_key_path, "rb") as f:
                     key_bytes = f.read().strip()
                 return Fernet(key_bytes)
             except Exception as e:
-                logger.warning("Failed to read vault key file from %s: %s. Generating new key.", self.vault_key_path, e)
+                logger.warning("Failed to read vault key file from %s: %s. Using secretbox.", self.vault_key_path, e)
 
-        # Generate new Fernet key and save securely
-        key_bytes = Fernet.generate_key()
-        try:
-            self.vault_key_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.vault_key_path, "wb") as f:
-                f.write(key_bytes)
-            if sys.platform != "win32":
-                try:
-                    os.chmod(self.vault_key_path, 0o600)
-                except Exception:
-                    pass
-            logger.info("Generated fresh Fernet vault key at %s", self.vault_key_path)
-        except Exception as e:
-            logger.error("Could not persist vault key to %s: %s", self.vault_key_path, e)
+        # If a custom non-default path was specified (e.g. in test fixtures), generate into it
+        default_path = Path(settings.STORAGE_DIR) / ".vault.key"
+        if self.vault_key_path and self.vault_key_path != default_path:
+            key_bytes = Fernet.generate_key()
+            try:
+                self.vault_key_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.vault_key_path, "wb") as f:
+                    f.write(key_bytes)
+                return Fernet(key_bytes)
+            except Exception as e:
+                logger.error("Could not persist custom vault key to %s: %s", self.vault_key_path, e)
 
-        return Fernet(key_bytes)
+        # Standard centralized Fernet key from SECRETS_MASTER_KEY
+        from shorts_engine.security.secretbox import get_fernet
+        return get_fernet()
 
     def encrypt_key(self, raw_key: str) -> str:
         """Encrypts a plaintext API key string using Fernet."""

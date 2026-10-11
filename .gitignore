@@ -8,14 +8,23 @@
 .env
 .env.*
 !.env.example
+in progress dev/.env
+in progress dev/.env.*
 *.pem
 *.key
 *.cert
 *.crt
+*.enc
 client_secret*.json
 credentials.json
 token.json
 oauth_credentials.json
+cookies.txt
+cookies*.txt
+harvester_cookies*.txt
+storage/harvester_cookies.txt
+storage/cookies.txt
+*.bak
 
 # ------------------------------------------------------------------------------
 # 2. Virtual Environments & Python Runtime

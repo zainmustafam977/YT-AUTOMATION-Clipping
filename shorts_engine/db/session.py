@@ -241,10 +241,12 @@ def ensure_schema_upgrades(target_engine=None):
 
 
 def init_db(target_engine=None):
-    """Initializes tables in database, applies schema upgrades, and triggers if PostgreSQL."""
+    """Initializes tables in database, applies schema upgrades, versioned migrations, and triggers if PostgreSQL."""
     eng = target_engine or engine
     Base.metadata.create_all(bind=eng)
     ensure_schema_upgrades(eng)
+    from shorts_engine.db.migrations import run_schema_migrations
+    run_schema_migrations(eng)
     if is_postgres(eng):
         apply_m3_01_triggers(eng)
 

@@ -10,6 +10,7 @@ Implements Section 3 of the Shorts Engine Specification:
 5. AES-256-GCM token encryption at rest. Never logs secrets or tokens.
 """
 
+import os
 import json
 import logging
 import secrets
@@ -62,44 +63,64 @@ class ChannelOAuthManager:
         self.secrets_path = client_secrets_file or self._find_client_secrets_file()
 
     def _find_client_secrets_file(self) -> Path:
+        storage_dir = settings.STORAGE_DIR
+
+        # 1. Prioritize encrypted client secret vaults
+        encrypted_candidates = [
+            storage_dir / "client_secret.enc",
+            storage_dir / "client_secret.json.enc",
+            Path("storage/client_secret.enc").resolve(),
+            Path("storage/client_secret.json.enc").resolve(),
+        ]
+        for p in encrypted_candidates:
+            if p.exists() and p.is_file() and p.stat().st_size > 0:
+                return p
+
+        # 2. Check plaintext candidates (during migration and for test fixtures)
         candidates = [
-            settings.STORAGE_DIR / "client_secret.json",
+            storage_dir / "client_secret.json",
             Path("storage/client_secret.json").resolve(),
             Path("D:/Projects/YT AUTOMATION/storage/client_secret.json").resolve(),
         ]
-        storage_dir = settings.STORAGE_DIR
         if storage_dir.exists():
             for p in storage_dir.glob("client_secret*.json"):
                 candidates.insert(0, p)
             for p in storage_dir.glob("*client_secret*"):
-                if p.is_file() and p.stat().st_size > 0:
+                if p.is_file() and p.stat().st_size > 0 and p not in candidates:
                     candidates.append(p)
 
-        target_std = settings.STORAGE_DIR / "client_secret.json"
+        target_std = storage_dir / "client_secret.enc"
         for p in candidates:
             if p.exists() and p.is_file() and p.stat().st_size > 0:
-                if p != target_std and (not target_std.exists() or target_std.stat().st_size == 0):
-                    try:
-                        import shutil
-                        shutil.copy2(p, target_std)
-                        logger.info("Standardized client secrets from %s to %s", p.name, target_std)
-                        return target_std
-                    except Exception as e:
-                        logger.warning("Could not standardize client secrets: %s", e)
                 return p
         return target_std
 
     def load_client_secrets(self) -> Dict[str, Any]:
-        """Loads and parses the client secret JSON file."""
+        """Loads and parses the client secret configuration, decrypting if encrypted."""
+        # 1. Environment variable override
+        env_json = os.environ.get("YOUTUBE_CLIENT_SECRET_JSON")
+        if env_json and env_json.strip().startswith("{"):
+            try:
+                return json.loads(env_json.strip())
+            except Exception as e:
+                logger.warning("Failed to parse YOUTUBE_CLIENT_SECRET_JSON env var: %s", e)
+
         if not self.secrets_path.exists():
             raise FileNotFoundError(
                 f"Google OAuth client secrets file not found at {self.secrets_path}. "
-                "Please place client_secret.json in storage/."
+                "Please place client_secret.enc in storage/."
             )
         try:
-            return json.loads(self.secrets_path.read_text(encoding="utf-8"))
+            content = self.secrets_path.read_text(encoding="utf-8").strip()
+            # If plaintext JSON
+            if content.startswith("{"):
+                return json.loads(content)
+            # If Fernet ciphertext -> decrypt via secretbox
+            from shorts_engine.security.secretbox import decrypt
+            decrypted = decrypt(content)
+            return json.loads(decrypted)
         except Exception as e:
-            raise ValueError(f"Failed to parse client secret JSON at {self.secrets_path}: {e}") from e
+            raise ValueError(f"Failed to parse or decrypt client secret at {self.secrets_path}: {e}") from e
 
     def get_client_config(self) -> Dict[str, Any]:
         """Returns the client configuration dictionary under 'web' or 'installed'."""

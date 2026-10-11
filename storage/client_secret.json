@@ -1,1 +1,0 @@
-{"web":{"client_id":"746579743277-85u28coj5sloln31b79rdkj09hmc6jvb.apps.googleusercontent.com","project_id":"yt-auto-510417","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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"}}

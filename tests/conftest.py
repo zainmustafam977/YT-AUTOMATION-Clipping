@@ -33,3 +33,19 @@ def isolate_quota_state(monkeypatch, tmp_path):
 
     monkeypatch.setattr(QuotaTracker, "__init__", patched_init)
     yield
+
+
+@pytest.fixture(autouse=True)
+def default_test_master_key(monkeypatch):
+    """Provides a valid test Fernet master key for test execution if not explicitly set."""
+    if not os.environ.get("SECRETS_MASTER_KEY"):
+        from shorts_engine.config.settings import settings
+        env_key = getattr(settings, "SECRETS_MASTER_KEY", None)
+        if env_key:
+            monkeypatch.setenv("SECRETS_MASTER_KEY", env_key)
+        else:
+            from cryptography.fernet import Fernet
+            test_key = Fernet.generate_key().decode()
+            monkeypatch.setenv("SECRETS_MASTER_KEY", test_key)
+    yield
+

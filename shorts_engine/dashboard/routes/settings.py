@@ -15,7 +15,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from shorts_engine.config.settings import settings
-from shorts_engine.config.logging_config import reload_runtime_settings, save_runtime_settings
+from shorts_engine.config.logging_config import (
+    reload_runtime_settings,
+    save_runtime_settings,
+    redact_sensitive_data,
+)
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.models import User
 from shorts_engine.db.security import mask_secret
@@ -384,7 +388,8 @@ def update_settings(
         updates["OPENAI_API_KEY"] = parsed_openai[0]
 
     save_runtime_settings(updates)
-    logger.info("Operator '%s' updated runtime settings: %s", current_user.username, updates)
+    sanitized_updates = redact_sensitive_data(updates)
+    logger.info("Operator '%s' updated runtime settings: %s", current_user.username, sanitized_updates)
 
     if request.headers.get("hx-request") == "true":
         return Response(
@@ -398,7 +403,7 @@ def update_settings(
             status_code=303,
         )
 
-    return {"status": "success", "updated_settings": updates}
+    return {"status": "success", "updated_settings": sanitized_updates}
 
 
 @router.post("/settings/keys/delete", summary="Remove an individual API key")

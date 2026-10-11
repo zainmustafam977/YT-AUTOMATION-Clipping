@@ -15,7 +15,57 @@ from typing import Dict, Any
 from shorts_engine.config.settings import settings
 from shorts_engine.utils.fs import atomic_write_json
 
+import re
+
 logger = logging.getLogger(__name__)
+
+SENSITIVE_KEY_PATTERN = re.compile(
+    r"(key|secret|token|password|passwd|credential|auth)",
+    re.IGNORECASE,
+)
+
+
+def is_sensitive_key(key_name: str) -> bool:
+    """Returns True if key name matches sensitive patterns (key, secret, token, password, etc.)."""
+    return bool(SENSITIVE_KEY_PATTERN.search(str(key_name)))
+
+
+def redact_sensitive_data(val: Any) -> Any:
+    """
+    Recursively traverses dictionaries, lists, and tuples, redacting any value
+    whose key matches sensitive patterns with '[REDACTED]'.
+    """
+    if isinstance(val, dict):
+        redacted = {}
+        for k, v in val.items():
+            if is_sensitive_key(str(k)):
+                redacted[k] = "[REDACTED]"
+            else:
+                redacted[k] = redact_sensitive_data(v)
+        return redacted
+    elif isinstance(val, list):
+        return [redact_sensitive_data(item) for item in val]
+    elif isinstance(val, tuple):
+        return tuple(redact_sensitive_data(item) for item in val)
+    return val
+
+
+class SensitiveDataFilter(logging.Filter):
+    """
+    Logging filter that intercepts LogRecords and redacts any argument or formatted
+    payload containing fields matching key/secret/token/password patterns.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = redact_sensitive_data(record.args)
+            elif isinstance(record.args, tuple):
+                record.args = tuple(redact_sensitive_data(a) for a in record.args)
+            elif isinstance(record.args, list):
+                record.args = [redact_sensitive_data(a) for a in record.args]
+        return True
+
 
 RUNTIME_CONFIG_PATH = settings.STORAGE_DIR / "config" / "runtime_settings.json"
 LOGS_DIR = settings.STORAGE_DIR / "logs"
@@ -44,6 +94,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     Initializes standard Python logging with dual output:
     1. Console (sys.stdout) for live terminal feedback.
     2. RotatingFileHandler writing to storage/logs/shorts_engine.log (or shorts_engine_test.log during tests).
+    Applies SensitiveDataFilter to prevent secrets leaking to logs.
     """
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter(
@@ -53,6 +104,9 @@ def setup_logging(level: int = logging.INFO) -> None:
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
+
+    sensitive_filter = SensitiveDataFilter()
+    root_logger.addFilter(sensitive_filter)
 
     active_log_file = get_log_file_path()
 
@@ -67,6 +121,7 @@ def setup_logging(level: int = logging.INFO) -> None:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         console_handler.setLevel(level)
+        console_handler.addFilter(sensitive_filter)
         root_logger.addHandler(console_handler)
 
     if not has_file:
@@ -78,12 +133,14 @@ def setup_logging(level: int = logging.INFO) -> None:
         )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(level)
+        file_handler.addFilter(sensitive_filter)
         root_logger.addHandler(file_handler)
 
     # Propagate uvicorn and app loggers
     for log_name in ["shorts_engine", "uvicorn", "uvicorn.access", "uvicorn.error"]:
         log_inst = logging.getLogger(log_name)
         log_inst.setLevel(level)
+        log_inst.addFilter(sensitive_filter)
 
 
 def reload_runtime_settings() -> Dict[str, Any]:
@@ -133,6 +190,8 @@ def save_runtime_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
     """
     Persists safe runtime parameter updates to storage/config/runtime_settings.json
     and applies them directly to the active settings singleton.
+    Sensitive credentials (matching key/secret/token/password patterns) are strictly
+    excluded from disk persistence.
     """
     RUNTIME_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -144,7 +203,12 @@ def save_runtime_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             current = {}
 
-    current.update(updates)
+    # Purge any legacy sensitive keys that might have existed in current file
+    current = {k: v for k, v in current.items() if not is_sensitive_key(k)}
+
+    # Exclude sensitive updates from on-disk persistence
+    safe_updates = {k: v for k, v in updates.items() if not is_sensitive_key(k)}
+    current.update(safe_updates)
 
     atomic_write_json(RUNTIME_CONFIG_PATH, current, indent=2)
 
