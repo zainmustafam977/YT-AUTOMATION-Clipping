@@ -56,7 +56,7 @@ class DurableJobQueue:
         known_stages = {
             "ingest", "download", "transcribe", "select", "analyze_candidates",
             "reframe", "crop_plan", "captions", "caption", "render", "publish",
-            "metadata_update", "daily_health",
+            "metadata_update", "daily_health", "analytics_poll",
         }
         if stage:
             eff_stage = stage.lower()

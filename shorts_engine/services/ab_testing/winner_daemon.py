@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, PublishLog
+from shorts_engine.db.models import Clip, ClipStatus, PublishLog, AnalyticsMetric
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
 from shorts_engine.services.queue.durable_queue import durable_job_queue
 
@@ -30,6 +30,7 @@ def evaluate_and_promote_clip(
     """
     Evaluates a single published clip's A/B variations and executes
     winner promotion or circuit breaker rollback if warranted.
+    Reads performance telemetry exclusively from the `analytics_metrics` table.
     """
     if clip.status != ClipStatus.PUBLISHED:
         return None
@@ -41,7 +42,40 @@ def evaluate_and_promote_clip(
     opt = optimizer or BayesianVariantOptimizer()
     pub = publisher
 
-    analytics = clip.analytics or {}
+    # Read per-clip snapshots from analytics_metrics table
+    metric_rows = (
+        db.query(AnalyticsMetric)
+        .filter_by(clip_id=clip.id)
+        .order_by(AnalyticsMetric.snapshot_date.asc())
+        .all()
+    )
+
+    analytics = dict(clip.analytics or {})
+    if metric_rows:
+        total_views = sum(m.views for m in metric_rows)
+        total_impressions = sum(m.impressions for m in metric_rows)
+        overall_ctr = round(total_views / total_impressions, 4) if total_impressions > 0 else 0.0
+
+        if len(metric_rows) >= 2:
+            current_velocity = round(metric_rows[-1].views / 24.0, 2)
+        elif len(metric_rows) == 1:
+            current_velocity = round(metric_rows[0].views / 24.0, 2)
+        else:
+            current_velocity = float(analytics.get("current_velocity", 0.0))
+
+        analytics["views"] = total_views
+        analytics["impressions"] = total_impressions
+        analytics["click_through_rate"] = overall_ctr
+        analytics["current_velocity"] = current_velocity
+        analytics["subscribers_gained"] = sum(m.subscribers_gained for m in metric_rows)
+        analytics["average_view_duration"] = metric_rows[-1].average_view_duration
+
+        # Feed table metrics to active variant
+        for var in variations:
+            if var.get("is_active"):
+                var["impressions"] = max(var.get("impressions", 0), total_impressions)
+                var["clicks"] = max(var.get("clicks", 0), total_views)
+
     baseline_velocity = float(analytics.get("baseline_velocity", 0.0))
     current_velocity = float(analytics.get("current_velocity", 0.0))
 

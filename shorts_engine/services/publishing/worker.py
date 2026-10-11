@@ -123,6 +123,95 @@ def build_youtube_client(
     return googleapiclient.discovery.build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
+def build_youtube_analytics_client(
+    token_or_refresh: Any,
+    client_config: Optional[Dict[str, Any]] = None,
+    scopes: Optional[List[str]] = None,
+) -> Any:
+    """
+    Builds an authorized YouTube Analytics API v2 client using OAuth credentials.
+    """
+    config = client_config or get_default_client_config()
+    installed = config.get("installed") or config.get("web") or {}
+    client_id = installed.get("client_id")
+    client_secret = installed.get("client_secret")
+    token_uri = installed.get("token_uri", "https://oauth2.googleapis.com/token")
+    effective_scopes = scopes or DEFAULT_SCOPES
+
+    if isinstance(token_or_refresh, str):
+        refresh_token = token_or_refresh
+        access_token = None
+    elif isinstance(token_or_refresh, dict):
+        refresh_token = token_or_refresh.get("refresh_token")
+        access_token = token_or_refresh.get("access_token")
+    else:
+        raise ValueError("token_or_refresh must be a string refresh token or dict")
+
+    if not refresh_token:
+        raise ValueError("Missing OAuth refresh token for YouTube Analytics client.")
+
+    creds = google.oauth2.credentials.Credentials(
+        token=access_token,
+        refresh_token=refresh_token,
+        token_uri=token_uri,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=effective_scopes,
+    )
+    return googleapiclient.discovery.build("youtubeAnalytics", "v2", credentials=creds, cache_discovery=False)
+
+
+def fetch_video_analytics_reports(
+    client: Any,
+    video_id: str,
+    start_date: str,
+    end_date: str,
+) -> List[Dict[str, Any]]:
+    """
+    Queries YouTube Analytics API for daily video statistics between start_date and end_date.
+    Returns list of dicts with day, views, impressions, click_through_rate, average_view_duration, subscribers_gained.
+    """
+    try:
+        req = client.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics="views,estimatedMinutesWatched,averageViewDuration,subscribersGained",
+            dimensions="day",
+            filters=f"video=={video_id}",
+            sort="day",
+        )
+        res = req.execute()
+    except Exception as e:
+        logger.error("Failed to query YouTube Analytics API for video %s: %s", video_id, e)
+        raise
+
+    col_headers = [col.get("name") if isinstance(col, dict) else str(col) for col in res.get("columnHeaders", [])]
+    rows = res.get("rows", [])
+    records = []
+    for row in rows:
+        row_dict = dict(zip(col_headers, row))
+        records.append(row_dict)
+    return records
+
+
+def get_channel_refresh_token(channel: Channel, db: Session) -> Optional[str]:
+    """Retrieves and decrypts the active refresh token for a channel."""
+    cred = db.query(ChannelCredential).filter_by(channel_id=channel.id).first()
+    if cred and cred.encrypted_refresh_token:
+        try:
+            return decrypt_secret(cred.encrypted_refresh_token)
+        except Exception as e:
+            logger.warning("Decryption failed for channel %s refresh token: %s", channel.id, e)
+    if channel.encrypted_oauth_token:
+        try:
+            token_dict = json.loads(decrypt_secret(channel.encrypted_oauth_token))
+            return token_dict.get("refresh_token")
+        except Exception:
+            pass
+    return None
+
+
 def _upload_video(
     client: Any,
     video_path: Path,
@@ -423,19 +512,7 @@ class YouTubePublishWorker:
 
     def _get_channel_refresh_token(self, channel: Channel, db: Session) -> Optional[str]:
         """Retrieves and decrypts the active refresh token for a channel."""
-        cred = db.query(ChannelCredential).filter_by(channel_id=channel.id).first()
-        if cred and cred.encrypted_refresh_token:
-            try:
-                return decrypt_secret(cred.encrypted_refresh_token)
-            except Exception as e:
-                logger.warning("Decryption failed for channel %s refresh token: %s", channel.id, e)
-        if channel.encrypted_oauth_token:
-            try:
-                token_dict = json.loads(decrypt_secret(channel.encrypted_oauth_token))
-                return token_dict.get("refresh_token")
-            except Exception:
-                pass
-        return None
+        return get_channel_refresh_token(channel, db)
 
     def _handle_quota_exceeded(
         self,

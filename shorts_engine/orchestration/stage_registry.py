@@ -475,6 +475,22 @@ def metadata_update_stage(ctx: StageContext) -> Dict[str, Any]:
         raise classify_exception(e)
 
 
+def analytics_poll_stage(ctx: StageContext) -> Dict[str, Any]:
+    """Hourly Analytics Polling Stage via AnalyticsPoller."""
+    from shorts_engine.services.analytics.poller import AnalyticsPoller
+
+    ctx.heartbeat()
+    poller = AnalyticsPoller()
+    lookback = ctx.payload.get("lookback_days", 7)
+    try:
+        summary = poller.poll_all_published_clips(db=ctx.db_session, lookback_days=lookback)
+        interval_hours = float(ctx.payload.get("scheduled_interval_hours", 1.0))
+        poller.schedule_next_poll(db=ctx.db_session, delay_hours=interval_hours)
+        return summary
+    except Exception as e:
+        raise classify_exception(e)
+
+
 # The canonical PIPELINE registry mapping
 PIPELINE: Dict[str, Stage] = {
     "ingest": Stage(
@@ -546,6 +562,12 @@ PIPELINE: Dict[str, Stage] = {
     "metadata_update": Stage(
         name="metadata_update",
         callable=metadata_update_stage,
+        produces=None,
+        max_attempts=3,
+    ),
+    "analytics_poll": Stage(
+        name="analytics_poll",
+        callable=analytics_poll_stage,
         produces=None,
         max_attempts=3,
     ),

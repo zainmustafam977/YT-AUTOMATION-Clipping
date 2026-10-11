@@ -352,6 +352,7 @@ class Clip(Base):
     publish_log = relationship("PublishLog", back_populates="clip", uselist=False, cascade="all, delete-orphan")
     platform_publish_logs = relationship("PlatformPublishLog", back_populates="clip", cascade="all, delete-orphan")
     publish_jobs = relationship("PublishJob", back_populates="clip", cascade="all, delete-orphan")
+    analytics_metrics = relationship("AnalyticsMetric", back_populates="clip", cascade="all, delete-orphan")
 
     @property
     def clip_candidate(self) -> Optional["ClipCandidate"]:
@@ -417,6 +418,45 @@ class PublishLog(Base):
     __table_args__ = (
         UniqueConstraint("clip_id", "youtube_video_id", name="uq_clip_publish"),
     )
+
+
+class AnalyticsMetric(Base):
+    """
+    Per-clip performance metrics snapshot from YouTube Analytics API.
+    Upserted daily per clip for A/B testing evaluation and dashboard reporting.
+    """
+    __tablename__ = "analytics_metrics"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), nullable=False, index=True)
+    platform_video_id = Column(String(64), nullable=False, index=True)
+    snapshot_date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    views = Column(Integer, default=0, nullable=False)
+    impressions = Column(Integer, default=0, nullable=False)
+    click_through_rate = Column(Float, default=0.0, nullable=False)
+    average_view_duration = Column(Float, default=0.0, nullable=False)
+    subscribers_gained = Column(Integer, default=0, nullable=False)
+    fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    clip = relationship("Clip", back_populates="analytics_metrics")
+
+    __table_args__ = (
+        UniqueConstraint("clip_id", "snapshot_date", name="uq_clip_snapshot_date"),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "clip_id": self.clip_id,
+            "platform_video_id": self.platform_video_id,
+            "snapshot_date": self.snapshot_date,
+            "views": self.views,
+            "impressions": self.impressions,
+            "click_through_rate": self.click_through_rate,
+            "average_view_duration": self.average_view_duration,
+            "subscribers_gained": self.subscribers_gained,
+            "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
+        }
 
 
 class PlatformPublishLog(Base):

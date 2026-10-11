@@ -1698,17 +1698,17 @@ def sync_youtube_analytics(
     current_user: User = Depends(require_operator),
     csrf_ok: bool = Depends(verify_csrf),
 ):
-    from shorts_engine.services.monitoring.analytics_sync import YouTubeAnalyticsSync
+    from shorts_engine.services.analytics.poller import AnalyticsPoller
     from shorts_engine.services.analytics.predictor import viral_predictor
 
-    syncer = YouTubeAnalyticsSync(db)
-    res = syncer.sync_all_published_clips()
+    poller = AnalyticsPoller(db)
+    res = poller.poll_all_published_clips(db)
 
     # Automatically retrain the ML virality predictor on the freshly ingested metrics
     train_res = viral_predictor.train_from_db(db)
     ml_msg = " & retrained ML Virality Predictor" if train_res.get("trained") else ""
 
-    msg = f"Synced analytics for {res['synced_count']} clips ({res['total_views']:,} views total){ml_msg}!"
+    msg = f"Synced analytics for {res['polled_clips_count']} clips ({res['total_records_upserted']} snapshots total){ml_msg}!"
     if request.headers.get("hx-request") == "true":
         return Response(
             content="",
