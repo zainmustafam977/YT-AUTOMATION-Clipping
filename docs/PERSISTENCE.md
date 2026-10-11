@@ -79,4 +79,22 @@ While SQLite with WAL mode handles multiple concurrent readers effortlessly, **S
 When horizontal scaling (multiple worker nodes or high-concurrency background ingestion) is required:
 1. Launch PostgreSQL 16 (e.g. via `docker-compose up -d postgres`).
 2. Export `DATABASE_URL=postgresql://ytuser:password@localhost:5432/ytshorts`.
-3. The platform automatically activates non-blocking row-level locking (`SELECT ... FOR UPDATE SKIP LOCKED` in `WorkerRunner`) and PostgreSQL trigger functions for seamless parallel scaling.
+3. Migrate existing SQLite data using the automated migration tool:
+   ```bash
+   python scripts/migrate_sqlite_to_postgres.py \
+       --sqlite-path storage/shorts_automation.db \
+       --target-url postgresql://ytuser:password@localhost:5432/ytshorts
+   ```
+4. The platform automatically activates non-blocking row-level locking (`SELECT ... FOR UPDATE SKIP LOCKED` in `WorkerRunner`) and PostgreSQL trigger functions for seamless parallel scaling across arbitrary worker instances.
+
+---
+
+## 5. Distributed Worker Claiming & Stale Claim Recovery
+
+In multi-node or multi-container clusters:
+- **Worker Identification**: Every worker node generates a host-scoped ID: `worker-<hostname>-<pid>-<uuid>`.
+- **Claim Token Format**: Claims are marked in `Clip.rendered_path` as `CLAIMED:<hostname>:<pid>:<uuid>`.
+- **Cross-Host Safety**:
+  - If a claim was made by a worker on the *same host*, local process checks (`is_pid_alive(pid)`) immediately detect crashes and release the claim.
+  - If a claim was made by a worker on a *different host/container*, local OS PID checks are bypassed to prevent false-positive claim stealing. Reclaiming occurs strictly after `stale_timeout_sec` (default 600s) of inactivity.
+

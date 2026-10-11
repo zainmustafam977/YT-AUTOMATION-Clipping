@@ -71,6 +71,10 @@ def ensure_schema_upgrades(target_engine=None):
     """Safely applies non-breaking schema column migrations and required unique indexes."""
     from sqlalchemy import inspect, text
     eng = target_engine or engine
+    is_pg = is_postgres(eng)
+    bool_default = "FALSE" if is_pg else "0"
+    dt_type = "TIMESTAMP" if is_pg else "DATETIME"
+
     try:
         inspector = inspect(eng)
         table_names = inspector.get_table_names()
@@ -95,7 +99,7 @@ def ensure_schema_upgrades(target_engine=None):
                     conn.commit()
             if "last_verified_at" not in cols:
                 with eng.connect() as conn:
-                    conn.execute(text("ALTER TABLE channels ADD COLUMN last_verified_at DATETIME"))
+                    conn.execute(text(f"ALTER TABLE channels ADD COLUMN last_verified_at {dt_type}"))
                     conn.commit()
 
         if "source_videos" in table_names:
@@ -106,7 +110,7 @@ def ensure_schema_upgrades(target_engine=None):
                     conn.commit()
             if "is_sensitive" not in cols:
                 with eng.connect() as conn:
-                    conn.execute(text("ALTER TABLE source_videos ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
+                    conn.execute(text(f"ALTER TABLE source_videos ADD COLUMN is_sensitive BOOLEAN DEFAULT {bool_default}"))
                     conn.commit()
 
             # Pre-flight duplicate check before creating unique index (PLAN-P1-09)
@@ -155,7 +159,7 @@ def ensure_schema_upgrades(target_engine=None):
                     conn.commit()
             if "is_sensitive" not in cols:
                 with eng.connect() as conn:
-                    conn.execute(text("ALTER TABLE clips ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
+                    conn.execute(text(f"ALTER TABLE clips ADD COLUMN is_sensitive BOOLEAN DEFAULT {bool_default}"))
                     conn.commit()
             if "draft_title" not in cols:
                 with eng.connect() as conn:
@@ -187,7 +191,7 @@ def ensure_schema_upgrades(target_engine=None):
                     conn.commit()
             if "draft_scheduled_at" not in cols:
                 with eng.connect() as conn:
-                    conn.execute(text("ALTER TABLE clips ADD COLUMN draft_scheduled_at DATETIME"))
+                    conn.execute(text(f"ALTER TABLE clips ADD COLUMN draft_scheduled_at {dt_type}"))
                     conn.commit()
             if "draft_version" not in cols:
                 with eng.connect() as conn:

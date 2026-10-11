@@ -9,9 +9,11 @@ import re
 import time
 import json
 import uuid
+import socket
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -46,13 +48,19 @@ def clear_cuda_cache():
         logger.warning(f"Failed to clear CUDA cache: {e}")
 
 
+def generate_worker_id() -> str:
+    """Generates a globally unique worker identifier containing hostname, PID, and entropy."""
+    host = socket.gethostname()
+    return f"worker-{host}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+
+
 def claim_next_clip(db: Session, worker_id: Optional[str] = None) -> Optional[Clip]:
     """
     Atomically claims the next pending clip for processing.
     - PostgreSQL: Uses SELECT ... FOR UPDATE SKIP LOCKED for non-blocking multi-worker concurrency.
     - SQLite: Uses atomic Compare-And-Swap (CAS) to prevent race conditions across local worker threads.
     """
-    wid = worker_id or f"worker-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    wid = worker_id or generate_worker_id()
 
     if is_postgres(db.get_bind()):
         # PostgreSQL: lock row directly at engine level
@@ -131,17 +139,57 @@ def is_pid_alive(pid: int) -> bool:
         return False
 
 
-def extract_pid_from_claim(claim_str: Optional[str]) -> Optional[int]:
-    """Extracts numeric PID from a 'CLAIMED:runner-<PID>' or 'CLAIMED:worker-<PID>' string."""
+def parse_claim_info(claim_str: Optional[str]) -> Tuple[Optional[str], Optional[int]]:
+    """
+    Parses a claim string into (host, pid).
+    Supports:
+      - 'CLAIMED:worker-<host>-<pid>-<uuid>' (distributed multi-host format)
+      - 'CLAIMED:worker-<pid>-<uuid>' (legacy local format)
+      - 'CLAIMED:runner-<pid>' (legacy runner format)
+    """
     if not claim_str or not isinstance(claim_str, str):
-        return None
-    m = re.search(r"CLAIMED:(?:runner|worker)-(\d+)", claim_str)
+        return None, None
+    m = re.match(r"^CLAIMED:(?:runner|worker)-([A-Za-z0-9_.-]+)-(\d+)-[a-f0-9]+$", claim_str)
     if m:
-        try:
-            return int(m.group(1))
-        except (ValueError, TypeError):
-            return None
-    return None
+        return m.group(1), int(m.group(2))
+    m_legacy = re.match(r"^CLAIMED:(?:runner|worker)-(\d+)(?:-[a-f0-9]+)?$", claim_str)
+    if m_legacy:
+        return None, int(m_legacy.group(1))
+    return None, None
+
+
+def extract_pid_from_claim(claim_str: Optional[str]) -> Optional[int]:
+    """Extracts numeric PID from a claim string for backward compatibility."""
+    _, pid = parse_claim_info(claim_str)
+    return pid
+
+
+def is_claim_stale(
+    claim_str: str,
+    updated_at: Optional[datetime],
+    now: datetime,
+    stale_timeout_sec: int = 600,
+) -> bool:
+    """
+    Determines whether a claim is stale across single-node or multi-node clusters.
+    - Local host claims: if process PID is dead -> STALE immediately.
+    - Remote host claims: safely wait for age > stale_timeout_sec (prevents false-positive steals across containers).
+    """
+    host, pid = parse_claim_info(claim_str)
+    current_host = socket.gethostname()
+
+    # If claim was made on current host (or legacy claim with no host):
+    if host is None or host.lower() == current_host.lower():
+        if pid is not None and not is_pid_alive(pid):
+            return True
+
+    # Check timeout for remote claims or living PIDs
+    if updated_at:
+        age_sec = (now - updated_at).total_seconds()
+        if age_sec > stale_timeout_sec:
+            return True
+
+    return False
 
 
 def reconcile_stale_claims(db: Session, stale_timeout_sec: int = 600) -> int:
@@ -158,25 +206,12 @@ def reconcile_stale_claims(db: Session, stale_timeout_sec: int = 600) -> int:
     try:
         rendering_clips = db.query(Clip).filter(Clip.status == ClipStatus.RENDERING).all()
         for clip in rendering_clips:
-            is_stale = False
             rpath = clip.rendered_path or ""
-
             if rpath.startswith("CLAIMED:"):
-                pid = extract_pid_from_claim(rpath)
-                if pid is not None:
-                    if not is_pid_alive(pid):
-                        logger.info("Reconciling stale claim on clip %s: worker PID %d is dead.", clip.id, pid)
-                        is_stale = True
-
-                if not is_stale and clip.updated_at:
-                    age_sec = (now - clip.updated_at).total_seconds()
-                    if age_sec > stale_timeout_sec:
-                        logger.info("Reconciling stale claim on clip %s: claim age (%.1fs) exceeds timeout.", clip.id, age_sec)
-                        is_stale = True
-
-            if is_stale:
-                clip.rendered_path = None
-                reclaimed += 1
+                if is_claim_stale(rpath, clip.updated_at, now, stale_timeout_sec=stale_timeout_sec):
+                    logger.info("Reconciling stale claim on clip %s (claim: %s)", clip.id, rpath)
+                    clip.rendered_path = None
+                    reclaimed += 1
 
         if reclaimed > 0:
             db.commit()
@@ -195,7 +230,7 @@ def claim_clip_by_id(db: Session, clip_id: str, worker_id: Optional[str] = None)
     - PostgreSQL: Uses SELECT ... FOR UPDATE SKIP LOCKED.
     - SQLite: Uses atomic CAS to guarantee single winner.
     """
-    wid = worker_id or f"worker-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    wid = worker_id or generate_worker_id()
 
     target_clip = db.query(Clip).filter(Clip.id == clip_id, Clip.status == ClipStatus.RENDERING).first()
     if not target_clip:
@@ -203,9 +238,9 @@ def claim_clip_by_id(db: Session, clip_id: str, worker_id: Optional[str] = None)
 
     # If already claimed, check if holding PID is alive
     if target_clip.rendered_path and target_clip.rendered_path.startswith("CLAIMED:"):
-        held_pid = extract_pid_from_claim(target_clip.rendered_path)
-        if held_pid is not None and not is_pid_alive(held_pid):
-            logger.info("Stealing/reclaiming clip %s from dead worker PID %s", clip_id, held_pid)
+        from datetime import datetime
+        if is_claim_stale(target_clip.rendered_path, target_clip.updated_at, datetime.utcnow()):
+            logger.info("Stealing/reclaiming clip %s from stale claim %s", clip_id, target_clip.rendered_path)
         else:
             # Still held by an active live process or named worker, do not steal
             return None
@@ -248,7 +283,7 @@ class WorkerRunner:
 
     def __init__(self, session_factory=SessionLocal, worker_id: Optional[str] = None):
         self.session_factory = session_factory
-        self.worker_id = worker_id or f"worker-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+        self.worker_id = worker_id or generate_worker_id()
         self.reframer = VideoReframer()
         self.ass_generator = ASSSubtitleGenerator()
         self.sfx_mapper = SFXMapper()

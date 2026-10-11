@@ -89,6 +89,7 @@ services:
       - DASHBOARD_PORT=8000
       - DASHBOARD_SECRET_KEY=${DASHBOARD_SECRET_KEY}
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
+      - SECRETS_MASTER_KEY=${SECRETS_MASTER_KEY}
     volumes:
       - ./storage:/app/storage
       - ./assets:/app/assets
@@ -115,6 +116,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-ytuser}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ytshorts}
       - REDIS_URL=redis://redis:6379/0
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
+      - SECRETS_MASTER_KEY=${SECRETS_MASTER_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DRY_RUN_PUBLISHING=${DRY_RUN_PUBLISHING:-true}
     volumes:
