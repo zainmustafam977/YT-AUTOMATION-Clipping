@@ -72,6 +72,8 @@ class CaptionStyleTemplate(BaseModel):
     case_transform: str = "uppercase"     # uppercase, lowercase, capitalize, none
     scale_pop: bool = True
     active_scale: int = 115
+    animation_style: str = "none"         # none, scale_pop, bounce, karaoke
+    secondary_highlight_color: Optional[str] = None
 
     def to_ass_overrides(self) -> Dict[str, Any]:
         """Maps template properties directly to ASSSubtitleGenerator override keys."""
@@ -91,6 +93,8 @@ class CaptionStyleTemplate(BaseModel):
             "case_transform": self.case_transform,
             "scale_pop": self.scale_pop,
             "active_scale": self.active_scale,
+            "animation_style": self.animation_style,
+            "secondary_highlight_color": hex_to_ass_color(self.secondary_highlight_color) if self.secondary_highlight_color else None,
         }
 
     def to_ui_dict(self) -> Dict[str, Any]:
@@ -114,6 +118,8 @@ class CaptionStyleTemplate(BaseModel):
             "case_transform": self.case_transform,
             "scale_pop": self.scale_pop,
             "active_scale": self.active_scale,
+            "animation_style": self.animation_style,
+            "secondary_highlight_hex": ass_to_hex_color(self.secondary_highlight_color) if self.secondary_highlight_color else None,
         }
 
 
@@ -196,11 +202,84 @@ BUILTIN_TEMPLATES: Dict[str, CaptionStyleTemplate] = {
         max_words_per_line=3,
         case_transform="uppercase",
     ),
+    "hormozi_bounce": CaptionStyleTemplate(
+        template_id="hormozi_bounce",
+        name="Alex Hormozi Bounce",
+        description="Viral kinetic typography: uppercase bold text with dynamic pop-in bounce animation, neon yellow highlight, and heavy outline.",
+        font_name="Arial Black",
+        font_size=58,
+        primary_color="&H00FFFFFF",
+        highlight_color="&H0000FFFF",  # Neon Yellow
+        outline_color="&H00000000",
+        outline_width=4.8,
+        shadow_depth=2.5,
+        margin_vertical=settings.CAPTION_MARGIN_VERTICAL,
+        max_words_per_line=3,
+        case_transform="uppercase",
+        scale_pop=True,
+        animation_style="bounce",
+        active_scale=125,
+    ),
+    "neon_punch": CaptionStyleTemplate(
+        template_id="neon_punch",
+        name="Neon Punch Glow",
+        description="High-energy cyberpunk aesthetic: electric spring green highlight with magenta glow and active scale bounce.",
+        font_name="Arial Black",
+        font_size=56,
+        primary_color="&H00FFFFFF",
+        highlight_color="&H0000FF7F",  # Spring Neon Green
+        outline_color="&H00800080",    # Deep Purple/Magenta
+        outline_width=4.5,
+        shadow_depth=3.5,
+        margin_vertical=settings.CAPTION_MARGIN_VERTICAL,
+        max_words_per_line=3,
+        case_transform="uppercase",
+        scale_pop=True,
+        animation_style="bounce",
+        active_scale=120,
+    ),
+    "karaoke_sweep": CaptionStyleTemplate(
+        template_id="karaoke_sweep",
+        name="Karaoke Fluid Sweep",
+        description="Smooth fluid karaoke-style color sweep across spoken words with electric cyan highlight.",
+        font_name="Arial Black",
+        font_size=56,
+        primary_color="&H00FFFFFF",
+        highlight_color="&H00FFFF00",  # Neon Cyan
+        outline_color="&H00000000",
+        outline_width=4.0,
+        shadow_depth=2.0,
+        margin_vertical=settings.CAPTION_MARGIN_VERTICAL,
+        max_words_per_line=4,
+        case_transform="uppercase",
+        scale_pop=False,
+        animation_style="karaoke",
+    ),
+    "minimal_clean": CaptionStyleTemplate(
+        template_id="minimal_clean",
+        name="Minimalist Editorial Clean",
+        description="Clean understated luxury typography: off-white with warm gold highlight and soft shadow.",
+        font_name="Arial",
+        font_size=52,
+        primary_color="&H00F0F0F0",
+        highlight_color="&H00E0A838",  # Amber / Gold
+        outline_color="&H00111111",
+        outline_width=2.5,
+        shadow_depth=1.5,
+        margin_vertical=settings.CAPTION_MARGIN_VERTICAL,
+        max_words_per_line=4,
+        case_transform="none",
+        scale_pop=False,
+        animation_style="none",
+    ),
 }
 
 TEMPLATE_ALIASES: Dict[str, str] = {
     "cyberpunk": "neon",
     "high_contrast": "high_contrast_box",
+    "hormozi_animated": "hormozi_bounce",
+    "minimal": "minimal_clean",
+    "karaoke": "karaoke_sweep",
 }
 
 

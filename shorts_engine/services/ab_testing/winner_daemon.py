@@ -66,7 +66,7 @@ def evaluate_and_promote_clip(
             winner_idx, new_title, clip.id, eval_result.confidence * 100
         )
 
-        # 1. Update title on YouTube
+        # 1. Update title and thumbnail on YouTube
         if youtube_video_id:
             pub.update_video_title(
                 youtube_video_id=youtube_video_id,
@@ -74,6 +74,17 @@ def evaluate_and_promote_clip(
                 encrypted_oauth_token=encrypted_token,
                 dry_run=settings.DRY_RUN_PUBLISHING,
             )
+            winning_thumb = variations[winner_idx].get("thumbnail_path")
+            if winning_thumb and hasattr(pub, "update_video_thumbnail"):
+                try:
+                    pub.update_video_thumbnail(
+                        youtube_video_id=youtube_video_id,
+                        thumbnail_path=winning_thumb,
+                        encrypted_oauth_token=encrypted_token,
+                        dry_run=settings.DRY_RUN_PUBLISHING,
+                    )
+                except Exception as th_err:
+                    logger.warning("Could not update winning thumbnail for clip %s: %s", clip.id, th_err)
 
         # 2. Update variations state in DB
         for i, var in enumerate(variations):
@@ -94,6 +105,8 @@ def evaluate_and_promote_clip(
             "promoted_at": datetime.utcnow().isoformat(),
             "confidence": eval_result.confidence,
         }
+        if variations[winner_idx].get("thumbnail_path"):
+            analytics["last_promotion"]["thumbnail_path"] = variations[winner_idx]["thumbnail_path"]
         # Update baseline velocity to current velocity before switch
         analytics["baseline_velocity"] = current_velocity
         clip.analytics = analytics
@@ -108,7 +121,7 @@ def evaluate_and_promote_clip(
             clip.id, baseline_title
         )
 
-        # 1. Revert title on YouTube
+        # 1. Revert title and thumbnail on YouTube
         if youtube_video_id:
             pub.update_video_title(
                 youtube_video_id=youtube_video_id,
@@ -116,6 +129,17 @@ def evaluate_and_promote_clip(
                 encrypted_oauth_token=encrypted_token,
                 dry_run=settings.DRY_RUN_PUBLISHING,
             )
+            baseline_thumb = variations[baseline_idx].get("thumbnail_path")
+            if baseline_thumb and hasattr(pub, "update_video_thumbnail"):
+                try:
+                    pub.update_video_thumbnail(
+                        youtube_video_id=youtube_video_id,
+                        thumbnail_path=baseline_thumb,
+                        encrypted_oauth_token=encrypted_token,
+                        dry_run=settings.DRY_RUN_PUBLISHING,
+                    )
+                except Exception as th_err:
+                    logger.warning("Could not revert baseline thumbnail for clip %s: %s", clip.id, th_err)
 
         # 2. Reset active flag
         for i, var in enumerate(variations):

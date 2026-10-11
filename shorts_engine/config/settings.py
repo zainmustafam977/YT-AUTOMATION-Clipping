@@ -331,6 +331,10 @@ class PipelineSettings(BaseSettings):
     )
 
     # Bayesian Multi-Armed Bandit A/B Winner Promotion
+    ENABLE_AB_TESTING: bool = Field(
+        default=True,
+        description="Enable autonomous generation of 3 title and thumbnail variants per clip",
+    )
     AB_WINNER_CHECK_INTERVAL_SECONDS: int = Field(
         default=120,
         ge=30,

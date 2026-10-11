@@ -497,3 +497,51 @@ class YouTubePublisher:
             "title": updated_title,
         }
 
+    def update_video_thumbnail(
+        self,
+        youtube_video_id: str,
+        thumbnail_path: str,
+        encrypted_oauth_token: Optional[str] = None,
+        dry_run: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Updates the custom video thumbnail cover on YouTube Data API v3 (thumbnails().set).
+        Used by the Bayesian A/B promotion daemon to promote winning thumbnail variants.
+        """
+        is_dry_run = dry_run if dry_run is not None else settings.DRY_RUN_PUBLISHING
+        thumb_file = Path(thumbnail_path)
+        if not thumb_file.exists():
+            raise FileNotFoundError(f"Thumbnail file not found at: {thumbnail_path}")
+
+        if is_dry_run:
+            logger.info("[DRY-RUN] Simulating YouTube thumbnail update for %s -> %s", youtube_video_id, thumb_file.name)
+            return {
+                "success": True,
+                "dry_run": True,
+                "video_id": youtube_video_id,
+                "thumbnail_path": str(thumb_file),
+            }
+
+        if not encrypted_oauth_token:
+            raise ValueError(f"No OAuth token provided to update thumbnail for video {youtube_video_id}")
+
+        decrypted_token = decrypt_secret(encrypted_oauth_token)
+        client = _build_youtube_client(decrypted_token)
+
+        try:
+            from googleapiclient.http import MediaFileUpload
+            media = MediaFileUpload(str(thumb_file), mimetype="image/jpeg", resumable=True)
+            req = client.thumbnails().set(videoId=youtube_video_id, media_body=media)
+            resp = req.execute()
+            logger.info("Successfully updated YouTube video %s thumbnail cover.", youtube_video_id)
+            return {
+                "success": True,
+                "dry_run": False,
+                "video_id": youtube_video_id,
+                "thumbnail_path": str(thumb_file),
+                "response": resp,
+            }
+        except Exception as e:
+            logger.error("Failed to upload YouTube thumbnail for %s: %s", youtube_video_id, e)
+            raise
+

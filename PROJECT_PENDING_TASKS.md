@@ -10,7 +10,7 @@ This document maintains the technical backlog and upcoming implementation packag
 | :--- | :--- | :--- | :--- |
 | **Package 1: Durable Job Queue Architecture** | ✅ Completed | High | Transactional task queue, exponential backoff, DLQ, and crash recovery |
 | **Package 2: Multi-Worker Concurrency & Scaling** | ✅ Completed | High | PostgreSQL migration engine, dialect-aware DDL, and multi-node claim isolation |
-| **Package 3: Pipeline AI & Media Enhancements** | ⏳ Backlog | Medium | Dynamic subtitle styling, smart reframing, and automated A/B testing |
+| **Package 3: Pipeline AI & Media Enhancements** | ✅ Completed | Medium | Dynamic subtitle styling, smart reframing, and automated A/B testing |
 | **Package 4: Observability & Health Dashboards** | ⏳ Backlog | Medium | Centralized metrics, Prometheus/Grafana or FastAPI real-time monitor |
 
 ---

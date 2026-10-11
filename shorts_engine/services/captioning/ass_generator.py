@@ -50,6 +50,8 @@ class ASSSubtitleGenerator:
         margin_vertical: int = settings.CAPTION_MARGIN_VERTICAL,
         scale_pop: bool = False,
         active_scale: int = 115,
+        animation_style: str = "none",
+        secondary_highlight_color: Optional[str] = None,
         emoji_fallback: bool = True,
         emoji_font: Optional[str] = None,
     ):
@@ -63,6 +65,8 @@ class ASSSubtitleGenerator:
         self.margin_vertical = margin_vertical
         self.scale_pop = scale_pop
         self.active_scale = active_scale
+        self.animation_style = animation_style
+        self.secondary_highlight_color = secondary_highlight_color
         self.emoji_fallback = emoji_fallback
         self.emoji_font = emoji_font or DEFAULT_EMOJI_FONT
 
@@ -127,6 +131,8 @@ class ASSSubtitleGenerator:
         case_transform = "none"
         scale_pop = self.scale_pop
         active_scale = self.active_scale
+        animation_style = self.animation_style
+        secondary_highlight_color = self.secondary_highlight_color
 
         if style_overrides:
             font_name = style_overrides.get("font_name", font_name)
@@ -146,6 +152,10 @@ class ASSSubtitleGenerator:
                 scale_pop = bool(style_overrides["scale_pop"])
             if "active_scale" in style_overrides:
                 active_scale = int(style_overrides["active_scale"])
+            if "animation_style" in style_overrides:
+                animation_style = str(style_overrides["animation_style"])
+            if "secondary_highlight_color" in style_overrides:
+                secondary_highlight_color = style_overrides["secondary_highlight_color"]
 
         content = []
         content.append(self._generate_header(
@@ -195,10 +205,24 @@ class ASSSubtitleGenerator:
                     word_formatted = self._format_word_emojis(word_clean, font_name)
 
                     if idx == active_idx:
-                        if scale_pop:
-                            line_parts.append(f"{{\\fscx{active_scale}\\fscy{active_scale}\\c{highlight_color}&}}{word_formatted}{{\\fscx100\\fscy100\\c{primary_color}&}}")
+                        hl_color = highlight_color
+                        if secondary_highlight_color and (active_idx % 2 == 1):
+                            hl_color = secondary_highlight_color
+
+                        duration_ms = max(50, int((w_end - w_start) * 1000))
+                        duration_cs = max(5, int((w_end - w_start) * 100))
+
+                        if animation_style == "bounce":
+                            t1 = min(70, max(20, duration_ms // 3))
+                            t2 = min(140, max(40, (duration_ms * 2) // 3))
+                            bounce_tag = f"{{\\t(0,{t1},\\fscx{active_scale}\\fscy{active_scale})\\t({t1},{t2},\\fscx105\\fscy105)\\c{hl_color}&}}"
+                            line_parts.append(f"{bounce_tag}{word_formatted}{{\\fscx100\\fscy100\\c{primary_color}&}}")
+                        elif animation_style == "karaoke":
+                            line_parts.append(f"{{\\kf{duration_cs}\\c{hl_color}&}}{word_formatted}{{\\c{primary_color}&}}")
+                        elif scale_pop or animation_style == "scale_pop":
+                            line_parts.append(f"{{\\fscx{active_scale}\\fscy{active_scale}\\c{hl_color}&}}{word_formatted}{{\\fscx100\\fscy100\\c{primary_color}&}}")
                         else:
-                            line_parts.append(f"{{\\c{highlight_color}&}}{word_formatted}{{\\c{primary_color}&}}")
+                            line_parts.append(f"{{\\c{hl_color}&}}{word_formatted}{{\\c{primary_color}&}}")
                     else:
                         line_parts.append(word_formatted)
 

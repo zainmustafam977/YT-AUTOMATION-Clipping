@@ -897,6 +897,21 @@ class PipelineRunner:
                             if thumb_path.exists() and not storage_thumb.exists():
                                 import shutil
                                 shutil.copy2(str(thumb_path), str(storage_thumb))
+
+                            # Autonomous A/B variant suite generation (Title archetypes + 3 Thumbnail variants)
+                            if getattr(settings, "ENABLE_AB_TESTING", False):
+                                try:
+                                    from shorts_engine.services.ab_testing.coordinator import ABVariantCoordinator
+                                    ab_coord = ABVariantCoordinator()
+                                    ab_coord.generate_clip_variants(
+                                        clip=clip,
+                                        video_path=rendered_file,
+                                        output_dir=thumb_path.parent,
+                                        duration_sec=max(1.0, (cand.end_ms - cand.start_ms) / 1000.0),
+                                        db_session=self.db,
+                                    )
+                                except Exception as ab_err:
+                                    logger.warning("Could not generate A/B testing suite for clip %s: %s", clip.id, ab_err)
                         except Exception as thumb_err:
                             logger.warning("Could not generate viral cover thumbnail for clip %s: %s", clip.id, thumb_err)
 

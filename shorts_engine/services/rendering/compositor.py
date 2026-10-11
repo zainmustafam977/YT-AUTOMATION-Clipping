@@ -276,7 +276,8 @@ class VideoCompositor:
         else:
             # 16:9 widescreen or default: active crop plan
             if crop_plan is not None:
-                return crop_plan.to_ffmpeg_filter(scale_algo=algo), False
+                is_split = bool(getattr(crop_plan, "is_split_screen", False))
+                return crop_plan.to_ffmpeg_filter(scale_algo=algo), is_split
             else:
                 return (
                     f"crop=min(iw\\,ih*9/16):ih:(iw-ow)/2:0,scale=1080:1920:flags={algo},setsar=1",
