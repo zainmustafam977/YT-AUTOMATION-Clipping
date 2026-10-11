@@ -9,14 +9,14 @@ triggers emergency circuit breaker rollbacks when view velocity collapses > 50%.
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
-from shorts_engine.services.publishing.client import YouTubePublisher
+from shorts_engine.services.queue.durable_queue import durable_job_queue
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def evaluate_and_promote_clip(
     db: Session,
     clip: Clip,
     optimizer: Optional[BayesianVariantOptimizer] = None,
-    publisher: Optional[YouTubePublisher] = None,
+    publisher: Optional[Any] = None,
 ) -> Optional[VariantEvaluationResult]:
     """
     Evaluates a single published clip's A/B variations and executes
@@ -39,7 +39,7 @@ def evaluate_and_promote_clip(
         return None
 
     opt = optimizer or BayesianVariantOptimizer()
-    pub = publisher or YouTubePublisher(db_session=db)
+    pub = publisher
 
     analytics = clip.analytics or {}
     baseline_velocity = float(analytics.get("baseline_velocity", 0.0))
@@ -68,23 +68,38 @@ def evaluate_and_promote_clip(
 
         # 1. Update title and thumbnail on YouTube
         if youtube_video_id:
-            pub.update_video_title(
-                youtube_video_id=youtube_video_id,
-                new_title=new_title,
-                encrypted_oauth_token=encrypted_token,
-                dry_run=settings.DRY_RUN_PUBLISHING,
-            )
             winning_thumb = variations[winner_idx].get("thumbnail_path")
-            if winning_thumb and hasattr(pub, "update_video_thumbnail"):
-                try:
-                    pub.update_video_thumbnail(
-                        youtube_video_id=youtube_video_id,
-                        thumbnail_path=winning_thumb,
-                        encrypted_oauth_token=encrypted_token,
-                        dry_run=settings.DRY_RUN_PUBLISHING,
-                    )
-                except Exception as th_err:
-                    logger.warning("Could not update winning thumbnail for clip %s: %s", clip.id, th_err)
+            if pub:
+                pub.update_video_title(
+                    youtube_video_id=youtube_video_id,
+                    new_title=new_title,
+                    encrypted_oauth_token=encrypted_token,
+                    dry_run=settings.DRY_RUN_PUBLISHING,
+                )
+                if winning_thumb and hasattr(pub, "update_video_thumbnail"):
+                    try:
+                        pub.update_video_thumbnail(
+                            youtube_video_id=youtube_video_id,
+                            thumbnail_path=winning_thumb,
+                            encrypted_oauth_token=encrypted_token,
+                            dry_run=settings.DRY_RUN_PUBLISHING,
+                        )
+                    except Exception as th_err:
+                        logger.warning("Could not update winning thumbnail for clip %s: %s", clip.id, th_err)
+            else:
+                durable_job_queue.enqueue(
+                    job_type="metadata_update",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    payload={
+                        "youtube_video_id": youtube_video_id,
+                        "title": new_title,
+                        "thumbnail_path": winning_thumb,
+                        "dry_run": settings.DRY_RUN_PUBLISHING,
+                    },
+                    stage="metadata_update",
+                    db=db,
+                )
 
         # 2. Update variations state in DB
         for i, var in enumerate(variations):
@@ -123,23 +138,38 @@ def evaluate_and_promote_clip(
 
         # 1. Revert title and thumbnail on YouTube
         if youtube_video_id:
-            pub.update_video_title(
-                youtube_video_id=youtube_video_id,
-                new_title=baseline_title,
-                encrypted_oauth_token=encrypted_token,
-                dry_run=settings.DRY_RUN_PUBLISHING,
-            )
             baseline_thumb = variations[baseline_idx].get("thumbnail_path")
-            if baseline_thumb and hasattr(pub, "update_video_thumbnail"):
-                try:
-                    pub.update_video_thumbnail(
-                        youtube_video_id=youtube_video_id,
-                        thumbnail_path=baseline_thumb,
-                        encrypted_oauth_token=encrypted_token,
-                        dry_run=settings.DRY_RUN_PUBLISHING,
-                    )
-                except Exception as th_err:
-                    logger.warning("Could not revert baseline thumbnail for clip %s: %s", clip.id, th_err)
+            if pub:
+                pub.update_video_title(
+                    youtube_video_id=youtube_video_id,
+                    new_title=baseline_title,
+                    encrypted_oauth_token=encrypted_token,
+                    dry_run=settings.DRY_RUN_PUBLISHING,
+                )
+                if baseline_thumb and hasattr(pub, "update_video_thumbnail"):
+                    try:
+                        pub.update_video_thumbnail(
+                            youtube_video_id=youtube_video_id,
+                            thumbnail_path=baseline_thumb,
+                            encrypted_oauth_token=encrypted_token,
+                            dry_run=settings.DRY_RUN_PUBLISHING,
+                        )
+                    except Exception as th_err:
+                        logger.warning("Could not revert baseline thumbnail for clip %s: %s", clip.id, th_err)
+            else:
+                durable_job_queue.enqueue(
+                    job_type="metadata_update",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    payload={
+                        "youtube_video_id": youtube_video_id,
+                        "title": baseline_title,
+                        "thumbnail_path": baseline_thumb,
+                        "dry_run": settings.DRY_RUN_PUBLISHING,
+                    },
+                    stage="metadata_update",
+                    db=db,
+                )
 
         # 2. Reset active flag
         for i, var in enumerate(variations):
@@ -172,11 +202,10 @@ def check_and_promote_ab_winners(db: Session) -> List[str]:
 
     actioned_clip_ids: List[str] = []
     optimizer = BayesianVariantOptimizer()
-    publisher = YouTubePublisher(db_session=db)
 
     for clip in published_clips:
         try:
-            res = evaluate_and_promote_clip(db, clip, optimizer=optimizer, publisher=publisher)
+            res = evaluate_and_promote_clip(db, clip, optimizer=optimizer)
             if res and res.action in ("PROMOTE", "ROLLBACK"):
                 actioned_clip_ids.append(clip.id)
         except Exception as e:

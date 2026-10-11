@@ -55,7 +55,8 @@ class DurableJobQueue:
         session, should_close = self._get_session(db)
         known_stages = {
             "ingest", "download", "transcribe", "select", "analyze_candidates",
-            "reframe", "crop_plan", "captions", "caption", "render", "publish"
+            "reframe", "crop_plan", "captions", "caption", "render", "publish",
+            "metadata_update", "daily_health",
         }
         if stage:
             eff_stage = stage.lower()

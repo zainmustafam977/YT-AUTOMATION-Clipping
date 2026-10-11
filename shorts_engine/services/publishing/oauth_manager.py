@@ -21,10 +21,13 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Union
 from sqlalchemy.orm import Session
 
-from google_auth_oauthlib.flow import Flow
-import google.oauth2.credentials
-import googleapiclient.discovery
-from googleapiclient.errors import HttpError
+from shorts_engine.services.publishing.worker import (
+    HttpError,
+    DEFAULT_SCOPES,
+    create_oauth_flow,
+    build_youtube_client,
+    fetch_channel_identity as worker_fetch_identity,
+)
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import (
@@ -42,10 +45,7 @@ from shorts_engine.services.publishing.quota import QuotaTracker
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SCOPES = [
-    "https://www.googleapis.com/auth/youtube.upload",
-    "https://www.googleapis.com/auth/youtube.readonly",
-]
+
 
 
 def generate_pkce_pair() -> Tuple[str, str]:
@@ -268,39 +268,7 @@ class ChannelOAuthManager:
         Queries YouTube Data API v3 channels.list(part="id,snippet", mine=True).
         Records 1 quota unit in the ledger and returns channel ID, title, handle, and avatar.
         """
-        credentials = google.oauth2.credentials.Credentials(
-            token=token_data.get("access_token"),
-            refresh_token=token_data.get("refresh_token"),
-            token_uri=token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
-            client_id=token_data.get("client_id"),
-            client_secret=token_data.get("client_secret"),
-            scopes=token_data.get("scopes", DEFAULT_SCOPES),
-        )
-
-        service = googleapiclient.discovery.build("youtube", "v3", credentials=credentials, cache_discovery=False)
-        res = service.channels().list(part="id,snippet", mine=True).execute()
-
-        items = res.get("items", [])
-        if not items:
-            raise RuntimeError("YouTube API channels.list(mine=true) returned no channel.")
-
-        item = items[0]
-        channel_id = item["id"]
-        snippet = item.get("snippet", {})
-        title = snippet.get("title", "Untitled Channel")
-        handle = snippet.get("customUrl", "")
-        thumbnails = snippet.get("thumbnails", {})
-        avatar_url = thumbnails.get("default", {}).get("url") or thumbnails.get("high", {}).get("url", "")
-
-        # Record 1 unit in QuotaTracker
-        QuotaTracker().record_channels_list(channel_id=channel_id, db=db)
-
-        return {
-            "channel_id": channel_id,
-            "title": title,
-            "handle": handle,
-            "avatar_url": avatar_url,
-        }
+        return worker_fetch_identity(token_data, client_config=self.get_client_config(), db=db)
 
     def handle_callback(
         self,
@@ -698,15 +666,7 @@ class ChannelOAuthManager:
 
         try:
             cfg = self.get_client_config()
-            credentials = google.oauth2.credentials.Credentials(
-                token=None,
-                refresh_token=refresh_token,
-                token_uri=cfg.get("token_uri", "https://oauth2.googleapis.com/token"),
-                client_id=cfg.get("client_id"),
-                client_secret=cfg.get("client_secret"),
-                scopes=DEFAULT_SCOPES,
-            )
-            service = googleapiclient.discovery.build("youtube", "v3", credentials=credentials, cache_discovery=False)
+            service = build_youtube_client(refresh_token, client_config=cfg, scopes=DEFAULT_SCOPES)
             res = service.channels().list(part="id,snippet", mine=True).execute()
             items = res.get("items", [])
             if not items:
@@ -874,15 +834,11 @@ class ChannelOAuthManager:
 
         try:
             cfg = self.get_client_config()
-            credentials = google.oauth2.credentials.Credentials(
-                token=token_dict.get("access_token"),
-                refresh_token=refresh_token,
-                token_uri=token_dict.get("token_uri", "https://oauth2.googleapis.com/token"),
-                client_id=token_dict.get("client_id") or cfg.get("client_id"),
-                client_secret=token_dict.get("client_secret") or cfg.get("client_secret"),
+            service = build_youtube_client(
+                token_dict,
+                client_config=cfg,
                 scopes=token_dict.get("scopes", DEFAULT_SCOPES),
             )
-            service = googleapiclient.discovery.build("youtube", "v3", credentials=credentials, cache_discovery=False)
             res = service.channels().list(part="snippet,statistics", mine=True).execute()
             items = res.get("items", [])
             if not items:

@@ -11,6 +11,7 @@ Enforces:
 - Manual calibration support via POST /api/quota/calibrate.
 """
 
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -21,13 +22,25 @@ from sqlalchemy.orm import Session
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import QuotaLedger
+from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
 UPLOAD_COST_UNITS = 1600
+VIDEOS_INSERT_COST_UNITS = 1600
+VIDEOS_UPDATE_COST_UNITS = 50
+SEARCH_LIST_COST_UNITS = 100
 CHANNELS_LIST_COST_UNITS = 1
 DEFAULT_SAFETY_RESERVE = 300
 PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def get_next_pacific_midnight() -> Tuple[datetime, str]:
+    """Returns (next_midnight_utc, next_midnight_iso) for Pacific midnight reset."""
+    now_pt = datetime.now(PACIFIC_TZ)
+    midnight_pt = (now_pt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    midnight_utc = midnight_pt.astimezone(timezone.utc).replace(tzinfo=None)
+    return midnight_utc, midnight_pt.isoformat()
 
 
 def get_pacific_day_bounds() -> Tuple[datetime, datetime, str]:
@@ -53,6 +66,7 @@ class QuotaTracker:
         cls._alerted_thresholds.clear()
 
     def __init__(self, state_file: Optional[Path] = None):
+        self.is_custom_state_file = state_file is not None
         self.state_file = state_file or settings.STORAGE_DIR / "quota_state.json"
         self.daily_limit = getattr(settings, "DAILY_QUOTA_LIMIT", 10000)
         self.safety_reserve = getattr(settings, "QUOTA_SAFETY_RESERVE", DEFAULT_SAFETY_RESERVE)
@@ -80,8 +94,21 @@ class QuotaTracker:
         db: Optional[Session] = None,
     ) -> int:
         """
-        Appends an immutable entry to `quota_ledger`.
+        Appends an immutable entry to `quota_ledger` or isolated state file.
         """
+        if self.state_file:
+            try:
+                today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                current_file_used = 0
+                if self.state_file.exists():
+                    data = json.loads(self.state_file.read_text(encoding="utf-8"))
+                    if data.get("date") == today_str:
+                        current_file_used = int(data.get("used_units", 0) or 0)
+                new_used = current_file_used + units
+                atomic_write_json(self.state_file, {"date": today_str, "used_units": new_used}, indent=2)
+            except Exception:
+                pass
+
         def _execute(session: Session) -> int:
             entry = QuotaLedger(
                 units=units,
@@ -100,9 +127,11 @@ class QuotaTracker:
 
         if db is not None:
             return _execute(db)
-        else:
+        elif not self.is_custom_state_file:
             with SessionLocal() as session:
                 return _execute(session)
+        else:
+            return units
 
     def record_publish(
         self,
@@ -138,11 +167,58 @@ class QuotaTracker:
         )
         return CHANNELS_LIST_COST_UNITS
 
+    def record_videos_update(
+        self,
+        cost: int = VIDEOS_UPDATE_COST_UNITS,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """Records videos.update cost (50 units) in the ledger."""
+        self.record_usage(
+            units=cost,
+            operation="youtube.videos.update",
+            channel_id=channel_id,
+            job_id=job_id,
+            db=db,
+        )
+        self.check_and_alert_quota(db=db)
+        return cost
+
+    def record_search_list(
+        self,
+        cost: int = SEARCH_LIST_COST_UNITS,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """Records search.list cost (100 units) in the ledger."""
+        self.record_usage(
+            units=cost,
+            operation="youtube.search.list",
+            channel_id=channel_id,
+            job_id=job_id,
+            db=db,
+        )
+        self.check_and_alert_quota(db=db)
+        return cost
+
     def get_used_units(self, db: Optional[Session] = None) -> int:
         """
         Calculates total quota units consumed during the current Pacific day
-        by querying the append-only quota ledger.
+        by querying the append-only quota ledger, reconciling with PublishLog and state file.
         """
+        if db is None and self.is_custom_state_file:
+            if self.state_file and self.state_file.exists():
+                try:
+                    data = json.loads(self.state_file.read_text(encoding="utf-8"))
+                    today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                    if data.get("date") == today_str:
+                        return int(data.get("used_units", 0) or 0)
+                except Exception:
+                    pass
+            return 0
+
         start_utc, end_utc, _ = get_pacific_day_bounds()
 
         def _calculate(session: Session) -> int:
@@ -151,9 +227,34 @@ class QuotaTracker:
                     QuotaLedger.ts >= start_utc,
                     QuotaLedger.ts < end_utc,
                 ).all()
+                ledger_sum = 0
                 if isinstance(entries, (list, tuple)):
-                    return sum(int(getattr(e, "units", 0) or 0) for e in entries)
-                return 0
+                    ledger_sum = sum(int(getattr(e, "units", 0) or 0) for e in entries)
+
+                # Reconcile with PublishLog records
+                db_units = 0
+                try:
+                    from shorts_engine.db.models import PublishLog
+                    db_pub_count = session.query(PublishLog).filter(
+                        PublishLog.published_at >= start_utc,
+                        PublishLog.published_at < end_utc,
+                        PublishLog.status.in_(["SUCCESS", "DRY_RUN", "PUBLISHED"]),
+                    ).count()
+                    db_units = int(db_pub_count or 0) * UPLOAD_COST_UNITS
+                except Exception:
+                    pass
+
+                file_units = 0
+                if self.state_file and self.state_file.exists():
+                    try:
+                        data = json.loads(self.state_file.read_text(encoding="utf-8"))
+                        today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                        if data.get("date") == today_str:
+                            file_units = int(data.get("used_units", 0) or 0)
+                    except Exception:
+                        pass
+
+                return max(ledger_sum, db_units, file_units)
             except (TypeError, ValueError, Exception):
                 return 0
 
@@ -167,6 +268,9 @@ class QuotaTracker:
         """
         Returns number of successful/in-progress uploads executed during the current Pacific day.
         """
+        if db is None and self.is_custom_state_file:
+            used = self.get_used_units(db=None)
+            return used // UPLOAD_COST_UNITS
         start_utc, end_utc, _ = get_pacific_day_bounds()
 
         def _calculate(session: Session) -> int:
@@ -177,9 +281,17 @@ class QuotaTracker:
                     QuotaLedger.ts < end_utc,
                     QuotaLedger.operation == "youtube.videos.insert",
                 ).count()
-                if isinstance(ledger_uploads, (int, float)):
-                    return int(ledger_uploads)
-                return 0
+                db_pub_count = 0
+                try:
+                    from shorts_engine.db.models import PublishLog
+                    db_pub_count = session.query(PublishLog).filter(
+                        PublishLog.published_at >= start_utc,
+                        PublishLog.published_at < end_utc,
+                        PublishLog.status.in_(["SUCCESS", "DRY_RUN", "PUBLISHED"]),
+                    ).count()
+                except Exception:
+                    pass
+                return max(int(ledger_uploads or 0), int(db_pub_count or 0))
             except (TypeError, ValueError, Exception):
                 return 0
 
@@ -238,6 +350,13 @@ class QuotaTracker:
         uploads_today = int(uploads_today) if isinstance(uploads_today, (int, float)) else 0
         cap = self.daily_upload_cap
         pct = round((used / self.daily_limit) * 100, 1) if self.daily_limit > 0 else 0.0
+
+        if self.state_file:
+            try:
+                today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                atomic_write_json(self.state_file, {"date": today_str, "used_units": used}, indent=2)
+            except Exception:
+                pass
 
         return {
             "used_units": used,

@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from googleapiclient.errors import HttpError
+from shorts_engine.services.publishing.worker import (
+    HttpError,
+    build_youtube_client,
+    _upload_video as worker_upload_video,
+    set_video_thumbnail,
+)
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog
@@ -26,14 +31,10 @@ logger = logging.getLogger(__name__)
 def _build_youtube_client(oauth_token_json: str):
     """
     Builds an authenticated YouTube Data API v3 client from a decrypted OAuth token JSON blob.
-    The blob must contain: refresh_token, and optionally client_id, client_secret, token_uri.
+    Delegates to shorts_engine.services.publishing.worker.build_youtube_client.
     """
-    import google.oauth2.credentials
-    import googleapiclient.discovery
-    import googleapiclient.http
-
     try:
-        token_data = json.loads(oauth_token_json)
+        token_data = json.loads(oauth_token_json) if isinstance(oauth_token_json, str) else oauth_token_json
     except Exception as e:
         raise ValueError(
             f"Invalid OAuth credentials format in database ({e}). "
@@ -53,110 +54,26 @@ def _build_youtube_client(oauth_token_json: str):
             "Please click 'Connect Channel' in the Publishing Studio to complete Google authorization."
         )
 
-    client_id = token_data.get("client_id")
-    client_secret = token_data.get("client_secret")
-
-    # Fall back to client secrets file if missing in token blob
-    if not client_id or not client_secret:
+    cfg = {}
+    if not token_data.get("client_id") or not token_data.get("client_secret"):
         try:
             from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
             cfg = ChannelOAuthManager().get_client_config()
-            client_id = client_id or cfg.get("client_id")
-            client_secret = client_secret or cfg.get("client_secret")
         except Exception:
             pass
 
-    if not client_id or not client_secret:
-        raise ValueError("OAuth client_id or client_secret missing from credentials and storage/client_secret.json")
+    return build_youtube_client(token_data, client_config=cfg)
 
-    credentials = google.oauth2.credentials.Credentials(
-        token=token_data.get("access_token"),
-        refresh_token=refresh_token,
-        token_uri=token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
-        client_id=client_id,
-        client_secret=client_secret,
-        scopes=token_data.get("scopes", ["https://www.googleapis.com/auth/youtube.upload"]),
-    )
-    return googleapiclient.discovery.build(
-        "youtube", "v3", credentials=credentials, cache_discovery=False
-    )
 
 
 def _upload_video(client, video_path: Path, metadata: "ShortsMetadata",
                   privacy_status: str = "unlisted") -> str:
     """
     Calls YouTube Data API v3 videos.insert() to upload the rendered clip.
-    Supports instant public/unlisted/private uploads as well as scheduled publishAt releases.
-    Returns the published YouTube video ID.
+    Delegates to shorts_engine.services.publishing.worker._upload_video.
     """
-    import googleapiclient.http
+    return worker_upload_video(client, video_path, metadata, privacy_status)
 
-    body = metadata.to_dict()
-    if privacy_status and not metadata.publish_at:
-        body["status"]["privacyStatus"] = privacy_status
-
-    media = googleapiclient.http.MediaFileUpload(
-        str(video_path),
-        mimetype="video/mp4",
-        resumable=True,
-        chunksize=256 * 1024,  # 256 KB chunks
-    )
-
-    request = client.videos().insert(
-        part=",".join(body.keys()),
-        body=body,
-        media_body=media,
-    )
-
-    response = None
-    max_retries = 3
-    retry_count = 0
-    backoff_sec = 1.0
-
-    while response is None:
-        try:
-            _, response = request.next_chunk()
-            retry_count = 0
-        except HttpError as e:
-            # Fast-fail immediately on non-retryable errors (401, 403, quotaExceeded)
-            status_code = getattr(e.resp, "status", None) if hasattr(e, "resp") else None
-            err_content = str(e)
-            if status_code in (401, 403) or "quotaExceeded" in err_content:
-                logger.error("Fast-failing YouTube upload chunk on non-retryable error (status=%s): %s", status_code, e)
-                raise
-
-            # Retry transient 5xx server errors
-            if status_code and 500 <= int(status_code) < 600:
-                retry_count += 1
-                if retry_count > max_retries:
-                    logger.error("Exceeded max chunk upload retries (%d) on 5xx error: %s", max_retries, e)
-                    raise
-                logger.warning(
-                    "Transient 5xx error (%s) during chunk upload. Retrying in %.1fs (attempt %d/%d)...",
-                    status_code, backoff_sec, retry_count, max_retries,
-                )
-                time.sleep(backoff_sec)
-                backoff_sec *= 2.0
-            else:
-                raise
-        except (IOError, OSError) as e:
-            # Transient socket / connection error
-            retry_count += 1
-            if retry_count > max_retries:
-                logger.error("Exceeded max chunk upload retries (%d) on socket/IO error: %s", max_retries, e)
-                raise
-            logger.warning(
-                "Socket/IO error during chunk upload: %s. Retrying in %.1fs (attempt %d/%d)...",
-                e, backoff_sec, retry_count, max_retries,
-            )
-            time.sleep(backoff_sec)
-            backoff_sec *= 2.0
-
-    youtube_video_id: str = response.get("id", "")
-    if not youtube_video_id:
-        raise RuntimeError(f"YouTube API returned no video ID. Full response: {response}")
-
-    return youtube_video_id
 
 
 def _check_recent_uploads_for_clip(client: Any, channel_youtube_id: str, clip_id: str) -> Optional[str]:
@@ -529,10 +446,7 @@ class YouTubePublisher:
         client = _build_youtube_client(decrypted_token)
 
         try:
-            from googleapiclient.http import MediaFileUpload
-            media = MediaFileUpload(str(thumb_file), mimetype="image/jpeg", resumable=True)
-            req = client.thumbnails().set(videoId=youtube_video_id, media_body=media)
-            resp = req.execute()
+            resp = set_video_thumbnail(client, youtube_video_id, thumb_file)
             logger.info("Successfully updated YouTube video %s thumbnail cover.", youtube_video_id)
             return {
                 "success": True,

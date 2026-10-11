@@ -444,22 +444,33 @@ def render_stage(ctx: StageContext) -> Dict[str, Any]:
 
 
 def publish_stage(ctx: StageContext) -> Dict[str, Any]:
-    """Stage 7: YouTube Publishing."""
-    from shorts_engine.services.publishing.client import YouTubePublisher
+    """Stage 7: YouTube Publishing via Publish Worker."""
+    from shorts_engine.services.publishing.worker import YouTubePublishWorker
 
     ctx.heartbeat()
-    rendered_path = ctx.artifacts.get("render", {}).get("rendered_path")
-    if not rendered_path or not Path(rendered_path).exists():
-        raise PermanentError(f"Rendered video missing for publishing: {rendered_path}")
-
+    worker = YouTubePublishWorker()
     try:
-        publisher = YouTubePublisher()
-        res = publisher.publish_short(
-            video_path=Path(rendered_path),
-            title=ctx.payload.get("title", f"Short {ctx.video_id}"),
-            description=ctx.payload.get("description", ""),
+        return worker.execute_publish_intent(
+            clip_id=ctx.entity_id or ctx.video_id,
+            payload=ctx.payload,
+            db=ctx.db,
         )
-        return {"published_id": res.get("id"), "url": res.get("url")}
+    except Exception as e:
+        raise classify_exception(e)
+
+
+def metadata_update_stage(ctx: StageContext) -> Dict[str, Any]:
+    """Metadata Update Stage via Publish Worker."""
+    from shorts_engine.services.publishing.worker import YouTubePublishWorker
+
+    ctx.heartbeat()
+    worker = YouTubePublishWorker()
+    try:
+        return worker.execute_metadata_update_intent(
+            clip_id=ctx.entity_id or ctx.video_id,
+            payload=ctx.payload,
+            db=ctx.db,
+        )
     except Exception as e:
         raise classify_exception(e)
 
@@ -529,6 +540,12 @@ PIPELINE: Dict[str, Stage] = {
     "publish": Stage(
         name="publish",
         callable=publish_stage,
+        produces=None,
+        max_attempts=3,
+    ),
+    "metadata_update": Stage(
+        name="metadata_update",
+        callable=metadata_update_stage,
         produces=None,
         max_attempts=3,
     ),

@@ -811,20 +811,33 @@ async def publish_or_schedule_clip_api(
             "title": clip.generated_title,
         }
 
-    from shorts_engine.services.publishing.client import YouTubePublisher
-    from shorts_engine.services.publishing.metadata import ShortsMetadata
+    from shorts_engine.services.queue.durable_queue import durable_job_queue
 
-    meta = ShortsMetadata(
-        title=clip.generated_title or "Viral Short #Shorts",
-        description=clip.generated_description or "Check out this Short! #Shorts",
-        tags=tags_list,
-        privacy_status=privacy_status,
-        category_id=category_id,
-        made_for_kids=made_for_kids,
+    payload = {
+        "title": clip.generated_title or "Viral Short #Shorts",
+        "description": clip.generated_description or "Check out this Short! #Shorts",
+        "tags": tags_list,
+        "privacy_status": privacy_status,
+        "category_id": category_id,
+        "made_for_kids": made_for_kids,
+    }
+    job = durable_job_queue.enqueue(
+        job_type="publish",
+        entity_id=clip.id,
+        entity_type="clip",
+        payload=payload,
+        stage="publish",
+        db=db,
     )
-    publisher = YouTubePublisher(db_session=db)
-    result = publisher.publish_clip(clip=clip, metadata=meta)
-    return result
+    clip.status = ClipStatus.APPROVED
+    db.commit()
+    return {
+        "success": True,
+        "status": "enqueued",
+        "job_id": job.id,
+        "clip_id": clip.id,
+        "message": "Publish job enqueued for publish worker.",
+    }
 
 
 @router.post("/queue/{clip_id}/publish", summary="Publish or schedule clip from form")
@@ -877,24 +890,30 @@ def publish_or_schedule_clip_form(
             return_query=return_query,
         )
 
-    from shorts_engine.services.publishing.client import YouTubePublisher
-    from shorts_engine.services.publishing.metadata import ShortsMetadata
+    from shorts_engine.services.queue.durable_queue import durable_job_queue
 
-    meta = ShortsMetadata(
-        title=clip.generated_title or "Viral Short #Shorts",
-        description=clip.generated_description or "Check out this Short! #Shorts",
-        tags=tags_list,
-        privacy_status=privacy_status,
-        category_id=category_id,
-        made_for_kids=is_kids,
+    payload = {
+        "title": clip.generated_title or "Viral Short #Shorts",
+        "description": clip.generated_description or "Check out this Short! #Shorts",
+        "tags": tags_list,
+        "privacy_status": privacy_status,
+        "category_id": category_id,
+        "made_for_kids": is_kids,
+    }
+    job = durable_job_queue.enqueue(
+        job_type="publish",
+        entity_id=clip.id,
+        entity_type="clip",
+        payload=payload,
+        stage="publish",
+        db=db,
     )
-    publisher = YouTubePublisher(db_session=db)
-    res = publisher.publish_clip(clip=clip, metadata=meta)
-    msg = f"Clip {clip_id[:8]} successfully published to YouTube!" if res.get("success") else f"Publishing failed: {res.get('reason')}"
+    clip.status = ClipStatus.APPROVED
+    db.commit()
     return _make_queue_redirect(
         request,
-        default_msg=msg,
-        msg_type="success" if res.get("success") else "danger",
+        default_msg=f"Clip {clip_id[:8]} queued for publishing (job {job.id[:8]}).",
+        msg_type="success",
         return_query=return_query,
     )
 
