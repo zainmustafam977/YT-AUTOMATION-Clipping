@@ -90,6 +90,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds unique constraint (entity_id, stage) to pipeline_jobs for deduplication",
         upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
     ),
+    Migration(
+        version="009_event_logs_table",
+        description="Adds event_logs table for persistent event bus history and 7-day telemetry retention",
+        upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
+    ),
 ]
 
 

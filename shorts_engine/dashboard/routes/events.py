@@ -100,3 +100,79 @@ async def publish_event(event: PlatformEvent):
     """Accepts and broadcasts an event to all active SSE subscribers."""
     await global_event_bus.publish(event)
     return {"status": "published", "id": event.id}
+
+
+from datetime import datetime
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from shorts_engine.db.session import SessionLocal
+from shorts_engine.db.models import EventLog, prune_old_event_logs
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.get(
+    "/api/events/recent",
+    summary="Get recent persisted platform events from the event_logs table for polling and downtime catch-up",
+)
+def get_recent_persisted_events(
+    since_id: Optional[str] = Query(default=None, description="Event ID to fetch events after"),
+    since_iso: Optional[str] = Query(default=None, description="ISO timestamp to fetch events after"),
+    event_name: Optional[str] = Query(default=None, description="Filter by exact event name"),
+    entity_id: Optional[str] = Query(default=None, description="Filter by entity ID"),
+    limit: int = Query(default=50, ge=1, le=500),
+    auto_prune: bool = Query(default=False, description="Optionally prune events older than 7 days"),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns persisted platform events matching criteria, ordered chronologically.
+    Allows clients to catch up after disconnection or poll every 2s.
+    """
+    if auto_prune:
+        try:
+            prune_old_event_logs(db=db, retention_days=7)
+        except Exception as e:
+            logger.warning("Auto prune failed in get_recent_persisted_events: %s", e)
+
+    query = db.query(EventLog)
+
+    if since_id:
+        ref_event = db.query(EventLog).filter(EventLog.id == since_id).first()
+        if ref_event and ref_event.created_at:
+            query = query.filter(EventLog.created_at > ref_event.created_at)
+
+    if since_iso:
+        try:
+            since_dt = datetime.fromisoformat(since_iso)
+            query = query.filter(EventLog.created_at > since_dt)
+        except Exception:
+            pass
+
+    if event_name:
+        query = query.filter(EventLog.event_name == event_name)
+
+    if entity_id:
+        query = query.filter(EventLog.entity_id == entity_id)
+
+    records = query.order_by(EventLog.created_at.desc()).limit(limit).all()
+    return [r.to_dict() for r in reversed(records)]
+
+
+@router.post(
+    "/api/events/prune",
+    summary="Prune event logs older than retention threshold (default 7 days)",
+)
+def prune_events(
+    retention_days: int = Query(default=7, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    """Prunes old event logs from the database."""
+    pruned_count = prune_old_event_logs(db=db, retention_days=retention_days)
+    return {"status": "ok", "pruned_count": pruned_count, "retention_days": retention_days}
+

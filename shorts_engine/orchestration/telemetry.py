@@ -123,7 +123,10 @@ class StructuredLogEmitter(TelemetryEmitter):
 
 
 class EventBusEmitter(TelemetryEmitter):
-    """Adapter emitting to the application platform EventBus."""
+    """
+    Adapter emitting standardized events to the application platform EventBus
+    and persisting them to the database `event_logs` table.
+    """
 
     def emit_job_finished(
         self,
@@ -133,19 +136,25 @@ class EventBusEmitter(TelemetryEmitter):
         **kwargs: Any,
     ) -> None:
         try:
-            from shorts_engine.services.events.bus import global_event_bus
-            from shorts_engine.services.events.models import PlatformEvent
-            global_event_bus.publish_sync(PlatformEvent(
-                category="pipeline",
-                level="INFO",
-                title="Job Finished",
-                message=f"Job {job_id[:8]} finished successfully in stage {stage or 'DONE'}.",
+            db = kwargs.pop("db", None)
+            from shorts_engine.services.events.taxonomy import emit_platform_event, STAGE_FINISHED
+            emit_platform_event(
+                event_name=STAGE_FINISHED,
+                payload={
+                    "job_id": job_id,
+                    "stage": stage or "COMPLETED",
+                    "result": result or {},
+                    **kwargs,
+                },
                 entity_id=job_id,
-                entity_type="pipeline_job",
-                details=result or {},
-            ))
-        except Exception:
-            pass
+                entity_type="job",
+                level="INFO",
+                title=f"Stage Finished: {stage or 'COMPLETED'}",
+                message=f"Job {job_id[:8]} finished stage {stage or 'COMPLETED'}.",
+                db=db,
+            )
+        except Exception as err:
+            logger.debug("Failed to emit stage.finished event: %s", err)
 
     def emit_job_retried(
         self,
@@ -157,19 +166,27 @@ class EventBusEmitter(TelemetryEmitter):
         **kwargs: Any,
     ) -> None:
         try:
-            from shorts_engine.services.events.bus import global_event_bus
-            from shorts_engine.services.events.models import PlatformEvent
-            global_event_bus.publish_sync(PlatformEvent(
-                category="pipeline",
-                level="WARNING",
-                title=f"Job Retried (Attempt {attempt_count})",
-                message=f"Job {job_id[:8]} retried: {str(error)[:200]}",
+            db = kwargs.pop("db", None)
+            from shorts_engine.services.events.taxonomy import emit_platform_event, STAGE_FAILED
+            emit_platform_event(
+                event_name=STAGE_FAILED,
+                payload={
+                    "job_id": job_id,
+                    "stage": stage or "UNKNOWN",
+                    "attempt_count": attempt_count,
+                    "next_run_at": next_run_at.isoformat() if isinstance(next_run_at, datetime) else str(next_run_at),
+                    "error": str(error),
+                    **kwargs,
+                },
                 entity_id=job_id,
-                entity_type="pipeline_job",
-                details={"attempt_count": attempt_count, "next_run_at": str(next_run_at), "stage": stage},
-            ))
-        except Exception:
-            pass
+                entity_type="job",
+                level="WARNING",
+                title=f"Stage Failed: {stage or 'UNKNOWN'}",
+                message=f"Job {job_id[:8]} failed (attempt {attempt_count}): {str(error)[:200]}",
+                db=db,
+            )
+        except Exception as err:
+            logger.debug("Failed to emit stage.failed event: %s", err)
 
     def emit_job_quarantined(
         self,
@@ -180,19 +197,26 @@ class EventBusEmitter(TelemetryEmitter):
         **kwargs: Any,
     ) -> None:
         try:
-            from shorts_engine.services.events.bus import global_event_bus
-            from shorts_engine.services.events.models import PlatformEvent
-            global_event_bus.publish_sync(PlatformEvent(
-                category="pipeline",
-                level="ERROR",
-                title="Job Quarantined",
-                message=f"Job {job_id[:8]} quarantined in stage {stage}: {str(last_error)[:200]}",
+            db = kwargs.pop("db", None)
+            from shorts_engine.services.events.taxonomy import emit_platform_event, STAGE_QUARANTINED
+            emit_platform_event(
+                event_name=STAGE_QUARANTINED,
+                payload={
+                    "job_id": job_id,
+                    "stage": stage or "UNKNOWN",
+                    "attempt_count": attempt_count,
+                    "last_error": str(last_error),
+                    **kwargs,
+                },
                 entity_id=job_id,
-                entity_type="pipeline_job",
-                details={"last_error": last_error, "stage": stage, "attempt_count": attempt_count},
-            ))
-        except Exception:
-            pass
+                entity_type="job",
+                level="ERROR",
+                title=f"Stage Quarantined: {stage or 'UNKNOWN'}",
+                message=f"Job {job_id[:8]} quarantined in stage {stage}: {str(last_error)[:200]}",
+                db=db,
+            )
+        except Exception as err:
+            logger.debug("Failed to emit stage.quarantined event: %s", err)
 
 
 class CompositeEmitter(TelemetryEmitter):
@@ -214,8 +238,11 @@ class CompositeEmitter(TelemetryEmitter):
             em.emit_job_quarantined(job_id, last_error=last_error, stage=stage, attempt_count=attempt_count, **kwargs)
 
 
-# Global default emitter instance
-_GLOBAL_EMITTER: TelemetryEmitter = StructuredLogEmitter()
+# Global default active emitter: Structured JSON logging + EventBus & DB persistence
+_GLOBAL_EMITTER: TelemetryEmitter = CompositeEmitter([
+    StructuredLogEmitter(),
+    EventBusEmitter(),
+])
 
 
 def get_telemetry_emitter() -> TelemetryEmitter:

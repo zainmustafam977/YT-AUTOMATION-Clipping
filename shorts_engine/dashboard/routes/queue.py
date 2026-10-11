@@ -640,6 +640,26 @@ def approve_clip(
     db.commit()
     logger.info("Operator '%s' approved clip %s for publishing", current_user.username, clip_id)
 
+    try:
+        from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_APPROVED
+        emit_platform_event(
+            event_name=CLIP_APPROVED,
+            payload={
+                "clip_id": clip_id,
+                "video_id": clip.candidate.source_video_id if (clip.candidate and clip.candidate.source_video_id) else None,
+                "approved_by": current_user.username,
+                "title": clip.generated_title,
+            },
+            entity_id=clip_id,
+            entity_type="clip",
+            level="SUCCESS",
+            title="Clip Approved",
+            message=f"Clip '{clip.generated_title or clip_id[:8]}' approved by {current_user.username}.",
+            db=db,
+        )
+    except Exception as ev_err:
+        logger.warning("Failed to emit clip.approved event: %s", ev_err)
+
     if request.headers.get("hx-request") == "true":
         undo_html = f"Clip {clip_id[:8]} approved. <button class='btn btn-sm btn-dark py-0 ms-2' hx-post='/queue/{clip_id}/undo' hx-swap='none'>Undo</button>"
         return Response(

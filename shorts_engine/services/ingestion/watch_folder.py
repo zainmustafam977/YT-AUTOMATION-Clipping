@@ -344,6 +344,21 @@ class WatchFolderDaemon:
                         payload={"file_path": str(file_path)},
                         db=db,
                     )
+                    from shorts_engine.services.events.taxonomy import emit_platform_event, VIDEO_INGESTED
+                    emit_platform_event(
+                        event_name=VIDEO_INGESTED,
+                        payload={
+                            "video_id": video.youtube_video_id,
+                            "file_path": str(file_path),
+                            "title": video.title,
+                            "source_type": "watch_folder",
+                        },
+                        entity_id=video.youtube_video_id,
+                        entity_type="video",
+                        title="Video Ingested",
+                        message=f"New video '{video.title}' ingested from watch folder.",
+                        db=db,
+                    )
             except Exception as e:
                 logger.error("Auto-ingestion failed for watch folder file %s: %s", file_path.name, e, exc_info=True)
 

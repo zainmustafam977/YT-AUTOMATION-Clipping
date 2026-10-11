@@ -549,13 +549,23 @@ class YouTubePublishWorker:
         db.commit()
 
         try:
-            global_event_bus.publish_sync(PlatformEvent(
-                category="quota",
+            from shorts_engine.services.events.taxonomy import emit_platform_event, QUOTA_LOW
+            job_id = getattr(job, "id", None)
+            emit_platform_event(
+                event_name=QUOTA_LOW,
+                payload={
+                    "job_id": job_id,
+                    "next_run_at": deferred_run_at.isoformat(),
+                    "reset_iso": reset_iso,
+                    "error": str(err_msg),
+                },
+                entity_id=job_id,
+                entity_type="job",
                 level="WARNING",
                 title="YouTube Quota Exceeded — Job Deferred",
                 message=f"YouTube daily quota limit reached. Job deferred until Pacific midnight ({reset_iso}).",
-                details={"next_run_at": deferred_run_at.isoformat(), "reset_iso": reset_iso},
-            ))
+                db=db,
+            )
         except Exception:
             pass
 
@@ -705,6 +715,28 @@ class YouTubePublishWorker:
                 db.add(p_log)
                 db.commit()
 
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_PUBLISHED
+                emit_platform_event(
+                    event_name=CLIP_PUBLISHED,
+                    payload={
+                        "clip_id": clip.id,
+                        "youtube_video_id": simulated_id,
+                        "channel_id": channel.youtube_channel_id,
+                        "title": clean_title,
+                        "youtube_url": f"https://youtube.com/shorts/{simulated_id}",
+                        "dry_run": True,
+                    },
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    level="SUCCESS",
+                    title="Clip Published (Dry Run)",
+                    message=f"[DRY-RUN] Clip '{clean_title}' published as {simulated_id}.",
+                    db=db,
+                )
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "status": "PUBLISHED",
@@ -733,6 +765,27 @@ class YouTubePublishWorker:
             logger.info("Found existing video %s with tag %s. Reclaiming without re-upload.", existing_video_id, tag)
             clip.status = ClipStatus.PUBLISHED
             db.commit()
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_PUBLISHED
+                emit_platform_event(
+                    event_name=CLIP_PUBLISHED,
+                    payload={
+                        "clip_id": clip.id,
+                        "youtube_video_id": existing_video_id,
+                        "channel_id": channel.youtube_channel_id,
+                        "title": clean_title,
+                        "youtube_url": f"https://youtube.com/shorts/{existing_video_id}",
+                        "reclaimed": True,
+                    },
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    level="SUCCESS",
+                    title="Clip Published (Reclaimed)",
+                    message=f"Clip '{clean_title}' reclaimed as {existing_video_id}.",
+                    db=db,
+                )
+            except Exception:
+                pass
             return {
                 "success": True,
                 "status": "PUBLISHED",
@@ -891,6 +944,27 @@ class YouTubePublishWorker:
             p_log.status = "SUCCESS"
         db.commit()
 
+        try:
+            from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_PUBLISHED
+            emit_platform_event(
+                event_name=CLIP_PUBLISHED,
+                payload={
+                    "clip_id": clip.id,
+                    "youtube_video_id": youtube_video_id,
+                    "channel_id": channel.youtube_channel_id,
+                    "title": clean_title,
+                    "youtube_url": f"https://youtube.com/shorts/{youtube_video_id}",
+                },
+                entity_id=clip.id,
+                entity_type="clip",
+                level="SUCCESS",
+                title="Clip Published",
+                message=f"Clip '{clean_title}' published to YouTube as {youtube_video_id}.",
+                db=db,
+            )
+        except Exception as e:
+            logger.warning("Failed to emit CLIP_PUBLISHED event for clip %s: %s", clip.id, e)
+
         logger.info("Successfully published clip %s to YouTube (Video ID: %s)", clip.id, youtube_video_id)
         return {
             "success": True,
@@ -1027,19 +1101,75 @@ class YouTubePublishWorker:
 
         cred = db.query(ChannelCredential).filter_by(channel_id=channel.id).first()
         if cred and cred.status == "needs_reauth":
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, CHANNEL_HEALTH
+                emit_platform_event(
+                    event_name=CHANNEL_HEALTH,
+                    payload={"healthy": False, "status": "needs_reauth", "channel_id": channel.id, "error": cred.last_error},
+                    entity_id=channel.id,
+                    entity_type="channel",
+                    level="ERROR",
+                    title="Channel Health Check Failed",
+                    message=f"Channel {channel.display_title} requires re-authentication.",
+                    db=db,
+                )
+            except Exception:
+                pass
             return {"healthy": False, "status": "needs_reauth", "error": cred.last_error}
 
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
             logger.info("[DRY-RUN] Simulating daily health check for channel %s", channel.display_title)
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, CHANNEL_HEALTH
+                emit_platform_event(
+                    event_name=CHANNEL_HEALTH,
+                    payload={"healthy": True, "dry_run": True, "channel_id": channel.id},
+                    entity_id=channel.id,
+                    entity_type="channel",
+                    level="INFO",
+                    title="Channel Health Check (Dry Run)",
+                    message=f"[DRY-RUN] Channel {channel.display_title} healthy.",
+                    db=db,
+                )
+            except Exception:
+                pass
             return {"healthy": True, "dry_run": True, "channel_id": channel.id}
 
         is_valid, err = verify_channel_credentials(channel, db=db, client_config=self._resolve_client_config())
         if not is_valid:
             if "invalid_grant" in str(err):
                 self._handle_invalid_grant(channel, db, str(err), job=job_entity)
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, CHANNEL_HEALTH
+                emit_platform_event(
+                    event_name=CHANNEL_HEALTH,
+                    payload={"healthy": False, "channel_id": channel.id, "error": err, "status": "invalid_grant" if "invalid_grant" in str(err) else "unhealthy"},
+                    entity_id=channel.id,
+                    entity_type="channel",
+                    level="ERROR",
+                    title="Channel Health Check Failed",
+                    message=f"Channel {channel.display_title} health check failed: {err}",
+                    db=db,
+                )
+            except Exception:
+                pass
             return {"healthy": False, "channel_id": channel.id, "error": err}
 
+        try:
+            from shorts_engine.services.events.taxonomy import emit_platform_event, CHANNEL_HEALTH
+            emit_platform_event(
+                event_name=CHANNEL_HEALTH,
+                payload={"healthy": True, "channel_id": channel.id, "verified_at": datetime.utcnow().isoformat()},
+                entity_id=channel.id,
+                entity_type="channel",
+                level="INFO",
+                title="Channel Health Check Succeeded",
+                message=f"Channel {channel.display_title} verified healthy.",
+                db=db,
+            )
+        except Exception:
+            pass
         return {"healthy": True, "channel_id": channel.id, "verified_at": datetime.utcnow().isoformat()}
 
     # ==========================================================================

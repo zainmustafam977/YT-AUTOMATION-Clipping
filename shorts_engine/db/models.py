@@ -6,7 +6,7 @@ Incorporates duplicate prevention unique constraints and reconciled ClipStatus e
 import json
 import uuid
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from sqlalchemy import (
     Column,
@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Enum as SQLEnum,
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import relationship, validates, Session
 from shorts_engine.db.session import Base
 
 
@@ -730,5 +730,60 @@ class CaptionPreset(Base):
             "scale_pop": self.scale_pop,
             "active_scale": self.active_scale,
         }
+
+
+class EventLog(Base):
+    """
+    Persistent audit log for platform events emitted via the event bus.
+    Retains a 7-day queryable window for consumer synchronization and catch-up.
+    """
+    __tablename__ = "event_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    event_name = Column(String(64), nullable=False, index=True)
+    entity_id = Column(String(64), nullable=True, index=True)
+    entity_type = Column(String(32), nullable=True)
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    @property
+    def payload(self) -> Dict[str, Any]:
+        """Deserializes payload_json to a dictionary."""
+        if not self.payload_json:
+            return {}
+        try:
+            return json.loads(self.payload_json)
+        except Exception:
+            return {}
+
+    @payload.setter
+    def payload(self, val: Optional[Dict[str, Any]]) -> None:
+        self.payload_json = json.dumps(val or {})
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "event_name": self.event_name,
+            "entity_id": self.entity_id,
+            "entity_type": self.entity_type,
+            "payload": self.payload,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+def prune_old_event_logs(db: Session, retention_days: int = 7) -> int:
+    """
+    Deletes event logs older than the retention threshold (default 7 days).
+    Returns the count of pruned rows.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    deleted_count = (
+        db.query(EventLog)
+        .filter(EventLog.created_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted_count
+
 
 
