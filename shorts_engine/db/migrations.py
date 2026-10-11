@@ -75,6 +75,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds platform_publish_logs, api_keys, caption_presets, channel_credentials, oauth_states, publish_jobs, quota_ledger, audit_log",
         upgrade_fn=lambda conn: None,
     ),
+    Migration(
+        version="006_durable_pipeline_jobs",
+        description="Adds pipeline_jobs table for transactional task queues, exponential backoff, and DLQ",
+        upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all or ensure_schema_upgrades
+    ),
 ]
 
 

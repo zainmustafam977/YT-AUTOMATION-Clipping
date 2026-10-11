@@ -238,6 +238,10 @@ def ensure_schema_upgrades(target_engine=None):
             from shorts_engine.db.models import AuditLog
             AuditLog.__table__.create(eng, checkfirst=True)
 
+        if "pipeline_jobs" not in table_names:
+            from shorts_engine.db.models import PipelineJob
+            PipelineJob.__table__.create(eng, checkfirst=True)
+
     except Exception as e:
         logger.error("Database schema upgrade failed: %s", e, exc_info=True)
         raise RuntimeError(f"Schema upgrade failed: {e}") from e

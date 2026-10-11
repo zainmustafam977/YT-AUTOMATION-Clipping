@@ -58,6 +58,14 @@ class UserRole(str, Enum):
     VIEWER = "viewer"
 
 
+class PipelineJobStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    DEAD_LETTER = "DEAD_LETTER"
+
+
 class Channel(Base):
     __tablename__ = "channels"
 
@@ -408,6 +416,32 @@ class PublishJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     clip = relationship("Clip", back_populates="publish_jobs")
+
+
+class PipelineJob(Base):
+    __tablename__ = "pipeline_jobs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    job_type = Column(String(64), nullable=False, index=True)  # INGEST_VIDEO, RENDER_CLIP, PUBLISH_CLIP
+    entity_type = Column(String(32), nullable=False)           # source_video, clip, channel
+    entity_id = Column(String(64), nullable=False, index=True)
+    status = Column(SQLEnum(PipelineJobStatus), default=PipelineJobStatus.PENDING, nullable=False, index=True)
+    stage = Column(String(64), default="QUEUED", nullable=False)
+    progress_pct = Column(Float, default=0.0, nullable=False)
+    progress_detail = Column(Text, nullable=True)
+    payload_json = Column(Text, nullable=True)
+    result_json = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+    max_retries = Column(Integer, default=3, nullable=False)
+    backoff_multiplier_sec = Column(Float, default=10.0, nullable=False)
+    next_run_at = Column(DateTime, nullable=True, index=True)
+    locked_by = Column(String(128), nullable=True, index=True)
+    locked_at = Column(DateTime, nullable=True)
+    heartbeat_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
 
 
 class QuotaLedger(Base):

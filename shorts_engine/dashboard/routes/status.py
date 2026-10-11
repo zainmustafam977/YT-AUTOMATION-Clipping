@@ -165,26 +165,54 @@ def _run_pipeline_background(
     clear_cancellation(video_url_or_id)
 
     db = SessionLocal()
+    job = None
     try:
+        from shorts_engine.services.queue.durable_queue import durable_job_queue
+
         channel = db.query(Channel).filter_by(id=channel_id).first() if channel_id else None
+
+        # Track execution inside durable job queue
+        job = durable_job_queue.enqueue(
+            job_type="INGEST_VIDEO",
+            entity_id=vid,
+            entity_type="source_video",
+            payload={
+                "video_url_or_id": video_url_or_id,
+                "channel_id": channel_id,
+                "dry_run": dry_run,
+                "caption_preset": caption_preset,
+                "runtime_overrides": runtime_overrides,
+            },
+            db=db,
+        )
+        durable_job_queue.claim_next_job(job_type="INGEST_VIDEO", db=db)
+
         runner = PipelineRunner(db)
         logger.info(
-            "Background processing started for video: %s (dry_run=%s, caption_preset=%s, overrides=%s)",
+            "Background processing started for video: %s (job=%s, dry_run=%s, caption_preset=%s, overrides=%s)",
             video_url_or_id,
+            job.id,
             dry_run,
             caption_preset,
             bool(runtime_overrides),
         )
-        runner.run_pipeline_for_video(
+        res = runner.run_pipeline_for_video(
             video_url_or_id,
             channel=channel,
             dry_run=dry_run,
             caption_preset=caption_preset,
             runtime_overrides=runtime_overrides,
         )
-        logger.info("Background processing completed successfully for video: %s", video_url_or_id)
+        durable_job_queue.complete_job(job.id, result=res if isinstance(res, dict) else {}, db=db)
+        logger.info("Background processing completed successfully for video: %s (job=%s)", video_url_or_id, job.id)
     except Exception as e:
         logger.exception("Background processing error for video %s: %s", video_url_or_id, e)
+        if job:
+            try:
+                from shorts_engine.services.queue.durable_queue import durable_job_queue
+                durable_job_queue.fail_job(job.id, str(e), db=db)
+            except Exception:
+                pass
     finally:
         db.close()
 

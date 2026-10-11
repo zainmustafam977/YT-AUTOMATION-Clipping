@@ -587,6 +587,7 @@ class WorkerRunner:
     def run_loop(self, poll_interval: float = 5.0, stop_event=None):
         """Continuous polling loop."""
         logger.info(f"Worker {self.worker_id} started. Polling interval: {poll_interval}s")
+        reconcile_counter = 0
         try:
             while True:
                 if stop_event and stop_event.is_set():
@@ -596,6 +597,15 @@ class WorkerRunner:
                 reload_runtime_settings()
                 count = self.run_once()
                 if count == 0:
+                    reconcile_counter += 1
+                    if reconcile_counter % 12 == 0:  # Reconcile orphaned jobs every ~60 seconds of idle
+                        try:
+                            from shorts_engine.services.queue.durable_queue import durable_job_queue
+                            durable_job_queue.reconcile_orphaned_jobs()
+                        except Exception as rec_err:
+                            logger.debug("Orphaned job reconciliation check failed: %s", rec_err)
                     time.sleep(poll_interval)
+                else:
+                    reconcile_counter = 0
         except KeyboardInterrupt:
             logger.info("Worker stopped by keyboard interrupt.")

@@ -29,6 +29,7 @@ TABLE_MIGRATION_ORDER = [
     "channel_credentials",
     "oauth_states",
     "publish_jobs",
+    "pipeline_jobs",
     "publish_log",
     "platform_publish_logs",
     "quota_ledger",
