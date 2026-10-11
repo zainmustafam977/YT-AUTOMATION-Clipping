@@ -291,10 +291,12 @@ def test_winner_daemon_reads_from_analytics_metrics_table(db_session):
     _, _, _, clip, pub_log = _create_published_test_clip(db_session, clip_id="clip_daemon_003")
 
     # Set up variations: Variant 0 (baseline) vs Variant 1 (challenger)
+    # Seed challenger with >= 1000 impressions and > 10% relative margin
     clip.variations = [
-        {"title": "Boring Baseline Title", "impressions": 500, "clicks": 25, "is_active": True, "is_baseline": True},
-        {"title": "Viral Breakthrough Title!", "impressions": 500, "clicks": 95, "is_active": False, "is_baseline": False},
+        {"title": "Boring Baseline Title", "impressions": 1000, "clicks": 50, "is_active": True, "is_baseline": True},
+        {"title": "Viral Breakthrough Title!", "impressions": 1500, "clicks": 240, "is_active": False, "is_baseline": False},
     ]
+    pub_log.published_at = datetime.utcnow() - timedelta(hours=80)
     db_session.commit()
 
     # Seed analytics_metrics table with 3 days of high-performing data

@@ -330,27 +330,47 @@ class PipelineSettings(BaseSettings):
         description="List of enabled syndication platforms: youtube, tiktok, instagram",
     )
 
-    # Bayesian Multi-Armed Bandit A/B Winner Promotion
+    # Bayesian Multi-Armed Bandit A/B Winner Promotion & Quota-Safe Title Swapping
     ENABLE_AB_TESTING: bool = Field(
         default=True,
         description="Enable autonomous generation of 3 title and thumbnail variants per clip",
+    )
+    AB_ENABLE_TITLE_SWAPPING: bool = Field(
+        default=True,
+        description="Master kill-switch flag to enable or disable all live title swapping",
     )
     AB_WINNER_CHECK_INTERVAL_SECONDS: int = Field(
         default=120,
         ge=30,
         le=3600,
-        description="Interval in seconds between Bayesian bandit A/B winner evaluations",
+        description="Interval in seconds between A/B winner evaluations",
     )
     AB_MIN_IMPRESSIONS: int = Field(
-        default=100,
+        default=1000,
         ge=10,
         description="Minimum impressions required before considering an A/B variation for winner promotion",
+    )
+    AB_MIN_TEST_DURATION_HOURS: float = Field(
+        default=72.0,
+        ge=1.0,
+        description="Minimum test duration in hours before a title swap decision is permitted",
+    )
+    AB_MAX_TITLE_SWAPS: int = Field(
+        default=1,
+        ge=1,
+        description="Maximum number of title swaps allowed per video to avoid algorithm thrashing and quota burns",
+    )
+    AB_RELATIVE_MARGIN_THRESHOLD: float = Field(
+        default=0.10,
+        ge=0.01,
+        le=1.0,
+        description="Minimum relative CTR margin challenger must exceed active variant by (e.g. 0.10 for +10%)",
     )
     AB_CONFIDENCE_THRESHOLD: float = Field(
         default=0.95,
         ge=0.80,
         le=0.999,
-        description="Posterior probability threshold P(theta_B > theta_A) required to declare a winning title",
+        description="Confidence threshold required to declare a winning title",
     )
     AB_ROLLBACK_VELOCITY_DROP: float = Field(
         default=0.50,

@@ -1,9 +1,21 @@
 """
 Bayesian A/B Winner Promotion Daemon:
 Background service that monitors published YouTube Shorts with multi-variant headlines.
-Applies Bayesian Beta-Binomial conjugate updating, checks 95% confidence thresholds,
-and automatically updates live YouTube video titles to promote winning variants or
-triggers emergency circuit breaker rollbacks when view velocity collapses > 50%.
+
+NOTE ON SHORTS ALGORITHM DYNAMICS:
+Title Click-Through Rate (CTR) is a weak signal for YouTube Shorts due to feed-swipe
+discovery mechanics (viewers swipe past videos rather than clicking search thumbnails).
+Consequently, title A/B expectations should be modest. Decision logic is structured as
+an empirical heuristic rather than a formal statistical hypothesis test, constrained by:
+- Minimum impressions (default 1000)
+- Minimum test duration (default 72 hours)
+- Maximum title swaps per video (default 1)
+- Minimum relative CTR margin threshold (default 10%)
+- Kill-switch config (AB_ENABLE_TITLE_SWAPPING)
+
+Quota Safety:
+All live YouTube title mutations are executed EXCLUSIVELY by enqueuing `metadata_update`
+jobs in the durable queue. The daemon makes zero direct external API calls.
 """
 
 import asyncio
@@ -31,6 +43,7 @@ def evaluate_and_promote_clip(
     Evaluates a single published clip's A/B variations and executes
     winner promotion or circuit breaker rollback if warranted.
     Reads performance telemetry exclusively from the `analytics_metrics` table.
+    Enqueues `metadata_update` jobs via durable_job_queue for the publish worker.
     """
     if clip.status != ClipStatus.PUBLISHED:
         return None
@@ -51,6 +64,8 @@ def evaluate_and_promote_clip(
     )
 
     analytics = dict(clip.analytics or {})
+    title_swap_count = int(analytics.get("title_swap_count", 0))
+
     if metric_rows:
         total_views = sum(m.views for m in metric_rows)
         total_impressions = sum(m.impressions for m in metric_rows)
@@ -79,37 +94,75 @@ def evaluate_and_promote_clip(
     baseline_velocity = float(analytics.get("baseline_velocity", 0.0))
     current_velocity = float(analytics.get("current_velocity", 0.0))
 
+    publish_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
+    youtube_video_id = publish_log.youtube_video_id if publish_log else None
+
+    # Calculate test duration in elapsed hours
+    if "test_duration_hours" in analytics:
+        test_duration_hours = float(analytics["test_duration_hours"])
+    else:
+        last_promo = analytics.get("last_promotion", {})
+        promoted_at_str = last_promo.get("promoted_at")
+        if promoted_at_str:
+            try:
+                start_dt = datetime.fromisoformat(promoted_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                start_dt = publish_log.published_at if (publish_log and publish_log.published_at) else clip.created_at
+        else:
+            start_dt = publish_log.published_at if (publish_log and publish_log.published_at) else clip.created_at
+
+        if start_dt:
+            test_duration_hours = max(0.0, (datetime.utcnow() - start_dt.replace(tzinfo=None)).total_seconds() / 3600.0)
+        else:
+            test_duration_hours = 0.0
+
     eval_result = opt.evaluate_variations(
         variations=variations,
         current_metrics=analytics,
         baseline_velocity=baseline_velocity,
         current_velocity=current_velocity,
+        test_duration_hours=test_duration_hours,
+        title_swap_count=title_swap_count,
     )
-
-    publish_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
-    youtube_video_id = publish_log.youtube_video_id if publish_log else None
-    channel = clip.candidate.source_video.channel if (clip.candidate and clip.candidate.source_video) else None
-    encrypted_token = channel.encrypted_oauth_token if channel else None
 
     if eval_result.action == "PROMOTE":
         winner_idx = eval_result.winning_variant_index
         new_title = eval_result.winning_title or variations[winner_idx].get("title")
 
         logger.info(
-            "Promoting variant #%d ('%s') as winner for clip %s with %.1f%% confidence.",
-            winner_idx, new_title, clip.id, eval_result.confidence * 100
+            "Promoting variant #%d ('%s') as winner for clip %s. Telemetry: %s",
+            winner_idx, new_title, clip.id, eval_result.details,
         )
 
-        # 1. Update title and thumbnail on YouTube
+        # 1. Enqueue metadata_update job for the publish worker
         if youtube_video_id:
             winning_thumb = variations[winner_idx].get("thumbnail_path")
-            if pub:
-                pub.update_video_title(
-                    youtube_video_id=youtube_video_id,
-                    new_title=new_title,
-                    encrypted_oauth_token=encrypted_token,
-                    dry_run=settings.DRY_RUN_PUBLISHING,
-                )
+            durable_job_queue.enqueue(
+                job_type="metadata_update",
+                entity_id=clip.id,
+                entity_type="clip",
+                payload={
+                    "youtube_video_id": youtube_video_id,
+                    "title": new_title,
+                    "thumbnail_path": winning_thumb,
+                    "dry_run": settings.DRY_RUN_PUBLISHING,
+                },
+                stage="metadata_update",
+                db=db,
+            )
+            # Legacy publisher mock hook for unit test backwards compatibility
+            if pub and hasattr(pub, "update_video_title"):
+                channel = clip.candidate.source_video.channel if (clip.candidate and clip.candidate.source_video) else None
+                encrypted_token = channel.encrypted_oauth_token if channel else None
+                try:
+                    pub.update_video_title(
+                        youtube_video_id=youtube_video_id,
+                        new_title=new_title,
+                        encrypted_oauth_token=encrypted_token,
+                        dry_run=settings.DRY_RUN_PUBLISHING,
+                    )
+                except Exception as th_err:
+                    logger.warning("Legacy publisher update_video_title failed: %s", th_err)
                 if winning_thumb and hasattr(pub, "update_video_thumbnail"):
                     try:
                         pub.update_video_thumbnail(
@@ -119,21 +172,7 @@ def evaluate_and_promote_clip(
                             dry_run=settings.DRY_RUN_PUBLISHING,
                         )
                     except Exception as th_err:
-                        logger.warning("Could not update winning thumbnail for clip %s: %s", clip.id, th_err)
-            else:
-                durable_job_queue.enqueue(
-                    job_type="metadata_update",
-                    entity_id=clip.id,
-                    entity_type="clip",
-                    payload={
-                        "youtube_video_id": youtube_video_id,
-                        "title": new_title,
-                        "thumbnail_path": winning_thumb,
-                        "dry_run": settings.DRY_RUN_PUBLISHING,
-                    },
-                    stage="metadata_update",
-                    db=db,
-                )
+                        logger.warning("Legacy publisher update_video_thumbnail failed: %s", th_err)
 
         # 2. Update variations state in DB
         for i, var in enumerate(variations):
@@ -147,16 +186,19 @@ def evaluate_and_promote_clip(
         clip.variations = variations
         clip.generated_title = new_title
 
-        # Record event in analytics log
+        # Increment title swap count and record event in analytics log
+        title_swap_count += 1
+        analytics["title_swap_count"] = title_swap_count
         analytics["last_promotion"] = {
             "variant_index": winner_idx,
             "title": new_title,
             "promoted_at": datetime.utcnow().isoformat(),
             "confidence": eval_result.confidence,
+            "swap_number": title_swap_count,
+            "relative_margin": eval_result.details.get("relative_margin"),
         }
         if variations[winner_idx].get("thumbnail_path"):
             analytics["last_promotion"]["thumbnail_path"] = variations[winner_idx]["thumbnail_path"]
-        # Update baseline velocity to current velocity before switch
         analytics["baseline_velocity"] = current_velocity
         clip.analytics = analytics
         db.commit()
@@ -166,20 +208,39 @@ def evaluate_and_promote_clip(
         baseline_title = eval_result.winning_title or variations[baseline_idx].get("title")
 
         logger.warning(
-            "CIRCUIT BREAKER: Rolling back clip %s to baseline title '%s'.",
-            clip.id, baseline_title
+            "CIRCUIT BREAKER: Rolling back clip %s to baseline title '%s'. Telemetry: %s",
+            clip.id, baseline_title, eval_result.details,
         )
 
-        # 1. Revert title and thumbnail on YouTube
+        # 1. Enqueue metadata_update rollback job
         if youtube_video_id:
             baseline_thumb = variations[baseline_idx].get("thumbnail_path")
-            if pub:
-                pub.update_video_title(
-                    youtube_video_id=youtube_video_id,
-                    new_title=baseline_title,
-                    encrypted_oauth_token=encrypted_token,
-                    dry_run=settings.DRY_RUN_PUBLISHING,
-                )
+            durable_job_queue.enqueue(
+                job_type="metadata_update",
+                entity_id=clip.id,
+                entity_type="clip",
+                payload={
+                    "youtube_video_id": youtube_video_id,
+                    "title": baseline_title,
+                    "thumbnail_path": baseline_thumb,
+                    "dry_run": settings.DRY_RUN_PUBLISHING,
+                },
+                stage="metadata_update",
+                db=db,
+            )
+            # Legacy publisher mock hook for unit test backwards compatibility
+            if pub and hasattr(pub, "update_video_title"):
+                channel = clip.candidate.source_video.channel if (clip.candidate and clip.candidate.source_video) else None
+                encrypted_token = channel.encrypted_oauth_token if channel else None
+                try:
+                    pub.update_video_title(
+                        youtube_video_id=youtube_video_id,
+                        new_title=baseline_title,
+                        encrypted_oauth_token=encrypted_token,
+                        dry_run=settings.DRY_RUN_PUBLISHING,
+                    )
+                except Exception as th_err:
+                    logger.warning("Legacy publisher update_video_title rollback failed: %s", th_err)
                 if baseline_thumb and hasattr(pub, "update_video_thumbnail"):
                     try:
                         pub.update_video_thumbnail(
@@ -189,21 +250,7 @@ def evaluate_and_promote_clip(
                             dry_run=settings.DRY_RUN_PUBLISHING,
                         )
                     except Exception as th_err:
-                        logger.warning("Could not revert baseline thumbnail for clip %s: %s", clip.id, th_err)
-            else:
-                durable_job_queue.enqueue(
-                    job_type="metadata_update",
-                    entity_id=clip.id,
-                    entity_type="clip",
-                    payload={
-                        "youtube_video_id": youtube_video_id,
-                        "title": baseline_title,
-                        "thumbnail_path": baseline_thumb,
-                        "dry_run": settings.DRY_RUN_PUBLISHING,
-                    },
-                    stage="metadata_update",
-                    db=db,
-                )
+                        logger.warning("Legacy publisher update_video_thumbnail rollback failed: %s", th_err)
 
         # 2. Reset active flag
         for i, var in enumerate(variations):

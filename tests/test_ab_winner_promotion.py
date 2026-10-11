@@ -3,6 +3,7 @@ Unit & Integration Tests for Component 4: Bayesian Multi-Armed Bandit A/B Winner
 (Conjugate Beta-Binomial Updating, Velocity Scoring, 95% Confidence Gate, Circuit Breaker Rollback)
 """
 
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import create_engine
@@ -104,18 +105,19 @@ def test_evaluate_and_promote_clip_winner_promotion(db_session):
         generated_title="Original Baseline Title",
     )
     # Configure A/B variations: Variant 0 (baseline) vs Variant 1 (viral challenger)
+    # Both variants exceed AB_MIN_IMPRESSIONS (1000)
     variations = [
         {
             "title": "Original Baseline Title",
-            "impressions": 500,
-            "clicks": 25,  # 5% CTR
+            "impressions": 1200,
+            "clicks": 60,  # 5% CTR
             "is_active": True,
             "is_baseline": True,
         },
         {
             "title": "Insanely Viral Winning Title!",
-            "impressions": 500,
-            "clicks": 80,  # 16% CTR -> heavily beats baseline!
+            "impressions": 1500,
+            "clicks": 240,  # 16% CTR -> heavily beats baseline!
             "is_active": False,
             "is_baseline": False,
         },
@@ -124,12 +126,14 @@ def test_evaluate_and_promote_clip_winner_promotion(db_session):
     db_session.add(clip)
     db_session.commit()
 
+    # Published 80 hours ago (> 72h minimum test duration)
     pub_log = PublishLog(
         clip_id=clip.id,
         youtube_video_id="yt_live_123",
         title="Original Baseline Title",
         description="Description",
         status="SUCCESS",
+        published_at=datetime.utcnow() - timedelta(hours=80),
     )
     db_session.add(pub_log)
     db_session.commit()
