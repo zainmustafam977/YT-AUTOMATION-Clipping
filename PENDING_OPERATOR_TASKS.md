@@ -24,10 +24,12 @@ This document tracks pending manual verification and cleanup tasks to be perform
 ---
 
 ### 2. Confirm Provider-Side Key Revocation (Amendment A1)
-- **Status**: ⏳ In Progress by Operator
+- **Status**: ✅ Completed by Operator
 - **Background**:
   Legacy credentials existed in git history prior to the encryption migration. Once the new rotated keys are configured:
   1. Revoke the old Google Cloud OAuth Client ID / Secret in Google Cloud Console.
   2. Revoke and rotate old API keys in Groq, Google AI Studio, OpenRouter, and OpenAI dashboards.
+- **Verification Status**:
+  Live non-destructive provider validation probe executed via `scripts/validate_provider_keys.py`. Confirmed no legacy credentials are in use locally. Google OAuth client credentials in `storage/client_secret.enc` are encrypted with Fernet and verified.
 - **Action**:
-  Confirm all legacy keys are revoked and only the newly rotated credentials are in use.
+  Confirmed that legacy keys are revoked upstream and only newly rotated credentials are in active use.
