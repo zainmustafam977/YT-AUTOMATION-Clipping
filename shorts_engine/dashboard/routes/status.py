@@ -152,28 +152,26 @@ def get_storage_stats() -> Dict[str, Any]:
 
 def _run_pipeline_background(
     video_url_or_id: str,
-    channel_id: Optional[str],
-    dry_run: bool,
+    channel_id: Optional[str] = None,
+    dry_run: bool = False,
     caption_preset: Optional[str] = None,
     runtime_overrides: Optional[Dict[str, Any]] = None,
 ):
-    """Executes pipeline in an isolated thread with its own database session."""
-    # Ensure any stale cancellation flag from a previous cancellation or lock release is cleared
+    """
+    Queue producer for video ingestion.
+    Shrunk to a single enqueue('ingest', video_id) action with zero direct runner invocation.
+    """
     m = re.search(r"(?:v=|\/|youtu\.be\/|shorts\/)([0-9A-Za-z_-]{11})", video_url_or_id)
     vid = m.group(1) if m else video_url_or_id
     clear_cancellation(vid)
     clear_cancellation(video_url_or_id)
 
     db = SessionLocal()
-    job = None
     try:
         from shorts_engine.services.queue.durable_queue import durable_job_queue
 
-        channel = db.query(Channel).filter_by(id=channel_id).first() if channel_id else None
-
-        # Track execution inside durable job queue
         job = durable_job_queue.enqueue(
-            job_type="INGEST_VIDEO",
+            job_type="ingest",
             entity_id=vid,
             entity_type="source_video",
             payload={
@@ -185,34 +183,18 @@ def _run_pipeline_background(
             },
             db=db,
         )
-        durable_job_queue.claim_next_job(job_type="INGEST_VIDEO", db=db)
-
-        runner = PipelineRunner(db)
         logger.info(
-            "Background processing started for video: %s (job=%s, dry_run=%s, caption_preset=%s, overrides=%s)",
-            video_url_or_id,
+            "Producer enqueued ingest job %s for video: %s (dry_run=%s, caption_preset=%s, overrides=%s)",
             job.id,
+            video_url_or_id,
             dry_run,
             caption_preset,
             bool(runtime_overrides),
         )
-        res = runner.run_pipeline_for_video(
-            video_url_or_id,
-            channel=channel,
-            dry_run=dry_run,
-            caption_preset=caption_preset,
-            runtime_overrides=runtime_overrides,
-        )
-        durable_job_queue.complete_job(job.id, result=res if isinstance(res, dict) else {}, db=db)
-        logger.info("Background processing completed successfully for video: %s (job=%s)", video_url_or_id, job.id)
+        return job
     except Exception as e:
-        logger.exception("Background processing error for video %s: %s", video_url_or_id, e)
-        if job:
-            try:
-                from shorts_engine.services.queue.durable_queue import durable_job_queue
-                durable_job_queue.fail_job(job.id, str(e), db=db)
-            except Exception:
-                pass
+        logger.exception("Error enqueuing ingest job for video %s: %s", video_url_or_id, e)
+        raise
     finally:
         db.close()
 
@@ -927,13 +909,8 @@ def manual_process_video(
         runtime_overrides,
     )
 
-    # Spawn processing thread
-    thread = threading.Thread(
-        target=_run_pipeline_background,
-        args=(video_id, channel_id, is_dry_run, caption_preset, runtime_overrides),
-        daemon=True,
-    )
-    thread.start()
+    # Enqueue processing job via queue producer
+    _run_pipeline_background(video_id, channel_id, is_dry_run, caption_preset, runtime_overrides)
 
     success_msg = f"Started processing video {video_id}"
     if request.headers.get("hx-request") == "true":
@@ -1042,13 +1019,8 @@ def retry_video_processing(
         video.retry_count,
     )
 
-    # Spawn processing thread
-    thread = threading.Thread(
-        target=_run_pipeline_background,
-        args=(video.youtube_video_id, video.channel_id, False),
-        daemon=True,
-    )
-    thread.start()
+    # Enqueue retry job via queue producer
+    _run_pipeline_background(video.youtube_video_id, video.channel_id, False)
 
     msg = f"Retrying ingestion for {video.youtube_video_id} (Attempt #{video.retry_count})"
     if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
@@ -1086,12 +1058,8 @@ def resume_video_processing(
     release_video_lock(video.youtube_video_id)
     clear_cancellation(video.youtube_video_id)
 
-    thread = threading.Thread(
-        target=_run_pipeline_background,
-        args=(video.youtube_video_id, video.channel_id, False),
-        daemon=True,
-    )
-    thread.start()
+    # Enqueue resume job via queue producer
+    _run_pipeline_background(video.youtube_video_id, video.channel_id, False)
 
     logger.info("Operator '%s' resumed pipeline for video %s (%s)", current_user.username, video.id, video.youtube_video_id)
     msg = f"Resumed processing for {video.youtube_video_id}"
@@ -1164,13 +1132,8 @@ def clean_retry_video_processing(
         video.retry_count,
     )
 
-    # 3. Spawn background runner
-    thread = threading.Thread(
-        target=_run_pipeline_background,
-        args=(yt_id, video.channel_id, False),
-        daemon=True,
-    )
-    thread.start()
+    # 3. Enqueue clean re-ingest job via queue producer
+    _run_pipeline_background(yt_id, video.channel_id, False)
 
     msg = f"Clean re-ingest started for {yt_id} (Purged disk fragments, Attempt #{video.retry_count})"
     if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
@@ -1723,12 +1686,8 @@ def api_ingest_video(
     if "override_max_segments" in payload:
         runtime_overrides["max_segments"] = payload["override_max_segments"]
 
-    t = threading.Thread(
-        target=_run_pipeline_background,
-        args=(url, payload.get("channel_id"), False, "hormozi_viral", runtime_overrides or None),
-        daemon=True,
-    )
-    t.start()
+    # Enqueue processing job via queue producer
+    _run_pipeline_background(url, payload.get("channel_id"), False, "hormozi_viral", runtime_overrides or None)
     return {"status": "started", "video": url}
 
 

@@ -184,13 +184,15 @@ class WatchFolderDaemon:
         stable_time_sec: float = 3.0,
         poll_interval_sec: float = 1.0,
         auto_ingest_db: bool = True,
+        session_factory: Optional[Callable[[], Any]] = None,
     ):
         self.watch_dir = Path(watch_dir or Path(settings.STORAGE_DIR) / "watch_folder").resolve()
         self.watch_dir.mkdir(parents=True, exist_ok=True)
         self.callback = callback
-        self.stable_time_sec = max(0.05, float(stable_time_sec))
-        self.poll_interval_sec = max(0.02, float(poll_interval_sec))
+        self.stable_time_sec = max(0.001, float(stable_time_sec))
+        self.poll_interval_sec = max(0.001, float(poll_interval_sec))
         self.auto_ingest_db = auto_ingest_db
+        self.session_factory = session_factory
 
         self._pending_files: Dict[str, Dict[str, Any]] = {}
         self._processed_files: Set[str] = set()
@@ -322,14 +324,25 @@ class WatchFolderDaemon:
             except Exception as e:
                 logger.error("Callback failed for watch folder file %s: %s", file_path.name, e, exc_info=True)
 
-        # 2. Database Ingestion
+        # 2. Database Ingestion & Queue Producer
         if self.auto_ingest_db and not self.callback:
             try:
-                with SessionLocal() as db:
-                    LocalVideoIngestionService.ingest_local_path(
+                session_maker = self.session_factory or SessionLocal
+                with session_maker() as db:
+                    video = LocalVideoIngestionService.ingest_local_path(
                         db=db,
                         file_path=file_path,
                         title=file_path.stem,
+                    )
+                    from shorts_engine.services.queue.durable_queue import DurableJobQueue
+                    queue = DurableJobQueue(session_factory=session_maker)
+                    queue.enqueue(
+                        job_type="ingest",
+                        entity_id=video.youtube_video_id,
+                        entity_type="source_video",
+                        stage="ingest",
+                        payload={"file_path": str(file_path)},
+                        db=db,
                     )
             except Exception as e:
                 logger.error("Auto-ingestion failed for watch folder file %s: %s", file_path.name, e, exc_info=True)

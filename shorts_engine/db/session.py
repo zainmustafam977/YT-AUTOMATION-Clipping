@@ -248,6 +248,15 @@ def ensure_schema_upgrades(target_engine=None):
                     conn.execute(text("ALTER TABLE pipeline_jobs ADD COLUMN attempt_count INTEGER DEFAULT 0 NOT NULL"))
                     conn.commit()
 
+            indexes = [idx["name"] for idx in inspector.get_indexes("pipeline_jobs")]
+            if "uq_pipeline_jobs_entity_stage" not in indexes:
+                with eng.connect() as conn:
+                    try:
+                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_pipeline_jobs_entity_stage ON pipeline_jobs (entity_id, stage)"))
+                        conn.commit()
+                    except Exception as idx_err:
+                        logger.warning("Could not create uq_pipeline_jobs_entity_stage index directly: %s", idx_err)
+
     except Exception as e:
         logger.error("Database schema upgrade failed: %s", e, exc_info=True)
         raise RuntimeError(f"Schema upgrade failed: {e}") from e

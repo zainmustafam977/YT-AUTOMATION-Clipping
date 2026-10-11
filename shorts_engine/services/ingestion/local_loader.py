@@ -304,12 +304,19 @@ class LocalVideoIngestionService:
         meta = cls.probe_video_metadata(canonical_path)
         channel = cls.get_or_create_local_channel(db, channel_id)
 
-        # Deterministic or unique video ID for local videos
+        norm_disk_path = os.path.normpath(str(canonical_path))
+        existing_video = db.query(SourceVideo).filter(SourceVideo.downloaded_path == norm_disk_path).first()
+        if existing_video:
+            logger.info("Local file '%s' already registered as SourceVideo %s", canonical_path.name, existing_video.youtube_video_id)
+            return existing_video
+
+        # Deterministic video ID for local videos based on file path hash
+        import hashlib
         clean_title = (title or canonical_path.stem).strip()
-        local_vid = f"loc_{generate_uuid()[:12]}"
+        path_hash = hashlib.md5(norm_disk_path.encode()).hexdigest()[:12]
+        local_vid = f"loc_{path_hash}"
 
         duration_sec = int(round(meta.get("duration_sec", 0.0)))
-        norm_disk_path = os.path.normpath(str(canonical_path))
 
         source_video = SourceVideo(
             id=generate_uuid(),

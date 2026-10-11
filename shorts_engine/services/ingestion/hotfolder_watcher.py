@@ -141,6 +141,16 @@ class HotfolderWatcher:
                 except Exception:
                     pass
 
+                # Queue producer: enqueue ingest job
+                from shorts_engine.services.queue.durable_queue import durable_job_queue
+                durable_job_queue.enqueue(
+                    job_type="ingest",
+                    entity_id=source_video.youtube_video_id,
+                    entity_type="source_video",
+                    payload={"file_path": str(dest_path)},
+                    db=db,
+                )
+
                 return source_video
         except Exception as e:
             logger.error("Failed to ingest hotfolder video %s: %s", file_path.name, e, exc_info=True)

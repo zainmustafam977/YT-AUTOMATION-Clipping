@@ -85,6 +85,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds attempt_count to pipeline_jobs for retry taxonomy and stage registry",
         upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
     ),
+    Migration(
+        version="008_pipeline_jobs_unique_subject_stage",
+        description="Adds unique constraint (entity_id, stage) to pipeline_jobs for deduplication",
+        upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
+    ),
 ]
 
 

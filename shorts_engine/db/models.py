@@ -251,6 +251,14 @@ class Transcript(Base):
 
     source_video = relationship("SourceVideo", back_populates="transcript")
 
+    @property
+    def raw_transcript(self) -> Optional[str]:
+        return self.word_level_json
+
+    @raw_transcript.setter
+    def raw_transcript(self, val: Optional[str]) -> None:
+        self.word_level_json = val or ""
+
 
 class ClipCandidate(Base):
     __tablename__ = "clip_candidates"
@@ -286,6 +294,22 @@ class ClipCandidate(Base):
             self.variations_json = None
         else:
             self.variations_json = json.dumps(val)
+
+    @property
+    def virality_score(self) -> float:
+        return self.score
+
+    @virality_score.setter
+    def virality_score(self, val: float) -> None:
+        self.score = val
+
+    @property
+    def reasoning(self) -> str:
+        return self.reason
+
+    @reasoning.setter
+    def reasoning(self, val: str) -> None:
+        self.reason = val
 
 
 class Clip(Base):
@@ -328,6 +352,14 @@ class Clip(Base):
     publish_log = relationship("PublishLog", back_populates="clip", uselist=False, cascade="all, delete-orphan")
     platform_publish_logs = relationship("PlatformPublishLog", back_populates="clip", cascade="all, delete-orphan")
     publish_jobs = relationship("PublishJob", back_populates="clip", cascade="all, delete-orphan")
+
+    @property
+    def clip_candidate(self) -> Optional["ClipCandidate"]:
+        return self.candidate
+
+    @clip_candidate.setter
+    def clip_candidate(self, val: Optional["ClipCandidate"]) -> None:
+        self.candidate = val
 
     @property
     def variations(self) -> list:
@@ -467,6 +499,18 @@ class PipelineJob(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("entity_id", "stage", name="uq_pipeline_jobs_entity_stage"),
+    )
+
+    @property
+    def subject_id(self) -> str:
+        return self.entity_id
+
+    @subject_id.setter
+    def subject_id(self, val: str) -> None:
+        self.entity_id = val
 
     @property
     def last_error(self) -> Optional[str]:

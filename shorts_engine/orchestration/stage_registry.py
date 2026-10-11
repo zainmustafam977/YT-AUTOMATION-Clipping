@@ -19,7 +19,17 @@ from pathlib import Path
 from typing import Callable, Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
-from shorts_engine.db.models import PipelineJob, PipelineJobStatus, SourceVideo, Clip
+from shorts_engine.db.models import (
+    PipelineJob,
+    PipelineJobStatus,
+    SourceVideo,
+    SourceVideoStatus,
+    ClipCandidate,
+    Clip,
+    ClipStatus,
+    Transcript,
+)
+from shorts_engine.config.settings import settings
 from shorts_engine.orchestration.exceptions import (
     PipelineError,
     TransientError,
@@ -87,19 +97,24 @@ def calculate_backoff_run_at(
 
 def download_stage(ctx: StageContext) -> Dict[str, Any]:
     """Stage 1: Download & Ingestion."""
-    from shorts_engine.config.settings import settings
     from shorts_engine.services.ingestion.downloader import IngestionService
 
     ctx.heartbeat()
-    ingestion = IngestionService(db_session=ctx.db_session)
     video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
 
     # Check for local file
     if video and video.downloaded_path and Path(video.downloaded_path).is_file():
-        return {"video_path": video.downloaded_path, "audio_path": video.audio_path}
+        if video.status != SourceVideoStatus.DONE:
+            video.status = SourceVideoStatus.TRANSCRIBING
+            ctx.db_session.commit()
+        return {"video_path": video.downloaded_path, "audio_path": video.audio_path or video.downloaded_path}
 
     try:
+        ingestion = IngestionService()
         res = ingestion.download_video(ctx.video_id)
+        if video:
+            video.status = SourceVideoStatus.TRANSCRIBING
+            ctx.db_session.commit()
         return {"video_path": str(res.video_path), "audio_path": str(res.audio_path)}
     except Exception as e:
         raise classify_exception(e)
@@ -111,33 +126,150 @@ def transcribe_stage(ctx: StageContext) -> Dict[str, Any]:
 
     ctx.heartbeat()
     video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
-    audio_path = ctx.artifacts.get("download", {}).get("audio_path") or (video.audio_path if video else None)
+    audio_path = (
+        ctx.artifacts.get("download", {}).get("audio_path")
+        or ctx.artifacts.get("ingest", {}).get("audio_path")
+        or (video.audio_path if video else None)
+        or (video.downloaded_path if video else None)
+    )
     if not audio_path or not Path(audio_path).exists():
         raise PermanentError(f"Missing audio file for transcription: {audio_path}")
 
     try:
         service = TranscriptionService()
         transcript = service.transcribe(Path(audio_path), video_id=ctx.video_id)
-        return {"transcript": transcript.to_dict(), "language": transcript.language}
+        trans_dict = transcript.to_dict()
+
+        if video:
+            existing_t = ctx.db_session.query(Transcript).filter_by(source_video_id=video.id).first()
+            if not existing_t:
+                new_t = Transcript(
+                    source_video_id=video.id,
+                    word_level_json=json.dumps(trans_dict),
+                    language=transcript.language,
+                )
+                ctx.db_session.add(new_t)
+            video.status = SourceVideoStatus.ANALYZING
+            ctx.db_session.commit()
+
+        return {"transcript": trans_dict, "language": transcript.language}
     except Exception as e:
         raise classify_exception(e)
 
 
 def analyze_candidates_stage(ctx: StageContext) -> Dict[str, Any]:
-    """Stage 3: LLM Candidate Discovery & Virality Scoring."""
+    """Stage 3: LLM Candidate Discovery & Virality Scoring with Clip Fan-out."""
     from shorts_engine.services.clip_selection.selector import ClipSelectionService
     from shorts_engine.services.transcription.formatter import FormattedTranscript
+    from shorts_engine.services.queue.durable_queue import durable_job_queue
 
     ctx.heartbeat()
-    trans_data = ctx.artifacts.get("transcribe", {}).get("transcript")
+    trans_data = (
+        ctx.artifacts.get("transcribe", {}).get("transcript")
+        or ctx.artifacts.get("transcript")
+    )
+    video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
+    if not trans_data and video:
+        t_row = ctx.db_session.query(Transcript).filter_by(source_video_id=video.id).first()
+        if t_row and t_row.raw_transcript:
+            try:
+                trans_data = json.loads(t_row.raw_transcript)
+            except Exception:
+                pass
+
+    if not trans_data:
+        t_file = Path(settings.STORAGE_DIR) / "transcripts" / f"{ctx.video_id}.json"
+        if t_file.exists():
+            try:
+                trans_data = json.loads(t_file.read_text())
+            except Exception:
+                pass
+
     if not trans_data:
         raise PermanentError("Cannot analyze candidates without transcript data.")
 
+    if isinstance(trans_data, FormattedTranscript):
+        transcript_obj = trans_data
+    elif isinstance(trans_data, (dict, list)):
+        try:
+            transcript_obj = FormattedTranscript.from_dict(trans_data)
+        except Exception:
+            transcript_obj = trans_data
+    else:
+        transcript_obj = trans_data
+
     try:
         service = ClipSelectionService()
-        transcript = FormattedTranscript.from_dict(trans_data)
-        candidates = service.select_candidates(transcript, video_id=ctx.video_id)
-        return {"candidates": [c.to_dict() if hasattr(c, "to_dict") else dict(c) for c in candidates]}
+        if hasattr(service, "select_clips"):
+            candidates = service.select_clips(transcript_obj)
+        elif hasattr(service, "select_candidates"):
+            candidates = service.select_candidates(transcript_obj, video_id=ctx.video_id)
+        else:
+            candidates = []
+        candidates_out = []
+
+        for cand in candidates:
+            c_dict = cand.to_dict() if hasattr(cand, "to_dict") else dict(cand)
+            candidates_out.append(c_dict)
+
+            if video:
+                start_ms = c_dict.get("start_ms", 0)
+                end_ms = c_dict.get("end_ms", 30000)
+                cand_db = ctx.db_session.query(ClipCandidate).filter_by(
+                    source_video_id=video.id,
+                    start_ms=start_ms,
+                    end_ms=end_ms,
+                ).first()
+                if not cand_db:
+                    score_val = float(c_dict.get("virality_score", c_dict.get("score", 0.0)) or 0.0)
+                    reason_val = str(c_dict.get("reasoning", c_dict.get("reason", "")) or "")
+                    cand_db = ClipCandidate(
+                        source_video_id=video.id,
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        score=score_val,
+                        reason=reason_val,
+                        hook_text=c_dict.get("hook_text"),
+                        payoff_text=c_dict.get("payoff_text"),
+                    )
+                    ctx.db_session.add(cand_db)
+                    ctx.db_session.commit()
+                    ctx.db_session.refresh(cand_db)
+
+                clip = ctx.db_session.query(Clip).filter_by(clip_candidate_id=cand_db.id).first()
+                if not clip:
+                    clip = Clip(
+                        clip_candidate_id=cand_db.id,
+                        status=ClipStatus.RENDERING,
+                        is_sensitive=bool(getattr(video, "is_sensitive", False)),
+                    )
+                    ctx.db_session.add(clip)
+                    ctx.db_session.commit()
+                    ctx.db_session.refresh(clip)
+
+                # Fan-out: Enqueue per-clip jobs (reframe and captions)
+                durable_job_queue.enqueue(
+                    job_type="reframe",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    stage="reframe",
+                    payload={"clip_id": clip.id, "video_id": ctx.video_id},
+                    db=ctx.db_session,
+                )
+                durable_job_queue.enqueue(
+                    job_type="captions",
+                    entity_id=clip.id,
+                    entity_type="clip",
+                    stage="captions",
+                    payload={"clip_id": clip.id, "video_id": ctx.video_id},
+                    db=ctx.db_session,
+                )
+
+        if video:
+            video.status = SourceVideoStatus.SEGMENTS_SELECTED
+            ctx.db_session.commit()
+
+        return {"candidates": candidates_out}
     except Exception as e:
         raise classify_exception(e)
 
@@ -145,20 +277,40 @@ def analyze_candidates_stage(ctx: StageContext) -> Dict[str, Any]:
 def crop_plan_stage(ctx: StageContext) -> Dict[str, Any]:
     """Stage 4: Reframing & Crop Plan."""
     from shorts_engine.services.reframing.cropper import VideoReframer
+    from shorts_engine.services.storage.path_manager import PathManager
 
     ctx.heartbeat()
+    clip = None
+    cand = ctx.payload.get("candidate", {})
+    start_ms = cand.get("start_ms", 0)
+    end_ms = cand.get("end_ms", 30000)
+
+    if ctx.clip_id:
+        clip = ctx.db_session.query(Clip).filter_by(id=ctx.clip_id).first()
+        if clip and clip.clip_candidate:
+            start_ms = clip.clip_candidate.start_ms
+            end_ms = clip.clip_candidate.end_ms
+            if not ctx.video_id and clip.clip_candidate.source_video:
+                ctx.video_id = clip.clip_candidate.source_video.youtube_video_id
+
     video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
-    video_path = ctx.artifacts.get("download", {}).get("video_path") or (video.downloaded_path if video else None)
+    video_path = (
+        ctx.artifacts.get("download", {}).get("video_path")
+        or ctx.artifacts.get("ingest", {}).get("video_path")
+        or (video.downloaded_path if video else None)
+    )
     if not video_path or not Path(video_path).exists():
         raise PermanentError(f"Master source video missing for crop planning: {video_path}")
 
     try:
         reframer = VideoReframer()
-        cand = ctx.payload.get("candidate", {})
-        start_ms = cand.get("start_ms", 0)
-        end_ms = cand.get("end_ms", 30000)
         plan = reframer.compute_crop_plan(Path(video_path), start_ms=start_ms, end_ms=end_ms)
-        return {"crop_plan": plan}
+        if ctx.clip_id:
+            crops_dir = Path(settings.STORAGE_DIR) / "crops"
+            crops_dir.mkdir(parents=True, exist_ok=True)
+            plan_file = crops_dir / f"{ctx.clip_id}_crop_plan.json"
+            plan_file.write_text(json.dumps(plan))
+        return {"crop_plan": plan, "clip_id": ctx.clip_id}
     except Exception as e:
         raise classify_exception(e)
 
@@ -169,20 +321,41 @@ def caption_stage(ctx: StageContext) -> Dict[str, Any]:
     from shorts_engine.services.storage.path_manager import PathManager
 
     ctx.heartbeat()
+    clip = None
     cand = ctx.payload.get("candidate", {})
     start_ms = cand.get("start_ms", 0)
     end_ms = cand.get("end_ms", 30000)
+
+    if ctx.clip_id:
+        clip = ctx.db_session.query(Clip).filter_by(id=ctx.clip_id).first()
+        if clip and clip.clip_candidate:
+            start_ms = clip.clip_candidate.start_ms
+            end_ms = clip.clip_candidate.end_ms
+            if not ctx.video_id and clip.clip_candidate.source_video:
+                ctx.video_id = clip.clip_candidate.source_video.youtube_video_id
+
     sub_path = PathManager.get_subtitle_path(ctx.video_id, start_ms, end_ms)
 
     trans_data = ctx.artifacts.get("transcribe", {}).get("transcript", {})
     words = trans_data.get("words", [])
+    if not words and ctx.db_session:
+        video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
+        if video:
+            t_row = ctx.db_session.query(Transcript).filter_by(source_video_id=video.id).first()
+            json_str = getattr(t_row, "word_level_json", None) or getattr(t_row, "raw_transcript", None)
+            if json_str:
+                try:
+                    words = json.loads(json_str).get("words", [])
+                except Exception:
+                    pass
+
     if not words:
         raise PermanentError("No words found in transcript for caption generation.")
 
     try:
         generator = ASSSubtitleGenerator()
         generator.generate_ass(words=words, segment_start_ms=start_ms, segment_end_ms=end_ms, output_path=sub_path)
-        return {"subtitle_path": str(sub_path)}
+        return {"subtitle_path": str(sub_path), "clip_id": ctx.clip_id}
     except Exception as e:
         raise classify_exception(e)
 
@@ -190,29 +363,82 @@ def caption_stage(ctx: StageContext) -> Dict[str, Any]:
 def render_stage(ctx: StageContext) -> Dict[str, Any]:
     """Stage 6: Video Composition & Mastering."""
     from shorts_engine.services.rendering.compositor import VideoCompositor
+    from shorts_engine.services.storage.path_manager import PathManager
 
     ctx.heartbeat()
+    clip = None
+    cand = ctx.payload.get("candidate", {})
+    start_ms = cand.get("start_ms", 0)
+    end_ms = cand.get("end_ms", 30000)
+
+    if ctx.clip_id:
+        clip = ctx.db_session.query(Clip).filter_by(id=ctx.clip_id).first()
+        if clip and clip.clip_candidate:
+            start_ms = clip.clip_candidate.start_ms
+            end_ms = clip.clip_candidate.end_ms
+            if not ctx.video_id and clip.clip_candidate.source_video:
+                ctx.video_id = clip.clip_candidate.source_video.youtube_video_id
+
     video = ctx.db_session.query(SourceVideo).filter_by(youtube_video_id=ctx.video_id).first()
-    video_path = ctx.artifacts.get("download", {}).get("video_path") or (video.downloaded_path if video else None)
+    video_path = (
+        ctx.artifacts.get("download", {}).get("video_path")
+        or ctx.artifacts.get("ingest", {}).get("video_path")
+        or (video.downloaded_path if video else None)
+    )
     if not video_path or not Path(video_path).exists():
         raise PermanentError(f"Master video missing for render stage: {video_path}")
 
     try:
         compositor = VideoCompositor()
-        cand = ctx.payload.get("candidate", {})
-        crop_plan = ctx.artifacts.get("crop_plan", {}).get("crop_plan")
-        sub_path = ctx.artifacts.get("caption", {}).get("subtitle_path")
+        crop_plan = (
+            ctx.artifacts.get("crop_plan", {}).get("crop_plan")
+            or ctx.artifacts.get("reframe", {}).get("crop_plan")
+        )
+        if not crop_plan and ctx.clip_id:
+            crops_dir = Path(settings.STORAGE_DIR) / "crops"
+            plan_file = crops_dir / f"{ctx.clip_id}_crop_plan.json"
+            if plan_file.exists():
+                try:
+                    crop_plan = json.loads(plan_file.read_text())
+                except Exception:
+                    pass
 
-        out_name = f"renders/{ctx.video_id}_{cand.get('start_ms', 0)}.mp4"
+        sub_path = (
+            ctx.artifacts.get("caption", {}).get("subtitle_path")
+            or ctx.artifacts.get("captions", {}).get("subtitle_path")
+        )
+        if not sub_path and ctx.video_id:
+            cand_sub = PathManager.get_subtitle_path(ctx.video_id, start_ms, end_ms)
+            if cand_sub.exists():
+                sub_path = str(cand_sub)
+
+        out_name = f"renders/{ctx.video_id}_{start_ms}.mp4" if not ctx.clip_id else f"renders/{ctx.clip_id}.mp4"
         rendered = compositor.render_short(
             source_video_path=Path(video_path),
-            start_ms=cand.get("start_ms", 0),
-            end_ms=cand.get("end_ms", 30000),
+            start_ms=start_ms,
+            end_ms=end_ms,
             crop_plan=crop_plan,
             subtitle_ass_path=Path(sub_path) if sub_path else None,
             output_filename=out_name,
         )
-        return {"rendered_path": str(rendered)}
+
+        if clip:
+            clip.rendered_path = str(rendered)
+            clip.status = ClipStatus.WAITING_APPROVAL
+            ctx.db_session.commit()
+
+            if video:
+                all_clips = (
+                    ctx.db_session.query(Clip)
+                    .join(ClipCandidate)
+                    .filter(ClipCandidate.source_video_id == video.id)
+                    .all()
+                )
+                if all_clips and all(c.status != ClipStatus.RENDERING for c in all_clips):
+                    video.status = SourceVideoStatus.DONE
+                    ctx.db_session.commit()
+
+        return {"rendered_path": str(rendered), "clip_id": ctx.clip_id}
     except Exception as e:
         raise classify_exception(e)
 
@@ -240,6 +466,12 @@ def publish_stage(ctx: StageContext) -> Dict[str, Any]:
 
 # The canonical PIPELINE registry mapping
 PIPELINE: Dict[str, Stage] = {
+    "ingest": Stage(
+        name="ingest",
+        callable=download_stage,
+        produces="{storage_dir}/downloads/{video_id}.mp4",
+        max_attempts=3,
+    ),
     "download": Stage(
         name="download",
         callable=download_stage,
@@ -252,16 +484,34 @@ PIPELINE: Dict[str, Stage] = {
         produces="{storage_dir}/transcripts/{video_id}.json",
         max_attempts=3,
     ),
+    "select": Stage(
+        name="select",
+        callable=analyze_candidates_stage,
+        produces="{storage_dir}/analysis/{video_id}_candidates.json",
+        max_attempts=3,
+    ),
     "analyze_candidates": Stage(
         name="analyze_candidates",
         callable=analyze_candidates_stage,
         produces="{storage_dir}/analysis/{video_id}_candidates.json",
         max_attempts=3,
     ),
+    "reframe": Stage(
+        name="reframe",
+        callable=crop_plan_stage,
+        produces="{storage_dir}/crops/{clip_id}_crop_plan.json",
+        max_attempts=3,
+    ),
     "crop_plan": Stage(
         name="crop_plan",
         callable=crop_plan_stage,
         produces="{storage_dir}/crops/{clip_id}_crop_plan.json",
+        max_attempts=3,
+    ),
+    "captions": Stage(
+        name="captions",
+        callable=caption_stage,
+        produces="{storage_dir}/subtitles/{clip_id}.ass",
         max_attempts=3,
     ),
     "caption": Stage(

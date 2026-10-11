@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from shorts_engine.db.session import SessionLocal, is_postgres
 from shorts_engine.db.models import PipelineJob, PipelineJobStatus
@@ -45,51 +46,89 @@ class DurableJobQueue:
         backoff_multiplier_sec: float = 10.0,
         next_run_at: Optional[datetime] = None,
         db: Optional[Session] = None,
+        stage: Optional[str] = None,
     ) -> PipelineJob:
         """
-        Enqueues a new job or returns the active existing job for the same (job_type, entity_id).
+        Enqueues a new job or returns the existing job for the same (entity_id, stage).
+        Idempotent and deduplicated at both application and unique constraint level.
         """
         session, should_close = self._get_session(db)
+        known_stages = {
+            "ingest", "download", "transcribe", "select", "analyze_candidates",
+            "reframe", "crop_plan", "captions", "caption", "render", "publish"
+        }
+        if stage:
+            eff_stage = stage.lower()
+        elif job_type.lower() in known_stages:
+            eff_stage = job_type.lower()
+        else:
+            eff_stage = "QUEUED"
+
         try:
-            # Check for existing active job (idempotent deduplication)
-            active_job = (
-                session.query(PipelineJob)
-                .filter(
-                    PipelineJob.job_type == job_type,
-                    PipelineJob.entity_id == entity_id,
-                    PipelineJob.status.in_([PipelineJobStatus.PENDING, PipelineJobStatus.RUNNING]),
+            # Check for existing job (idempotent deduplication via UNIQUE(entity_id, stage))
+            if eff_stage != "QUEUED":
+                existing_job = (
+                    session.query(PipelineJob)
+                    .filter(
+                        PipelineJob.entity_id == entity_id,
+                        PipelineJob.stage == eff_stage,
+                    )
+                    .first()
                 )
-                .first()
-            )
-            if active_job:
-                logger.info("Found active existing job %s for %s:%s; skipping duplicate enqueue.", active_job.id, job_type, entity_id)
-                return active_job
+            else:
+                existing_job = (
+                    session.query(PipelineJob)
+                    .filter(
+                        PipelineJob.job_type == job_type,
+                        PipelineJob.entity_id == entity_id,
+                        PipelineJob.status.in_([PipelineJobStatus.PENDING, PipelineJobStatus.RUNNING]),
+                    )
+                    .first()
+                )
+
+            if existing_job:
+                logger.info("Found existing job %s for %s:%s; skipping duplicate enqueue.", existing_job.id, entity_id, eff_stage)
+                return existing_job
 
             job = PipelineJob(
                 job_type=job_type,
                 entity_type=entity_type,
                 entity_id=entity_id,
                 status=PipelineJobStatus.PENDING,
-                stage="QUEUED",
+                stage=eff_stage,
                 progress_pct=0.0,
-                progress_detail="Job enqueued, awaiting worker pickup.",
+                progress_detail=f"Job enqueued for stage '{eff_stage}', awaiting worker pickup.",
                 payload_json=json.dumps(payload or {}),
                 max_retries=max_retries,
                 backoff_multiplier_sec=backoff_multiplier_sec,
                 next_run_at=next_run_at,
             )
             session.add(job)
-            session.commit()
-            session.refresh(job)
+            try:
+                session.commit()
+                session.refresh(job)
+            except IntegrityError:
+                session.rollback()
+                conflict_job = (
+                    session.query(PipelineJob)
+                    .filter(
+                        PipelineJob.entity_id == entity_id,
+                        PipelineJob.stage == eff_stage,
+                    )
+                    .first()
+                )
+                if conflict_job:
+                    return conflict_job
+                raise
 
-            logger.info("Enqueued %s job %s for entity %s", job_type, job.id, entity_id)
+            logger.info("Enqueued %s job %s (stage=%s) for entity %s", job_type, job.id, eff_stage, entity_id)
 
             try:
                 global_event_bus.publish_sync(PlatformEvent(
                     category="queue",
                     level="INFO",
                     title="Job Enqueued",
-                    message=f"Job {job.id[:8]} ({job_type}) enqueued for {entity_type} {entity_id}.",
+                    message=f"Job {job.id[:8]} ({job_type}/{eff_stage}) enqueued for {entity_type} {entity_id}.",
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
@@ -106,9 +145,12 @@ class DurableJobQueue:
         worker_id: Optional[str] = None,
         job_type: Optional[str] = None,
         db: Optional[Session] = None,
+        allowed_stages: Optional[List[str]] = None,
+        stage_concurrency_limits: Optional[Dict[str, int]] = None,
     ) -> Optional[PipelineJob]:
         """
         Atomically claims the next pending job whose next_run_at is now or in the past.
+        Supports stage pinning (allowed_stages) and stage group concurrency limits.
         - PostgreSQL: Uses SELECT ... FOR UPDATE SKIP LOCKED.
         - SQLite: Uses atomic Compare-And-Swap (CAS).
         """
@@ -123,6 +165,22 @@ class DurableJobQueue:
             )
             if job_type:
                 query = query.filter(PipelineJob.job_type == job_type)
+            if allowed_stages:
+                query = query.filter(or_(PipelineJob.stage.in_(allowed_stages), PipelineJob.job_type.in_(allowed_stages)))
+
+            # Check stage group concurrency limits
+            if stage_concurrency_limits:
+                for limit_stage, max_concur in stage_concurrency_limits.items():
+                    active_count = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.stage == limit_stage,
+                            PipelineJob.status == PipelineJobStatus.RUNNING,
+                        )
+                        .count()
+                    )
+                    if active_count >= max_concur:
+                        query = query.filter(PipelineJob.stage != limit_stage)
 
             query = query.order_by(PipelineJob.created_at.asc())
 
