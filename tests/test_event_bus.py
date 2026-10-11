@@ -16,6 +16,18 @@ from fastapi.testclient import TestClient
 from shorts_engine.services.events.models import PlatformEvent
 from shorts_engine.services.events.bus import EventBus, global_event_bus
 from shorts_engine.dashboard.app import app
+from shorts_engine.dashboard.auth import require_operator, require_viewer
+from shorts_engine.db.models import User, UserRole
+
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    fake_user = User(id="test_admin", username="admin", role=UserRole.ADMIN, is_active=True)
+    app.dependency_overrides[require_operator] = lambda: fake_user
+    app.dependency_overrides[require_viewer] = lambda: fake_user
+    yield
+    app.dependency_overrides.pop(require_operator, None)
+    app.dependency_overrides.pop(require_viewer, None)
 
 
 @pytest.fixture(autouse=True)

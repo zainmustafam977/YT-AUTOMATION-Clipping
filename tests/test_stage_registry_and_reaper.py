@@ -530,8 +530,11 @@ def test_quarantined_jobs_visibility_query_and_api_endpoint(in_memory_db):
     app = create_app()
     from shorts_engine.dashboard.routes.queue import get_db as queue_get_db
     from shorts_engine.db.session import get_db as session_get_db
+    from shorts_engine.dashboard.auth import require_viewer
+    from shorts_engine.db.models import User, UserRole
     app.dependency_overrides[queue_get_db] = lambda: in_memory_db
     app.dependency_overrides[session_get_db] = lambda: in_memory_db
+    app.dependency_overrides[require_viewer] = lambda: User(id="u1", username="viewer", role=UserRole.VIEWER, is_active=True)
 
     client = TestClient(app)
     response = client.get("/api/jobs/quarantined")

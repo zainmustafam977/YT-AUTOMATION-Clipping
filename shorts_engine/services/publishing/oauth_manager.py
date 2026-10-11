@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Union
 from sqlalchemy.orm import Session
 
+from google_auth_oauthlib.flow import Flow
 from shorts_engine.services.publishing.worker import (
     HttpError,
     DEFAULT_SCOPES,

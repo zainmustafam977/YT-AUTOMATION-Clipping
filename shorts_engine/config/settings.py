@@ -454,6 +454,45 @@ class PipelineSettings(BaseSettings):
         default=5.0,
         description="Hotfolder poll interval in seconds",
     )
+    MAX_INGESTION_DURATION_HOURS: float = Field(
+        default=4.0,
+        description="Maximum allowed duration in hours for ingested video content",
+    )
+    MAX_VIDEO_DURATION_SEC: int = Field(
+        default=14400,
+        ge=60,
+        description="Maximum allowed video duration in seconds (default 4 hours = 14400s)",
+    )
+    MAX_INGESTION_FILE_SIZE_MB: float = Field(
+        default=5120.0,
+        description="Maximum allowed file size in MB for ingested video content (default 5GB = 5120MB)",
+    )
+    MAX_VIDEO_FILESIZE_BYTES: int = Field(
+        default=5 * 1024 * 1024 * 1024,
+        ge=1024 * 1024,
+        description="Maximum allowed video file size in bytes (default 5GB)",
+    )
+    INGESTION_DOWNLOAD_TIMEOUT_SEC: float = Field(
+        default=1800.0,
+        ge=30.0,
+        description="Hard timeout in seconds for video stream downloads (default 30 minutes)",
+    )
+    INGESTION_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=5,
+        ge=1,
+        description="Rate limit for manual ingestion requests per minute per user",
+    )
+    FFMPEG_MAX_THREADS: int = Field(
+        default=4,
+        ge=1,
+        le=64,
+        description="Hard cap on ffmpeg/ffprobe thread count to prevent CPU starvation",
+    )
+    FFMPEG_SUBPROCESS_TIMEOUT_SEC: float = Field(
+        default=600.0,
+        ge=10.0,
+        description="Hard timeout in seconds for ffmpeg/ffprobe subprocess execution",
+    )
 
 
     @model_validator(mode="after")

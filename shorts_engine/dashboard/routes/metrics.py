@@ -10,11 +10,12 @@ storage capacity, and AI provider statuses.
 
 import time
 import psutil
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Depends
 from sqlalchemy import func
 from shorts_engine.config.settings import settings
+from shorts_engine.dashboard.auth import require_viewer
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, SourceVideo
+from shorts_engine.db.models import Clip, SourceVideo, User
 from shorts_engine.dashboard.routes.health import BOOT_TIME
 
 router = APIRouter(tags=["Metrics & Telemetry"])
@@ -145,7 +146,10 @@ def ai_token_metrics():
 
 
 @router.get("/api/metrics/clips/{clip_id}/ai-tokens", summary="Per-Clip AI Token Usage & Cost")
-def clip_ai_token_metrics(clip_id: str):
+def clip_ai_token_metrics(
+    clip_id: str,
+    current_user: User = Depends(require_viewer),
+):
     """
     Returns AI token breakdown and estimated USD inference cost for a specific clip.
     """

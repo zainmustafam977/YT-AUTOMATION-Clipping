@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session, joinedload
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import reload_runtime_settings
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
+from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
+from shorts_engine.utils.url_guard import validate_youtube_url_or_id, SSRFValidationError
 from shorts_engine.db.session import SessionLocal, get_db
 from shorts_engine.db.models import SourceVideo, SourceVideoStatus, Clip, ClipStatus, ClipCandidate, Channel, User
 from shorts_engine.services.publishing.quota import QuotaTracker
@@ -661,6 +663,7 @@ def api_estimate_clips(
     duration_sec: float,
     min_dur: float = 30.0,
     max_dur: float = 60.0,
+    current_user: User = Depends(require_viewer),
 ):
     from shorts_engine.services.clip_selection.estimator import estimate_optimal_clip_count
     return estimate_optimal_clip_count(
@@ -698,27 +701,23 @@ def manual_process_video(
     override_whisper_language: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
+    rate_limit_user: User = Depends(rate_limit_ingestion),
     csrf_ok: bool = Depends(verify_csrf),
 ):
     raw_input = video_input.strip()
     if not raw_input:
         raise HTTPException(status_code=422, detail="YouTube URL or Video ID cannot be empty")
 
-    # Extract clean 11-char video ID or use raw input
-    m = re.search(r"(?:v=|\/|youtu\.be\/|shorts\/)([0-9A-Za-z_-]{11})", raw_input)
-    video_id = m.group(1) if m else raw_input
-
-    # Check if video exists in DB or is a valid 11-char YouTube ID
-    existing_in_db = db.query(SourceVideo).filter(
-        (SourceVideo.id == video_id) | (SourceVideo.youtube_video_id == video_id) | (SourceVideo.youtube_video_id == raw_input)
-    ).first()
-    if not existing_in_db and not re.match(r"^[0-9A-Za-z_-]{11}$", video_id):
+    try:
+        canonical_url, video_id = validate_youtube_url_or_id(raw_input)
+    except SSRFValidationError as e:
+        logger.warning("SSRF / Invalid URL rejected at manual intake: %s", e)
         if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
             return RedirectResponse(
-                url="/?msg=Invalid+YouTube+URL+or+11-character+Video+ID&type=danger",
+                url="/?msg=Invalid+or+forbidden+YouTube+URL&type=danger",
                 status_code=303,
             )
-        raise HTTPException(status_code=422, detail="Invalid YouTube URL or 11-character Video ID")
+        raise HTTPException(status_code=400, detail=f"SSRF Protection: {str(e)}")
 
     # Handle automatic channel registration or auto-resolution if channel_id not provided
     clean_detected_name = detected_channel_name.strip() if detected_channel_name else None
@@ -1250,6 +1249,7 @@ def generate_fallback_svg(title_or_id: str, is_vertical: bool = False) -> str:
 def get_thumbnail(
     video_or_clip_id: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
 ):
     """
     Returns high-speed cached thumbnail image (JPEG/PNG/SVG).
@@ -1676,10 +1676,17 @@ def api_ingest_video(
     payload: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
+    rate_limit_user: User = Depends(rate_limit_ingestion),
 ):
     url = (payload.get("url") or "").strip()
     if not url:
         raise HTTPException(status_code=422, detail="Video URL/path cannot be empty")
+    try:
+        canonical_url, video_id = validate_youtube_url_or_id(url)
+    except SSRFValidationError as e:
+        logger.warning("SSRF / Invalid URL rejected at API ingest: %s", e)
+        raise HTTPException(status_code=400, detail=f"SSRF Protection: {str(e)}")
+
     runtime_overrides = {}
     if "override_min_segments" in payload:
         runtime_overrides["min_segments"] = payload["override_min_segments"]
@@ -1687,8 +1694,8 @@ def api_ingest_video(
         runtime_overrides["max_segments"] = payload["override_max_segments"]
 
     # Enqueue processing job via queue producer
-    _run_pipeline_background(url, payload.get("channel_id"), False, "hormozi_viral", runtime_overrides or None)
-    return {"status": "started", "video": url}
+    _run_pipeline_background(video_id, payload.get("channel_id"), False, "hormozi_viral", runtime_overrides or None)
+    return {"status": "started", "video": canonical_url, "video_id": video_id}
 
 
 @router.post("/api/analytics/sync", summary="Synchronize YouTube analytics for all published clips")

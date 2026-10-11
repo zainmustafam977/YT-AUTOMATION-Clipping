@@ -87,8 +87,8 @@ def classify_exception(exc: Exception) -> PipelineError:
 
     # Check for known permanent indicators in standard exceptions
     permanent_signatures = [
-        "FileNotFoundError",
-        "quotaExceeded",
+        "filenotfounderror",
+        "quotaexceeded",
         "invalid_grant",
         "token_revoked",
         "unauthorized",
@@ -96,9 +96,19 @@ def classify_exception(exc: Exception) -> PipelineError:
         "video unavailable",
         "private video",
         "copyright",
+        "ssrf",
+        "exceeds maximum allowed",
+        "download timeout",
+        "overall timeout",
     ]
     lower_msg = msg.lower()
-    if any(sig in lower_msg for sig in permanent_signatures):
+    if any(sig in lower_msg for sig in permanent_signatures) or exc.__class__.__name__ in (
+        "SSRFValidationError",
+        "VideoTooLongError",
+        "VideoTooLargeError",
+        "IngestionTimeoutError",
+        "IngestionPermanentError",
+    ):
         return PermanentError(f"Permanent error: {msg}")
 
     # Default to transient retry

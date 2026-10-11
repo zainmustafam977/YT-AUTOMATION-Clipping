@@ -173,7 +173,21 @@ def create_dashboard_app() -> FastAPI:
 
         @app.get("/app", include_in_schema=False)
         @app.get("/app/{full_path:path}", include_in_schema=False)
-        async def serve_spa(full_path: str = ""):
+        async def serve_spa(request: Request, full_path: str = ""):
+            from shorts_engine.dashboard.auth import SESSION_COOKIE_NAME, verify_session_token
+            session_token = None
+            if SESSION_COOKIE_NAME in request.cookies:
+                session_token = request.cookies.get(SESSION_COOKIE_NAME)
+            elif "Authorization" in request.headers:
+                auth_h = request.headers.get("Authorization", "")
+                if auth_h.startswith("Bearer "):
+                    session_token = auth_h[7:].strip()
+            user_id = verify_session_token(session_token) if session_token else None
+            if not user_id:
+                if request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
+                    return RedirectResponse(url="/login", status_code=303)
+                raise HTTPException(status_code=401, detail="Authentication required")
+
             index_file = dist_dir / "index.html"
             if index_file.exists():
                 return FileResponse(str(index_file))

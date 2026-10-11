@@ -281,11 +281,18 @@ def test_api_metrics_ai_tokens_json(dashboard_client, tmp_path):
 
 def test_api_metrics_clip_ai_tokens_json(dashboard_client):
     """GET /api/metrics/clips/{clip_id}/ai-tokens returns per-clip token cost breakdown."""
-    res = dashboard_client.get("/api/metrics/clips/nonexistent_clip/ai-tokens")
-    assert res.status_code == 200
-    data = res.json()
-    assert data["clip_id"] == "nonexistent_clip"
-    assert data["total_tokens"] == 0
+    from shorts_engine.dashboard.auth import require_viewer
+    from shorts_engine.db.models import User, UserRole
+    fake_user = User(id="u1", username="viewer", role=UserRole.VIEWER, is_active=True)
+    dashboard_client.app.dependency_overrides[require_viewer] = lambda: fake_user
+    try:
+        res = dashboard_client.get("/api/metrics/clips/nonexistent_clip/ai-tokens")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["clip_id"] == "nonexistent_clip"
+        assert data["total_tokens"] == 0
+    finally:
+        dashboard_client.app.dependency_overrides.pop(require_viewer, None)
 
 
 def test_prometheus_metrics_exposition_contains_quota_and_ai(dashboard_client):

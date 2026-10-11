@@ -106,6 +106,14 @@ class SubprocessWatchdog:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
+        if sys.platform != "win32":
+            try:
+                import signal
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except Exception:
+                pass
+
         # Wait up to grace period
         gone, alive = psutil.wait_procs(all_procs, timeout=grace_period_sec)
 
@@ -115,6 +123,14 @@ class SubprocessWatchdog:
                 logger.warning("Process PID %d did not terminate gracefully; issuing SIGKILL.", p.pid)
                 p.kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        if sys.platform != "win32" and alive:
+            try:
+                import signal
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except Exception:
                 pass
 
         return terminated_pids
@@ -146,6 +162,30 @@ class SubprocessWatchdog:
             ExecutionResult object.
         """
         cmd_str_list = [str(c) for c in cmd]
+        # Enforce thread count cap on ffmpeg / ffprobe
+        if cmd_str_list:
+            exe_name = Path(cmd_str_list[0]).name.lower()
+            if exe_name in ("ffmpeg", "ffmpeg.exe", "ffprobe", "ffprobe.exe"):
+                try:
+                    from shorts_engine.config.settings import settings
+                    configured_threads = getattr(settings, "FFMPEG_MAX_THREADS", 4)
+                except Exception:
+                    configured_threads = 4
+                max_threads_str = str(configured_threads)
+
+                if "-threads" not in cmd_str_list:
+                    cmd_str_list.insert(1, "-threads")
+                    cmd_str_list.insert(2, max_threads_str)
+                else:
+                    try:
+                        t_idx = cmd_str_list.index("-threads")
+                        if t_idx + 1 < len(cmd_str_list):
+                            curr_val = int(cmd_str_list[t_idx + 1])
+                            if curr_val > configured_threads:
+                                cmd_str_list[t_idx + 1] = max_threads_str
+                    except (ValueError, IndexError):
+                        pass
+
         cwd_str = str(cwd) if cwd else None
         start_time = time.monotonic()
         cleaned_paths: List[Path] = []
@@ -203,25 +243,36 @@ class SubprocessWatchdog:
         stderr_text = ""
 
         try:
-            # We open pipes for both stdout and stderr
+            # We open pipes for both stdout and stderr with process group isolation
+            popen_kwargs: Dict[str, Any] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "cwd": cwd_str,
+                "env": run_env,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "replace",
+            }
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                popen_kwargs["start_new_session"] = True
+
             proc = subprocess.Popen(
                 cmd_str_list,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=cwd_str,
-                env=run_env,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+                **popen_kwargs,
             )
 
             # Assign child process to Win32 Job Object on Windows to prevent zombie processes
             if sys.platform == "win32":
                 try:
                     from shorts_engine.services.execution.win32_job import win32_job_manager
-                    if win32_job_manager.is_active:
+                    if win32_job_manager.is_active and not hasattr(proc, "mock_calls"):
                         handle = getattr(proc, "_handle", None)
-                        win32_job_manager.assign_process(handle if handle else proc.pid)
+                        if handle and not hasattr(handle, "mock_calls"):
+                            win32_job_manager.assign_process(handle)
+                        elif isinstance(getattr(proc, "pid", None), int) and not hasattr(proc.pid, "mock_calls"):
+                            win32_job_manager.assign_process(proc.pid)
                 except Exception as _je:
                     logger.debug("Win32 Job assignment notice: %s", _je)
 

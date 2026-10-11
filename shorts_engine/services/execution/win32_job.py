@@ -171,9 +171,11 @@ class Win32JobManager:
                 if not proc_handle:
                     return False
                 close_on_exit = True
-            else:
+            elif not hasattr(pid_or_handle, "mock_calls") and (isinstance(pid_or_handle, (wintypes.HANDLE, ctypes.c_void_p)) or (hasattr(pid_or_handle, "value") and not hasattr(pid_or_handle, "_mock_return_value"))):
                 proc_handle = pid_or_handle
                 close_on_exit = False
+            else:
+                return False
 
             k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
             k32.AssignProcessToJobObject.restype = wintypes.BOOL

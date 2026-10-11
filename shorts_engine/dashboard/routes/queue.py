@@ -1831,7 +1831,9 @@ def clear_all_failed(
 
 
 @router.get("/dead-letter/clear-all", summary="Redirect direct browser access to dead-letter queue")
-def clear_all_failed_get():
+def clear_all_failed_get(
+    current_user: User = Depends(require_viewer),
+):
     return RedirectResponse(url="/dead-letter", status_code=303)
 
 
@@ -2066,6 +2068,7 @@ def list_quarantined_jobs(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
 ):
     from shorts_engine.orchestration.stage_registry import get_quarantined_jobs
     jobs = get_quarantined_jobs(db, limit=limit, offset=offset)

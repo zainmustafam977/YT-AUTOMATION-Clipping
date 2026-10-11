@@ -151,6 +151,14 @@ class LocalVideoIngestionService:
             size_b = p.stat().st_size
             if size_b <= 0:
                 raise ValueError(f"Target video file is empty (0 bytes): {p}")
+            max_bytes = getattr(settings, "MAX_VIDEO_FILESIZE_BYTES", int(settings.MAX_INGESTION_FILE_SIZE_MB * 1024 * 1024))
+            if size_b > max_bytes:
+                from shorts_engine.services.ingestion.security import VideoTooLargeError
+                size_mb = size_b / (1024 * 1024)
+                max_mb = max_bytes / (1024 * 1024)
+                raise VideoTooLargeError(
+                    f"File size ({size_mb:.1f} MB) exceeds maximum allowed limit ({max_mb:.1f} MB)."
+                )
         except OSError as e:
             raise OSError(f"Cannot read file attributes for {p}: {e}") from e
 
@@ -190,8 +198,9 @@ class LocalVideoIngestionService:
 
         ffprobe_success = False
         try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=12)
-            if res.returncode == 0 and res.stdout:
+            from shorts_engine.services.execution.watchdog import SubprocessWatchdog
+            res = SubprocessWatchdog.run(cmd, timeout_sec=12.0, check=False)
+            if res.exit_code == 0 and res.stdout:
                 data = json.loads(res.stdout)
                 fmt = data.get("format", {})
                 if "duration" in fmt:
@@ -317,6 +326,12 @@ class LocalVideoIngestionService:
         local_vid = f"loc_{path_hash}"
 
         duration_sec = int(round(meta.get("duration_sec", 0.0)))
+        max_dur = getattr(settings, "MAX_VIDEO_DURATION_SEC", int(settings.MAX_INGESTION_DURATION_HOURS * 3600))
+        if duration_sec > max_dur:
+            from shorts_engine.services.ingestion.security import VideoTooLongError
+            raise VideoTooLongError(
+                f"Local video duration ({duration_sec}s / {duration_sec/3600:.2f}h) exceeds maximum allowed duration ({max_dur}s)."
+            )
 
         source_video = SourceVideo(
             id=generate_uuid(),
@@ -389,12 +404,21 @@ class LocalVideoIngestionService:
         final_path = dest_dir / final_name
         part_path = dest_dir / f"{final_name}.part"
 
+        total_bytes = 0
+        max_bytes = getattr(settings, "MAX_VIDEO_FILESIZE_BYTES", int(settings.MAX_INGESTION_FILE_SIZE_MB * 1024 * 1024))
+
         try:
             with open(part_path, "wb") as f_out:
                 while True:
                     chunk = await upload_file.read(chunk_size)
                     if not chunk:
                         break
+                    total_bytes += len(chunk)
+                    if total_bytes > max_bytes:
+                        from shorts_engine.services.ingestion.security import VideoTooLargeError
+                        raise VideoTooLargeError(
+                            f"Uploaded file exceeds maximum allowed file size ({max_bytes / (1024*1024):.1f} MB)."
+                        )
                     f_out.write(chunk)
 
             # Atomic move from .part to final
@@ -406,6 +430,11 @@ class LocalVideoIngestionService:
                     part_path.unlink()
                 except Exception:
                     pass
+            from shorts_engine.services.ingestion.security import VideoTooLargeError
+            if isinstance(e, VideoTooLargeError):
+                raise e
+            if isinstance(e, (IOError, OSError)):
+                raise e
             raise IOError(f"Failed to stream and save uploaded file: {e}") from e
 
     @classmethod

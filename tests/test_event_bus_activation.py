@@ -82,7 +82,7 @@ def db_session(tmp_path):
 @pytest.fixture
 def api_client(db_session):
     """TestClient wired with database override and clean event bus."""
-    from shorts_engine.dashboard.auth import require_operator, verify_csrf
+    from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf
     from shorts_engine.db.models import User, UserRole
 
     fake_operator = User(
@@ -98,6 +98,7 @@ def api_client(db_session):
     app.dependency_overrides[get_db] = _get_test_db
     app.dependency_overrides[get_queue_db] = _get_test_db
     app.dependency_overrides[require_operator] = lambda: fake_operator
+    app.dependency_overrides[require_viewer] = lambda: fake_operator
     app.dependency_overrides[verify_csrf] = lambda: True
     client = TestClient(app)
 

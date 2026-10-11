@@ -5,13 +5,23 @@ Unit and integration tests for:
 3. Manual video processing channel auto-resolution & caption preset passing
 """
 
+import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from shorts_engine.services.telemetry.progress_tracker import JobProgressTracker
 from shorts_engine.dashboard.app import app
+from shorts_engine.dashboard.auth import require_viewer
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import User
+from shorts_engine.db.models import User, UserRole
+
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    fake_user = User(id="u1", username="viewer", role=UserRole.VIEWER, is_active=True)
+    app.dependency_overrides[require_viewer] = lambda: fake_user
+    yield
+    app.dependency_overrides.pop(require_viewer, None)
 
 
 def test_job_progress_tracker_lifecycle():

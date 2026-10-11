@@ -7,9 +7,11 @@ and manual publication interface.
 import asyncio
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from starlette.responses import StreamingResponse
 
+from shorts_engine.dashboard.auth import require_viewer, require_operator
+from shorts_engine.db.models import User
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent
 
@@ -22,7 +24,11 @@ router = APIRouter()
     "/api/events/stream",
     summary="Real-time Server-Sent Events (SSE) stream for live UI activity bubbles and progress updates",
 )
-async def event_stream(request: Request, max_ticks: Optional[int] = None):
+async def event_stream(
+    request: Request,
+    max_ticks: Optional[int] = None,
+    current_user: User = Depends(require_viewer),
+):
     """
     Subscribes the client to live platform events.
     Yields events in standard text/event-stream format with automatic 15-second heartbeat pings.
@@ -82,6 +88,7 @@ def get_event_history(
     level: Optional[str] = Query(default=None),
     category: Optional[str] = Query(default=None),
     entity_id: Optional[str] = Query(default=None),
+    current_user: User = Depends(require_viewer),
 ):
     """Returns a slice of recent events matching optional filter criteria."""
     return global_event_bus.get_history(
@@ -96,7 +103,10 @@ def get_event_history(
     "/api/events/publish",
     summary="Publish a platform event to the event bus",
 )
-async def publish_event(event: PlatformEvent):
+async def publish_event(
+    event: PlatformEvent,
+    current_user: User = Depends(require_operator),
+):
     """Accepts and broadcasts an event to all active SSE subscribers."""
     await global_event_bus.publish(event)
     return {"status": "published", "id": event.id}
@@ -105,16 +115,8 @@ async def publish_event(event: PlatformEvent):
 from datetime import datetime
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from shorts_engine.db.session import SessionLocal
+from shorts_engine.db.session import SessionLocal, get_db
 from shorts_engine.db.models import EventLog, prune_old_event_logs
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get(
@@ -129,6 +131,7 @@ def get_recent_persisted_events(
     limit: int = Query(default=50, ge=1, le=500),
     auto_prune: bool = Query(default=False, description="Optionally prune events older than 7 days"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
 ):
     """
     Returns persisted platform events matching criteria, ordered chronologically.
@@ -171,6 +174,7 @@ def get_recent_persisted_events(
 def prune_events(
     retention_days: int = Query(default=7, ge=1, le=365),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
 ):
     """Prunes old event logs from the database."""
     pruned_count = prune_old_event_logs(db=db, retention_days=retention_days)

@@ -121,16 +121,14 @@ class IngestionService:
     purge_stale_fragments = _PurgeFragmentsDescriptor()
 
     def get_video_url(self, video_id_or_url: str) -> str:
-        if video_id_or_url.startswith("http://") or video_id_or_url.startswith("https://"):
-            return video_id_or_url
-        return f"https://www.youtube.com/watch?v={video_id_or_url}"
+        from shorts_engine.utils.url_guard import validate_youtube_url_or_id
+        canonical_url, _ = validate_youtube_url_or_id(video_id_or_url)
+        return canonical_url
 
     def extract_video_id(self, video_id_or_url: str) -> str:
-        if "v=" in video_id_or_url:
-            return video_id_or_url.split("v=")[1].split("&")[0]
-        if "youtu.be/" in video_id_or_url:
-            return video_id_or_url.split("youtu.be/")[1].split("?")[0]
-        return video_id_or_url
+        from shorts_engine.utils.url_guard import validate_youtube_url_or_id
+        _, video_id = validate_youtube_url_or_id(video_id_or_url)
+        return video_id
 
     def extract_audio(self, video_path: Path, audio_path: Path) -> Path:
         """Extracts 16kHz mono WAV from video file using FFmpeg for optimal ASR."""
@@ -217,6 +215,12 @@ class IngestionService:
                 if duration_sec <= 0:
                     duration_sec = self.probe_duration_sec(cached_video)
 
+                if duration_sec > (settings.MAX_INGESTION_DURATION_HOURS * 3600):
+                    raise ValueError(
+                        f"Cached video duration ({duration_sec}s / {duration_sec/3600:.2f}h) "
+                        f"exceeds maximum allowed duration ({settings.MAX_INGESTION_DURATION_HOURS}h)."
+                    )
+
                 return VideoDownloadResult(
                     video_id=video_id,
                     title=meta.get("title", video_id),
@@ -225,6 +229,44 @@ class IngestionService:
                     audio_path=target_audio,
                     metadata=meta,
                 )
+
+        from shorts_engine.services.ingestion.security import (
+            VideoTooLongError,
+            VideoTooLargeError,
+            IngestionTimeoutError,
+        )
+
+        # Pre-download metadata inspection for duration and size bounds
+        try:
+            probe_meta = self.get_metadata(url)
+            probe_dur = probe_meta.get("duration")
+            max_dur_sec = getattr(settings, "MAX_VIDEO_DURATION_SEC", int(settings.MAX_INGESTION_DURATION_HOURS * 3600))
+            if probe_dur is not None and probe_dur > max_dur_sec:
+                raise VideoTooLongError(
+                    f"Video duration ({probe_dur}s / {probe_dur/3600:.2f}h) "
+                    f"exceeds maximum allowed duration ({max_dur_sec}s / {max_dur_sec/3600:.1f}h)."
+                )
+
+            max_bytes = getattr(settings, "MAX_VIDEO_FILESIZE_BYTES", int(settings.MAX_INGESTION_FILE_SIZE_MB * 1024 * 1024))
+            probe_size = probe_meta.get("filesize") or probe_meta.get("filesize_approx")
+            if not probe_size and "formats" in probe_meta:
+                for fmt in probe_meta.get("formats", []):
+                    f_size = fmt.get("filesize") or fmt.get("filesize_approx")
+                    if f_size and f_size > (probe_size or 0):
+                        probe_size = f_size
+            if probe_size and probe_size > max_bytes:
+                probe_mb = probe_size / (1024 * 1024)
+                max_mb = max_bytes / (1024 * 1024)
+                raise VideoTooLargeError(
+                    f"Estimated video file size ({probe_mb:.1f} MB) "
+                    f"exceeds maximum allowed limit ({max_mb:.1f} MB)."
+                )
+        except (VideoTooLongError, VideoTooLargeError):
+            raise
+        except ValueError as ve:
+            raise ve
+        except Exception as probe_err:
+            logger.warning("Pre-download metadata probe skipped or failed for %s: %s", url, probe_err)
 
         # Build download target folder (using temp fragments for download safety)
         temp_fragments_dir = PathManager.get_temp_dir(video_id, subfolder="fragments")
@@ -290,6 +332,8 @@ class IngestionService:
                 "merge_output_format": "mp4",
                 "quiet": True,
                 "no_warnings": True,
+                "socket_timeout": 30,
+                "max_filesize": max_bytes,
                 "js_runtimes": {"node": {}},
                 "extractor_args": {"youtube": {"player_client": chosen_clients}},
                 "progress_hooks": [_progress_hook],
@@ -322,7 +366,22 @@ class IngestionService:
                     detail=f"Initiating stream download (attempt {attempt}/{self.max_retries})...",
                 )
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as dl_executor:
+                        future = dl_executor.submit(ydl.extract_info, url, download=True)
+                        try:
+                            info = future.result(timeout=settings.INGESTION_DOWNLOAD_TIMEOUT_SEC)
+                        except concurrent.futures.TimeoutError:
+                            logger.error(
+                                "Overall download timeout (%0.1fs) expired for %s. Aborting.",
+                                settings.INGESTION_DOWNLOAD_TIMEOUT_SEC,
+                                url,
+                            )
+                            import shutil
+                            shutil.rmtree(temp_fragments_dir, ignore_errors=True)
+                            raise IngestionTimeoutError(
+                                f"Overall download timeout expired ({settings.INGESTION_DOWNLOAD_TIMEOUT_SEC}s) for {url}"
+                            )
                     actual_downloaded = Path(ydl.prepare_filename(info))
                     if not actual_downloaded.exists():
                         # Look for merged mp4 in temp_fragments_dir
@@ -401,6 +460,23 @@ class IngestionService:
                         audio_path=dest_audio_path,
                         metadata=info,
                     )
+            except (TimeoutError, IngestionTimeoutError) as te:
+                logger.error("Download aborted due to overall download timeout: %s", te)
+                import shutil
+                shutil.rmtree(temp_fragments_dir, ignore_errors=True)
+                if not isinstance(te, IngestionTimeoutError):
+                    raise IngestionTimeoutError(str(te))
+                raise te
+            except (VideoTooLongError, VideoTooLargeError) as ve:
+                logger.error("Download aborted due to metadata caps: %s", ve)
+                import shutil
+                shutil.rmtree(temp_fragments_dir, ignore_errors=True)
+                raise ve
+            except ValueError as ve:
+                logger.error("Download aborted due to metadata caps: %s", ve)
+                import shutil
+                shutil.rmtree(temp_fragments_dir, ignore_errors=True)
+                raise ve
             except Exception as e:
                 last_err = e
                 err_msg = str(e)

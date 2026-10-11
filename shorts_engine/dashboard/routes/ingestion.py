@@ -48,6 +48,8 @@ class LocalPathValidateRequest(BaseModel):
     file_path: str = Field(..., description="Path to check and probe")
 
 
+from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
+
 @router.post(
     "/local-path",
     summary="Zero-copy ingestion of an existing video file on local host filesystem",
@@ -58,6 +60,7 @@ def ingest_local_path_endpoint(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
+    rate_limit_user: User = Depends(rate_limit_ingestion),
     csrf_ok: bool = Depends(verify_csrf),
 ):
     """
@@ -115,6 +118,7 @@ async def ingest_local_file_endpoint(
     runtime_overrides_json: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
+    rate_limit_user: User = Depends(rate_limit_ingestion),
     csrf_ok: bool = Depends(verify_csrf),
 ):
     """

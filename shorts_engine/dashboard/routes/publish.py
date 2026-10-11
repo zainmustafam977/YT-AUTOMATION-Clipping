@@ -68,7 +68,10 @@ def publish_page(
 
 
 @router.get("/app/publish", summary="React SPA Publishing Studio (Temporary 307 Redirect)")
-def app_publish_redirect(request: Request):
+def app_publish_redirect(
+    request: Request,
+    current_user: User = Depends(require_viewer),
+):
     """307 Temporary Redirect to the React Review Queue."""
     q_str = str(request.url.query)
     target = f"/app/queue?{q_str}" if q_str else "/app/queue?studio=open"
