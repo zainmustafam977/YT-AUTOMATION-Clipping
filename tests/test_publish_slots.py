@@ -282,10 +282,10 @@ def test_dec_2025_quota_config_values(test_db):
     assert tracker.daily_limit == settings.DAILY_QUOTA_LIMIT
 
     # Check that settings define configurable costs
-    assert settings.QUOTA_VIDEOS_INSERT_COST == 100
+    assert settings.QUOTA_VIDEOS_INSERT_COST == 1600
     assert settings.QUOTA_VIDEOS_UPDATE_COST == 50
     assert settings.QUOTA_VIDEOS_DELETE_COST == 50
-    assert settings.QUOTA_DAILY_VIDEOS_INSERT_LIMIT == 50
+    assert settings.QUOTA_DAILY_VIDEOS_INSERT_LIMIT == 6
 
     # Test that can_publish evaluates against configurable limit
     can_pub, remaining, reason = tracker.can_publish(db=test_db, cost=settings.QUOTA_VIDEOS_INSERT_COST)

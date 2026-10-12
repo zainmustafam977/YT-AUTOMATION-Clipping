@@ -29,9 +29,11 @@ from shorts_engine.db.models import (
 from shorts_engine.db.migrations import run_schema_migrations
 
 
-def test_sqlite_pragmas_wal_and_busy_timeout():
+def test_sqlite_pragmas_wal_and_busy_timeout(tmp_path):
     """Verifies that SQLite connections enforce WAL mode and 30,000ms busy_timeout."""
-    with global_engine.connect() as conn:
+    db_file = tmp_path / "pragma_test.db"
+    eng = _create_isolated_engine(db_file)
+    with eng.connect() as conn:
         journal_mode = conn.execute(text("PRAGMA journal_mode")).scalar()
         busy_timeout = conn.execute(text("PRAGMA busy_timeout")).scalar()
         foreign_keys = conn.execute(text("PRAGMA foreign_keys")).scalar()
