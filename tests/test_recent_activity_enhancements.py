@@ -318,19 +318,19 @@ def test_runner_cooperative_cancellation_abort(activity_env):
     runner = PipelineRunner(db)
 
     # Register cancellation before running
-    register_cancellation("video_to_abort")
-    assert is_video_cancelled("video_to_abort") is True
+    register_cancellation("abort_vid01")
+    assert is_video_cancelled("abort_vid01") is True
 
     # Run pipeline with a mocked IngestionService that should NOT be called
     with patch.object(runner.ingestion, "download_video") as mock_dl:
-        res = runner.run_pipeline_for_video("video_to_abort", channel=ch, dry_run=True)
+        res = runner.run_pipeline_for_video("abort_vid01", channel=ch, dry_run=True)
         assert res["status"] == "CANCELLED"
         assert "Pipeline cancelled by operator" in res["message"]
         mock_dl.assert_not_called()
 
     # Clean up cancellation flag
-    clear_cancellation("video_to_abort")
-    assert is_video_cancelled("video_to_abort") is False
+    clear_cancellation("abort_vid01")
+    assert is_video_cancelled("abort_vid01") is False
 
 
 # ── 4. Skipped Short Badge & Metadata Formatting ─────────────────────────────

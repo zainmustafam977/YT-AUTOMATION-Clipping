@@ -417,7 +417,7 @@ def test_completed_video_reingest_guard(phase5_env):
     sv = SourceVideo(
         id="sv_cg_1",
         channel_id=ch.id,
-        youtube_video_id="video_guard_1",
+        youtube_video_id="vid_guard01",
         title="Completed Video",
         status=SourceVideoStatus.DONE,
     )
@@ -427,7 +427,7 @@ def test_completed_video_reingest_guard(phase5_env):
     # Trigger without force -> blocked with warning
     resp_blocked = client.post(
         "/process-video",
-        data={"video_input": "video_guard_1"},
+        data={"video_input": "vid_guard01"},
         follow_redirects=False,
     )
     assert resp_blocked.status_code in (200, 303)
@@ -440,7 +440,7 @@ def test_completed_video_reingest_guard(phase5_env):
     with patch("shorts_engine.dashboard.routes.status._run_pipeline_background"):
         resp_forced = client.post(
             "/process-video",
-            data={"video_input": "video_guard_1", "force": "true"},
+            data={"video_input": "vid_guard01", "force": "true"},
             follow_redirects=False,
         )
         assert resp_forced.status_code in (200, 303)

@@ -126,7 +126,7 @@ def test_runner_policy_skip_zero_retry_burn(mem_db):
     runner = PipelineRunner(mem_db)
 
     policy_mock = PolicyResult(
-        video_id="restricted_123",
+        video_id="restrict_01",
         is_restricted=True,
         sensitive_themes=["age_restricted"],
         action="skip",
@@ -135,11 +135,11 @@ def test_runner_policy_skip_zero_retry_burn(mem_db):
     )
 
     with patch("shorts_engine.services.ingestion.policy_gate.PolicyGate.assess_video", return_value=policy_mock):
-        res = runner.run_pipeline_for_video("https://www.youtube.com/watch?v=restricted_123", channel=channel)
+        res = runner.run_pipeline_for_video("https://www.youtube.com/watch?v=restrict_01", channel=channel)
         assert res == []
 
     # Check DB record
-    sv = mem_db.query(SourceVideo).filter_by(youtube_video_id="restricted_123").first()
+    sv = mem_db.query(SourceVideo).filter_by(youtube_video_id="restrict_01").first()
     assert sv is not None
     assert sv.status == SourceVideoStatus.POLICY_RESTRICTED
     assert sv.is_sensitive is True
@@ -155,7 +155,7 @@ def test_runner_policy_hold_zero_retry_burn(mem_db):
     runner = PipelineRunner(mem_db)
 
     policy_mock = PolicyResult(
-        video_id="strict_hold_456",
+        video_id="stricthold1",
         is_restricted=True,
         action="hold",
         reason="Strict gate: holding for operator review",
@@ -163,10 +163,10 @@ def test_runner_policy_hold_zero_retry_burn(mem_db):
     )
 
     with patch("shorts_engine.services.ingestion.policy_gate.PolicyGate.assess_video", return_value=policy_mock):
-        res = runner.run_pipeline_for_video("strict_hold_456", channel=channel)
+        res = runner.run_pipeline_for_video("stricthold1", channel=channel)
         assert res == []
 
-    sv = mem_db.query(SourceVideo).filter_by(youtube_video_id="strict_hold_456").first()
+    sv = mem_db.query(SourceVideo).filter_by(youtube_video_id="stricthold1").first()
     assert sv is not None
     assert sv.status == SourceVideoStatus.PENDING_POLICY_REVIEW
     assert sv.retry_count == 0

@@ -50,7 +50,7 @@ def test_test_log_isolation():
 
 def test_active_video_lock_prevents_duplicate_concurrent_run(memory_db):
     """Verifies that an active lock on a video ID blocks a concurrent second pipeline run."""
-    video_id = "test_concurrent_vid_1"
+    video_id = "concur_vid1"
     v_lock = get_video_lock(video_id)
     
     # Simulate first process holding the lock

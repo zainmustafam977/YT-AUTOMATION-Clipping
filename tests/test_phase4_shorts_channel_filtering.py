@@ -111,7 +111,7 @@ def test_pipeline_runner_skips_existing_short(test_env, tmp_path):
     dummy_audio.write_bytes(b"\x00" * 100)
 
     mock_download = VideoDownloadResult(
-        video_id="short_vid_123",
+        video_id="short_vid01",
         title="Mind Blowing Fact #Shorts",
         duration_sec=45,
         video_path=dummy_video,
@@ -120,11 +120,11 @@ def test_pipeline_runner_skips_existing_short(test_env, tmp_path):
     )
 
     with patch.object(runner.ingestion, "download_video", return_value=mock_download):
-        clips = runner.run_pipeline_for_video("https://youtube.com/watch?v=short_vid_123", channel=ch)
+        clips = runner.run_pipeline_for_video("https://youtube.com/watch?v=short_vid01", channel=ch)
         assert clips == []
 
         # Check that video was saved and transitioned to DONE with informative note
-        video = db.query(SourceVideo).filter_by(youtube_video_id="short_vid_123").first()
+        video = db.query(SourceVideo).filter_by(youtube_video_id="short_vid01").first()
         assert video is not None
         assert video.status == SourceVideoStatus.DONE
         assert "Skipped: already a YouTube Short" in video.error_message

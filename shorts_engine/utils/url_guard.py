@@ -152,40 +152,38 @@ def validate_youtube_url_or_id(input_str: str) -> Tuple[str, str]:
         # Allow offline / mock test execution if host is syntactically an allowed domain
         pass
 
-    # 4. Extract 11-char Video ID from YouTube URL
-    video_id: Optional[str] = None
+    # 4. Extract and validate exact 11-char Video ID from YouTube URL
+    candidate: Optional[str] = None
     if raw_host == "youtu.be":
         # Format: https://youtu.be/<video_id>
         path_parts = parsed.path.strip("/").split("/")
-        if path_parts and YOUTUBE_ID_REGEX.match(path_parts[0]):
-            video_id = path_parts[0]
+        if path_parts:
+            candidate = path_parts[0].split("?")[0]
     else:
         # Formats: /watch?v=<id>, /shorts/<id>, /embed/<id>, /v/<id>
         if "/shorts/" in parsed.path:
             parts = parsed.path.split("/shorts/")
             candidate = parts[1].split("/")[0].split("?")[0] if len(parts) > 1 else ""
-            if YOUTUBE_ID_REGEX.match(candidate):
-                video_id = candidate
         elif "/embed/" in parsed.path:
             parts = parsed.path.split("/embed/")
             candidate = parts[1].split("/")[0].split("?")[0] if len(parts) > 1 else ""
-            if YOUTUBE_ID_REGEX.match(candidate):
-                video_id = candidate
+        elif "/v/" in parsed.path:
+            parts = parsed.path.split("/v/")
+            candidate = parts[1].split("/")[0].split("?")[0] if len(parts) > 1 else ""
         else:
             q_params = urllib.parse.parse_qs(parsed.query)
             if "v" in q_params and q_params["v"]:
                 candidate = q_params["v"][0]
-                if YOUTUBE_ID_REGEX.match(candidate):
-                    video_id = candidate
 
-    if not video_id:
-        # Fallback regex extraction from full URL string
-        m = re.search(r"(?:v=|\/|youtu\.be\/|shorts\/)([0-9A-Za-z_-]{11})", cleaned)
-        if m:
-            video_id = m.group(1)
+    if not candidate:
+        raise SSRFValidationError(f"Could not extract a YouTube video ID parameter from '{cleaned}'.")
 
-    if not video_id or not YOUTUBE_ID_REGEX.match(video_id):
-        raise SSRFValidationError(f"Could not extract a valid 11-character YouTube video ID from '{cleaned}'.")
+    if not YOUTUBE_ID_REGEX.match(candidate):
+        raise SSRFValidationError(
+            f"Invalid YouTube video ID '{candidate}': must be exactly 11 characters matching [A-Za-z0-9_-]."
+        )
+
+    video_id = candidate
 
     canonical_url = f"https://www.youtube.com/watch?v={video_id}"
     return canonical_url, video_id

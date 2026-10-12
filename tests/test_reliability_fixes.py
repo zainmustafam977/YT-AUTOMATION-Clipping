@@ -30,9 +30,9 @@ def test_downloader_http_416_resets_fragments_and_retries_fresh(tmp_path):
     service = IngestionService(output_dir=tmp_path, max_retries=2)
 
     # Create dummy stale partial fragments in output_dir
-    fake_part = tmp_path / "testvid.part"
+    fake_part = tmp_path / "testvid1234.part"
     fake_part.write_text("corrupted bytes")
-    fake_ytdl = tmp_path / "testvid.ytdl"
+    fake_ytdl = tmp_path / "testvid1234.ytdl"
     fake_ytdl.write_text("state")
 
     attempts = 0
@@ -50,22 +50,23 @@ def test_downloader_http_416_resets_fragments_and_retries_fresh(tmp_path):
             "channel_id": "UC1234567890123456789012",
         }
         # Create output file
-        dummy_mp4 = tmp_path / "testvid.mp4"
+        dummy_mp4 = tmp_path / "testvid1234.mp4"
         dummy_mp4.write_text("mp4 content")
         return mock_info
 
     mock_ydl_instance = MagicMock()
     mock_ydl_instance.extract_info.side_effect = mock_extract_info
-    mock_ydl_instance.prepare_filename.return_value = str(tmp_path / "testvid.mp4")
+    mock_ydl_instance.prepare_filename.return_value = str(tmp_path / "testvid1234.mp4")
 
     with patch("yt_dlp.YoutubeDL") as mock_ydl_cls, \
+         patch.object(service, "get_metadata", return_value={"title": "Clean Test Video", "duration": 45, "channel": "Test Channel", "channel_id": "UC1234567890123456789012"}), \
          patch.object(service, "extract_audio") as mock_audio, \
          patch("time.sleep"):
         mock_ydl_cls.return_value.__enter__.return_value = mock_ydl_instance
-        res = service.download_video("testvid")
+        res = service.download_video("testvid1234")
 
     assert attempts == 2
-    assert res.video_id == "testvid"
+    assert res.video_id == "testvid1234"
     assert not fake_part.exists()
     assert not fake_ytdl.exists()
 
@@ -81,23 +82,24 @@ def test_downloader_winerror_32_lock_handling(tmp_path):
         if attempts == 1:
             raise RuntimeError("[WinError 32] The process cannot access the file because it is being used by another process")
         mock_info = {"title": "Unlocked Video", "duration": 30, "channel": "Tech", "channel_id": "UC123"}
-        (tmp_path / "winlock.mp4").write_text("data")
+        (tmp_path / "winlock1234.mp4").write_text("data")
         return mock_info
 
     mock_ydl_instance = MagicMock()
     mock_ydl_instance.extract_info.side_effect = mock_extract_info
-    mock_ydl_instance.prepare_filename.return_value = str(tmp_path / "winlock.mp4")
+    mock_ydl_instance.prepare_filename.return_value = str(tmp_path / "winlock1234.mp4")
 
     with patch("yt_dlp.YoutubeDL") as mock_ydl_cls, \
+         patch.object(service, "get_metadata", return_value={"title": "Unlocked Video", "duration": 30, "channel": "Tech", "channel_id": "UC123"}), \
          patch.object(service, "extract_audio"), \
          patch("gc.collect") as mock_gc, \
          patch("time.sleep"):
         mock_ydl_cls.return_value.__enter__.return_value = mock_ydl_instance
-        res = service.download_video("winlock")
+        res = service.download_video("winlock1234")
 
     assert attempts == 2
     assert mock_gc.called
-    assert res.video_id == "winlock"
+    assert res.video_id == "winlock1234"
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +244,7 @@ def test_pipeline_runner_preflight_missing_master_fails_fast(tmp_path):
     # Mock video with non-existent downloaded path
     video = MagicMock(spec=SourceVideo)
     video.id = "vid-123"
-    video.video_id = "missing_yt_id"
+    video.video_id = "missing_yt1"
     video.downloaded_path = str(tmp_path / "non_existent_master.mp4")
     video.channel = MagicMock(spec=Channel)
     video.channel.name = "TestChannel"
@@ -267,7 +269,7 @@ def test_pipeline_runner_preflight_missing_master_fails_fast(tmp_path):
     db_session.query.side_effect = mock_query
 
     mock_download_res = MagicMock(
-        video_id="missing_yt_id",
+        video_id="missing_yt1",
         title="Missing Video",
         video_path=tmp_path / "non_existent_master.mp4",
         audio_path=tmp_path / "non_existent_audio.wav",
@@ -280,7 +282,7 @@ def test_pipeline_runner_preflight_missing_master_fails_fast(tmp_path):
          patch.object(runner.clip_selector, "select_clips", return_value=[mock_cand]), \
          patch("shorts_engine.services.storage.path_manager.PathManager.resolve_download_path", return_value=None):
 
-        result = runner.run_pipeline_for_video("missing_yt_id", dry_run=False)
+        result = runner.run_pipeline_for_video("missing_yt1", dry_run=False)
 
     assert result["status"] == "FAILED"
     assert "Master source video not found on disk" in result["error"]
