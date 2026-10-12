@@ -27,14 +27,17 @@ class SessionHarvester:
 
     @classmethod
     def get_output_path(cls, custom_path: Optional[Path] = None) -> Path:
-        """Resolves target harvester cookies file path."""
+        """Resolves target harvester cookies file path (encrypted .enc at rest)."""
         p = (
             custom_path
             or getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None)
-            or (settings.STORAGE_DIR / "harvester_cookies.txt")
+            or (settings.STORAGE_DIR / "harvester_cookies.txt.enc")
         )
-        Path(p).parent.mkdir(parents=True, exist_ok=True)
-        return Path(p)
+        p = Path(p)
+        if not p.name.endswith(".enc"):
+            p = p.with_name(p.name + ".enc")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
 
     @classmethod
     def format_netscape_cookies(cls, cookies: List[Dict[str, Any]]) -> str:
@@ -195,11 +198,27 @@ class SessionHarvester:
             engine_used = "httpx"
 
         netscape_text = cls.format_netscape_cookies(cookies)
+        from shorts_engine.security.secretbox import encrypt as secretbox_encrypt
+        encrypted_text = secretbox_encrypt(netscape_text)
         with open(target_path, "w", encoding="utf-8") as f:
-            f.write(netscape_text)
+            f.write(encrypted_text)
+
+        # Eliminate plaintext re-leak artifact if present
+        plaintext_legacy = target_path.parent / target_path.stem
+        if plaintext_legacy.exists() and plaintext_legacy.is_file():
+            try:
+                plaintext_legacy.unlink()
+            except Exception:
+                pass
+        default_leak = settings.STORAGE_DIR / "harvester_cookies.txt"
+        if default_leak.exists() and default_leak.is_file():
+            try:
+                default_leak.unlink()
+            except Exception:
+                pass
 
         elapsed = round(time.time() - start_time, 2)
-        logger.info("Session harvest completed in %.2fs via %s: %s (%d cookies)", elapsed, engine_used, target_path, len(cookies))
+        logger.info("Session harvest completed in %.2fs via %s: %s (%d cookies, encrypted)", elapsed, engine_used, target_path, len(cookies))
 
         return {
             "success": True,
@@ -226,14 +245,21 @@ class SessionHarvester:
         age_sec = time.time() - stat.st_mtime
         age_min = round(age_sec / 60.0, 1)
 
-        # Count valid cookie lines
+        # Count valid cookie lines by decrypting if needed
         cookie_count = 0
         try:
+            from shorts_engine.security.secretbox import decrypt as secretbox_decrypt
             with open(target_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    clean = line.strip()
-                    if clean and not clean.startswith("#"):
-                        cookie_count += 1
+                content = f.read()
+            if target_path.name.endswith(".enc"):
+                try:
+                    content = secretbox_decrypt(content)
+                except Exception as dec_err:
+                    logger.debug("Harvester cookie decryption attempt: %s", dec_err)
+            for line in content.splitlines():
+                clean = line.strip()
+                if clean and not clean.startswith("#"):
+                    cookie_count += 1
         except Exception:
             pass
 
@@ -248,6 +274,22 @@ class SessionHarvester:
             "last_modified": datetime.utcfromtimestamp(stat.st_mtime).isoformat(),
             "status": "VALID" if is_fresh and cookie_count > 0 else "STALE",
         }
+
+    @classmethod
+    def get_decrypted_cookie_text(cls, output_path: Optional[Path] = None) -> Optional[str]:
+        """Returns the decrypted Netscape cookies plaintext, or None if unavailable."""
+        target_path = cls.get_output_path(output_path)
+        if not target_path.exists() or target_path.stat().st_size == 0:
+            return None
+        from shorts_engine.security.secretbox import decrypt as secretbox_decrypt
+        try:
+            raw = target_path.read_text(encoding="utf-8")
+            if target_path.name.endswith(".enc"):
+                return secretbox_decrypt(raw)
+            return raw
+        except Exception as e:
+            logger.warning("Failed to decrypt harvester cookies from %s: %s", target_path, e)
+            return None
 
     @classmethod
     def is_harvester_fresh(cls, max_age_hours: float = 48.0, output_path: Optional[Path] = None) -> bool:

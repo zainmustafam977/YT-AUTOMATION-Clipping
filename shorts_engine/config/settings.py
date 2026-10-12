@@ -494,8 +494,8 @@ class PipelineSettings(BaseSettings):
         description="Enable OAuth2 device token authentication tier for YouTube ingestion",
     )
     YOUTUBE_HARVESTER_COOKIES_PATH: Path = Field(
-        default=Path(__file__).resolve().parent.parent.parent / "storage" / "harvester_cookies.txt",
-        description="Path to fresh Netscape cookies exported by background session harvester",
+        default=Path(__file__).resolve().parent.parent.parent / "storage" / "harvester_cookies.txt.enc",
+        description="Path to fresh Netscape cookies exported by background session harvester (encrypted at rest)",
     )
     YOUTUBE_COOKIES_PATH: Path = Field(
         default=Path(__file__).resolve().parent.parent.parent / "storage" / "cookies.txt",

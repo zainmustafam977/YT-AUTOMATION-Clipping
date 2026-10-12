@@ -8,6 +8,8 @@ import gc
 import time
 import random
 import logging
+import tempfile
+import contextlib
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yt_dlp
@@ -21,6 +23,51 @@ from shorts_engine.services.ingestion.oauth_flow import YouTubeDeviceOAuth
 from shorts_engine.services.ingestion.proxy_manager import ProxyManager
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_transient_cookiefile(cookie_path: Optional[str]):
+    """
+    Resolves a usable cookie file path for yt-dlp.
+    If the target cookie file is encrypted (.enc), decrypts it to a transient
+    temporary file and returns (temp_file_path, cleanup_callable).
+    Otherwise returns (resolved_cookie_path, None).
+    """
+    if not cookie_path:
+        return None, None
+
+    path = Path(cookie_path)
+    if not path.exists() or path.stat().st_size == 0:
+        return None, None
+
+    if path.name.endswith(".enc"):
+        from shorts_engine.security.secretbox import decrypt as secretbox_decrypt
+        try:
+            encrypted_data = path.read_text(encoding="utf-8")
+            plaintext = secretbox_decrypt(encrypted_data)
+            temp = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".txt",
+                delete=False,
+                encoding="utf-8",
+                prefix="yt_transient_cookie_",
+            )
+            temp.write(plaintext)
+            temp.close()
+            temp_path = Path(temp.name)
+
+            def cleanup():
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except Exception:
+                        pass
+
+            return str(temp_path), cleanup
+        except Exception as e:
+            logger.warning("Failed to decrypt cookies from %s: %s", path, e)
+            return None, None
+    else:
+        return str(path.resolve()), None
 
 
 class VideoDownloadResult:
@@ -339,10 +386,9 @@ class IngestionService:
                 "progress_hooks": [_progress_hook],
                 "windowsfilenames": True,
             }
-            if auth_ctx.get("auth_type") == "oauth" and auth_ctx.get("access_token"):
-                ydl_opts["http_headers"] = {"Authorization": f"Bearer {auth_ctx['access_token']}"}
-            if cookie_path:
-                ydl_opts["cookiefile"] = cookie_path
+            effective_cookie, cleanup_cookie = resolve_transient_cookiefile(cookie_path)
+            if effective_cookie:
+                ydl_opts["cookiefile"] = effective_cookie
             if active_proxy:
                 ydl_opts["proxy"] = active_proxy
             if force_fresh_start:
@@ -517,6 +563,9 @@ class IngestionService:
                 # Jittered exponential backoff
                 backoff_wait = min(12.0, (2.0 ** attempt) + random.uniform(0.2, 1.2))
                 time.sleep(backoff_wait)
+            finally:
+                if cleanup_cookie:
+                    cleanup_cookie()
 
         raise RuntimeError(f"Failed to download video {video_id} after {self.max_retries} attempts: {last_err}")
 
@@ -541,7 +590,7 @@ class IngestionService:
                 logger.debug("Tier 1 OAuth token check error: %s", e)
 
         # Tier 2: Harvester Cookies
-        harvester_path = getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None) or (settings.STORAGE_DIR / "harvester_cookies.txt")
+        harvester_path = getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None) or (settings.STORAGE_DIR / "harvester_cookies.txt.enc")
         if harvester_path and Path(harvester_path).exists() and Path(harvester_path).stat().st_size > 0:
             return {
                 "tier": 2,
@@ -564,6 +613,7 @@ class IngestionService:
         """Automatically discovers YouTube bot-bypass cookies across settings, harvester, and standard paths."""
         candidate_cookies = [
             getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None),
+            settings.STORAGE_DIR / "harvester_cookies.txt.enc",
             getattr(settings, "YOUTUBE_COOKIES_PATH", None),
             getattr(settings, "YOUTUBE_COOKIE_PATH", None),
             os.getenv("YOUTUBE_COOKIE_PATH"),
@@ -588,8 +638,9 @@ class IngestionService:
             opts["http_headers"] = {"Authorization": f"Bearer {auth_ctx['access_token']}"}
 
         cookie_path = auth_ctx.get("cookie_path") or self.get_cookie_path()
-        if cookie_path:
-            opts["cookiefile"] = cookie_path
+        effective_cookie, cleanup_cookie = resolve_transient_cookiefile(cookie_path)
+        if effective_cookie:
+            opts["cookiefile"] = effective_cookie
 
         try:
             active_proxy = ProxyManager.get_next_proxy()
@@ -598,8 +649,12 @@ class IngestionService:
         except Exception:
             pass
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=False)
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=False)
+        finally:
+            if cleanup_cookie:
+                cleanup_cookie()
 
 
 # Module-level convenience aliases for housekeeping and proxy preview

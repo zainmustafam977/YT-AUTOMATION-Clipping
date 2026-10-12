@@ -7,6 +7,7 @@ Evaluates videos against settings.INGESTION_POLICY_MODE ('two_tier', 'strict_gat
 
 import re
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import httpx
@@ -78,8 +79,8 @@ class PolicyGate:
                 return True
 
         # 2. Check Harvester cookies
-        harvester_path = getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None) or (settings.STORAGE_DIR / "harvester_cookies.txt")
-        if harvester_path and harvester_path.exists() and harvester_path.stat().st_size > 0:
+        harvester_path = getattr(settings, "YOUTUBE_HARVESTER_COOKIES_PATH", None) or (settings.STORAGE_DIR / "harvester_cookies.txt.enc")
+        if harvester_path and Path(harvester_path).exists() and Path(harvester_path).stat().st_size > 0:
             return True
 
         # 3. Check Manual cookies
