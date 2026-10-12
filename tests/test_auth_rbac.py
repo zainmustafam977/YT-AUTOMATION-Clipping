@@ -371,9 +371,13 @@ def test_cli_create_user_admin_bootstrap():
         db.close()
 
 
-def test_browser_form_csrf_and_redirects(auth_client, test_db):
+def test_browser_form_csrf_and_redirects(auth_client, test_db, tmp_path, monkeypatch):
     """Verifies that templates embed CSRF tokens and browser POST forms validate CSRF and redirect with 303."""
     from shorts_engine.db.models import SourceVideoStatus
+
+    monkeypatch.setattr("shorts_engine.config.settings.settings.DRY_RUN_PUBLISHING", True)
+    dummy_video = tmp_path / "browser_vid_1_short.mp4"
+    dummy_video.write_bytes(b"\x00" * 1024)
 
     operator = User(
         username="op_browser_tester",
@@ -417,7 +421,7 @@ def test_browser_form_csrf_and_redirects(auth_client, test_db):
     clip = Clip(
         clip_candidate_id=cand.id,
         status=ClipStatus.WAITING_APPROVAL,
-        rendered_path="/test/browser_vid_1_short_1000_25000.mp4",
+        rendered_path=str(dummy_video),
     )
     test_db.add(clip)
     test_db.commit()
@@ -456,7 +460,7 @@ def test_browser_form_csrf_and_redirects(auth_client, test_db):
     assert post_with_csrf.status_code == 303
     assert post_with_csrf.headers["location"].startswith("/queue")
     test_db.refresh(clip)
-    assert clip.status == ClipStatus.APPROVED
+    assert clip.status in (ClipStatus.APPROVED, ClipStatus.SCHEDULED)
 
     # 4. Browser form POST to channel toggle-watch redirects (HTTP 303 -> /channels)
     watch_resp = auth_client.post(

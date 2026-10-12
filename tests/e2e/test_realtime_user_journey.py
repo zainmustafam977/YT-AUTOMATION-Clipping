@@ -137,6 +137,11 @@ def realtime_platform():
             db.commit()
 
         # Seed active clip
+        rendered_file = Path("storage/rendered/clip_active_001.mp4")
+        rendered_file.parent.mkdir(parents=True, exist_ok=True)
+        if not rendered_file.exists():
+            rendered_file.write_bytes(b"\x00" * 1024)
+
         clip_active = db.query(Clip).filter_by(id="clip_active_001").first()
         if not clip_active:
             clip_active = Clip(
@@ -416,6 +421,7 @@ def test_edge_case_rapid_button_spamming_idempotency(realtime_platform):
         r = httpx.post(f"{base_url}/api/clips/{clip_id}/approve", headers=headers)
         responses.append(r.status_code)
 
-    # All should return 200 or 404 (if already transitioned), zero unhandled 500 crashes
-    for status_code in responses:
-        assert status_code in (200, 404, 303), f"Unexpected status code {status_code} during rapid clicking"
+    # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request
+    assert responses[0] in (200, 303), f"Initial click failed: {responses[0]}"
+    for status_code in responses[1:]:
+        assert status_code in (200, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"

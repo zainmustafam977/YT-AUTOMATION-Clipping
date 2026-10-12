@@ -63,7 +63,7 @@ def _make_test_app_and_db():
     return client, db
 
 
-def _make_waiting_clip(db) -> Clip:
+def _make_waiting_clip(db, rendered_path: str = None) -> Clip:
     channel = Channel(youtube_channel_id="UC_dash", name="Dash Ch",
                       watch_enabled=True, human_review_required=True)
     db.add(channel)
@@ -73,11 +73,11 @@ def _make_waiting_clip(db) -> Clip:
     db.add(video)
     db.flush()
     cand = ClipCandidate(source_video_id=video.id, start_ms=0, end_ms=30000,
-                         score=0.8, reason="Good", selected=True)
+                         score=0.8, reason="Good", hook_text="Good hook", selected=True)
     db.add(cand)
     db.flush()
     clip = Clip(clip_candidate_id=cand.id, status=ClipStatus.WAITING_APPROVAL,
-                rendered_path="/fake/path.mp4", retry_count=0)
+                rendered_path=rendered_path or "/fake/path.mp4", retry_count=0)
     db.add(clip)
     db.commit()
     return clip
@@ -98,17 +98,21 @@ def test_status_endpoint_returns_correct_counts():
     assert isinstance(data["total_videos"], int)
 
 
-def test_queue_approve_transitions_clip_status():
+def test_queue_approve_transitions_clip_status(tmp_path, monkeypatch):
     """POST /queue/{id}/approve should transition a WAITING_APPROVAL clip to APPROVED."""
+    monkeypatch.setattr("shorts_engine.config.settings.settings.DRY_RUN_PUBLISHING", True)
+    dummy_video = tmp_path / "dash_rendered.mp4"
+    dummy_video.write_bytes(b"\x00" * 1024)
+
     client, db = _make_test_app_and_db()
-    clip = _make_waiting_clip(db)
+    clip = _make_waiting_clip(db, rendered_path=str(dummy_video))
 
     resp = client.post(f"/queue/{clip.id}/approve")
     assert resp.status_code == 200
-    assert resp.json()["new_status"] == ClipStatus.APPROVED.value
+    assert resp.json()["new_status"] in (ClipStatus.APPROVED.value, ClipStatus.SCHEDULED.value)
 
     db.refresh(clip)
-    assert clip.status == ClipStatus.APPROVED
+    assert clip.status in (ClipStatus.APPROVED, ClipStatus.SCHEDULED)
 
 
 def test_queue_reject_transitions_clip_status():

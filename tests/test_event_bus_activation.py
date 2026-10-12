@@ -467,7 +467,7 @@ def test_watch_folder_ingestion_emits_video_ingested(tmp_path, db_session):
     assert job is not None
 
 
-def test_review_approval_emits_clip_approved(api_client, db_session):
+def test_review_approval_emits_clip_approved(tmp_path, api_client, db_session, monkeypatch):
     """
     Acceptance Criterion:
     Review approval emits clip.approved to the event bus and event log.
@@ -476,6 +476,11 @@ def test_review_approval_emits_clip_approved(api_client, db_session):
         db=db_session,
         clip_id="clip_review_approved_1",
     )
+    dummy_video = tmp_path / "rendered_dummy.mp4"
+    dummy_video.write_bytes(b"\x00" * 1024)
+    clip.rendered_path = str(dummy_video)
+    db_session.commit()
+    monkeypatch.setattr("shorts_engine.config.settings.settings.DRY_RUN_PUBLISHING", True)
 
     # Call approval route
     response = api_client.post(
