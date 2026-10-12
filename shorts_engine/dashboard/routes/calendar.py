@@ -184,7 +184,10 @@ def calendar_reschedule_clip(
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {e}")
 
     from shorts_engine.services.publishing.slots import publish_slot_service
-    res = publish_slot_service.reschedule_clip(clip_id=clip.id, new_slot_time=dt, db=db)
+    try:
+        res = publish_slot_service.reschedule_clip(clip_id=clip.id, new_slot_time=dt, db=db)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
 
     logger.info("Operator '%s' rescheduled clip %s to %s via Calendar", current_user.username, clip_id, dt.isoformat())
     return {

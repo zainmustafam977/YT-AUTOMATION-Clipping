@@ -134,7 +134,20 @@ def test_calendar_reschedule_endpoint(test_setup):
     db.add(clip)
     db.commit()
 
-    # Move to 2026-09-22T18:30:00
+    # 1. Attempting to reschedule WAITING_APPROVAL clip must be rejected with 400
+    resp_unapproved = client.post(
+        f"/api/calendar/reschedule/{clip.id}",
+        data={"scheduled_at": "2026-09-22T18:30:00Z"},
+    )
+    assert resp_unapproved.status_code == 400
+    assert "awaiting approval" in resp_unapproved.json()["detail"].lower()
+    db.refresh(clip)
+    assert clip.status == ClipStatus.WAITING_APPROVAL
+
+    # 2. Once approved, rescheduling succeeds and updates timestamp
+    clip.status = ClipStatus.APPROVED
+    db.commit()
+
     resp = client.post(
         f"/api/calendar/reschedule/{clip.id}",
         data={"scheduled_at": "2026-09-22T18:30:00Z"},
@@ -146,5 +159,4 @@ def test_calendar_reschedule_endpoint(test_setup):
 
     db.refresh(clip)
     assert clip.scheduled_publish_at == datetime(2026, 9, 22, 18, 30, 0)
-    # Clip was in WAITING_APPROVAL, scheduling automatically approves it
     assert clip.status == ClipStatus.APPROVED

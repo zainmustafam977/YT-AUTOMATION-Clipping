@@ -487,6 +487,9 @@ class PublishSlotService:
         if not clip:
             raise ValueError(f"Clip {clip_id} not found")
 
+        if clip.status == ClipStatus.WAITING_APPROVAL:
+            raise ValueError("Clip is awaiting approval. Approve clip before rescheduling.")
+
         # Convert to UTC naive datetime for DB
         dt_utc = new_slot_time
         if dt_utc.tzinfo is not None:

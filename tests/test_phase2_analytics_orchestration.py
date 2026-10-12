@@ -116,15 +116,28 @@ def test_schedule_clip_endpoint(test_setup):
     db.add(clip)
     db.commit()
 
-    # Post to schedule endpoint
+    # 1. Attempting to schedule unapproved clip must be rejected with 400
     target_time = "2026-09-25T17:30"
+    resp_unapproved = client.post(
+        f"/queue/{clip.id}/schedule",
+        data={"scheduled_at": target_time},
+        headers={"HX-Request": "true"}
+    )
+    assert resp_unapproved.status_code == 400
+    assert "awaiting approval" in resp_unapproved.json()["detail"].lower()
+    db.refresh(clip)
+    assert clip.status == ClipStatus.WAITING_APPROVAL
+
+    # 2. Once approved, scheduling succeeds and sets scheduled_publish_at
+    clip.status = ClipStatus.APPROVED
+    db.commit()
+
     resp = client.post(
         f"/queue/{clip.id}/schedule",
         data={"scheduled_at": target_time},
         headers={"HX-Request": "true"}
     )
     assert resp.status_code == 200
-    assert "clipApproved" in resp.headers.get("HX-Trigger", "")
 
     # Verify DB state
     db.refresh(clip)
