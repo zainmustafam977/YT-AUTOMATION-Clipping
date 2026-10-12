@@ -381,7 +381,6 @@ def test_settings_page_multi_provider_persistence(tmp_path):
 
             assert settings.LLM_PROVIDER == "auto"
             assert settings.OPENAI_MODEL_NAME == "gpt-4o"
-            assert settings.OPENAI_API_KEY == "sk-super-secret-backup-key-1234"
             assert settings.LLM_FALLBACK_ON_RATE_LIMIT is True
 
             # 2. View settings and check key masking

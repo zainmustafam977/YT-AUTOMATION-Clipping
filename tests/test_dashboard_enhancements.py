@@ -13,7 +13,7 @@ Unit and integration tests for dashboard enhancements:
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -195,8 +195,10 @@ def test_manual_video_processing_trigger(test_env):
     """Verifies POST /process-video triggers a background thread and redirects with flash message."""
     client, _ = test_env
 
-    with patch("shorts_engine.dashboard.routes.status.threading.Thread") as mock_thread_cls:
-        mock_thread_instance = mock_thread_cls.return_value
+    with patch("shorts_engine.services.queue.durable_queue.durable_job_queue.enqueue") as mock_enqueue:
+        mock_job = MagicMock()
+        mock_job.id = "mock-job-123"
+        mock_enqueue.return_value = mock_job
         resp = client.post(
             "/process-video",
             data={
@@ -209,7 +211,8 @@ def test_manual_video_processing_trigger(test_env):
         )
         assert resp.status_code == 303
         assert "fTVN19h4nMg" in resp.headers["location"]
-        assert mock_thread_instance.start.called
+        assert mock_enqueue.called
+        assert mock_enqueue.call_args.kwargs.get("job_type") == "ingest"
 
 
 # ── 3. Live Log Viewer & JSON Endpoint ────────────────────────────────────────

@@ -10,6 +10,7 @@ def test_get_metadata_attaches_cookies_and_extractor_args(tmp_path):
     cookie_file.write_text("test_cookie_data")
 
     with patch.object(service, "get_cookie_path", return_value=str(cookie_file)), \
+         patch.object(service, "get_active_auth_context", return_value={"tier": 3, "cookie_path": str(cookie_file)}), \
          patch("yt_dlp.YoutubeDL") as mock_ydl_cls:
         mock_ydl = MagicMock()
         mock_ydl.__enter__.return_value = mock_ydl

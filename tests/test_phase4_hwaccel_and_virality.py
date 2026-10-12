@@ -580,13 +580,24 @@ def test_two_pass_loudness_normalize(tmp_path):
         "input_thresh": "-33.20",
         "target_offset": "0.15",
     })
+    dummy_pass2_json = json.dumps({
+        "input_i": "-22.40",
+        "input_tp": "-3.10",
+        "input_lra": "8.50",
+        "input_thresh": "-33.20",
+        "output_i": "-14.05",
+        "output_tp": "-1.02",
+        "output_lra": "6.80",
+        "output_thresh": "-24.20",
+        "target_offset": "0.05",
+    })
 
     recorded_cmds = []
 
     def mock_run(cmd, **kwargs):
         recorded_cmds.append([str(c) for c in cmd])
-        # Return pass 1 json on measurement call
-        return ExecutionResult(cmd=cmd, exit_code=0, stdout="", stderr=dummy_pass1_json, duration_ms=10.0)
+        stderr_json = dummy_pass1_json if len(recorded_cmds) == 1 else dummy_pass2_json
+        return ExecutionResult(cmd=cmd, exit_code=0, stdout="", stderr=stderr_json, duration_ms=10.0)
 
     with patch("shorts_engine.services.execution.watchdog.SubprocessWatchdog.run", side_effect=mock_run):
         engine.two_pass_loudness_normalize(in_audio, out_audio, duration_sec=15.0)
@@ -603,3 +614,34 @@ def test_two_pass_loudness_normalize(tmp_path):
         assert "measured_LRA=8.5" in cmd2_str
         assert "measured_thresh=-33.2" in cmd2_str
         assert "linear=true" in cmd2_str
+
+
+def test_two_pass_loudness_normalize_verification_probe_fallback(tmp_path):
+    """When Pass 2 output JSON does not contain output_i, an explicit post-measurement probe command must execute."""
+    engine = AudioMasteringEngine(target_lufs=-14.0, true_peak_dbfs=-1.0)
+    in_audio = tmp_path / "in.wav"
+    in_audio.write_bytes(b"dummy")
+    out_audio = tmp_path / "out.wav"
+
+    dummy_pass1_json = json.dumps({
+        "input_i": "-22.40",
+        "input_tp": "-3.10",
+        "input_lra": "8.50",
+        "input_thresh": "-33.20",
+        "target_offset": "0.15",
+    })
+
+    recorded_cmds = []
+
+    def mock_run(cmd, **kwargs):
+        recorded_cmds.append([str(c) for c in cmd])
+        return ExecutionResult(cmd=cmd, exit_code=0, stdout="", stderr=dummy_pass1_json, duration_ms=10.0)
+
+    with patch("shorts_engine.services.execution.watchdog.SubprocessWatchdog.run", side_effect=mock_run):
+        engine.two_pass_loudness_normalize(in_audio, out_audio, duration_sec=15.0)
+
+        assert len(recorded_cmds) == 3
+        # Command 3 must be the verification-probe on output audio
+        cmd3_str = " ".join(recorded_cmds[2])
+        assert str(out_audio) in cmd3_str
+        assert "loudnorm" in cmd3_str

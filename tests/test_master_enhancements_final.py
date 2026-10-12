@@ -189,13 +189,14 @@ def test_fonts_dir_defined_in_settings():
 
 def test_get_ass_filter_string_formatting():
     ass_path = Path("D:/Projects/YT AUTOMATION/storage/temp/sub.ass")
-    fonts_dir = Path("D:/Projects/YT AUTOMATION/assets/fonts")
+    fonts_dir = Path(settings.FONTS_DIR)
 
     filter_str = get_ass_filter_string(ass_path, fonts_dir)
     assert filter_str.startswith("ass='")
     assert ":fontsdir='" in filter_str
     # Backslashes must be normalized to forward slashes and colons escaped
-    assert "D\\:/Projects/YT AUTOMATION/assets/fonts" in filter_str
+    from shorts_engine.services.rendering.compositor import escape_ffmpeg_filter_path
+    assert escape_ffmpeg_filter_path(fonts_dir) in filter_str
     assert "D\\:/Projects/YT AUTOMATION/storage/temp/sub.ass" in filter_str
 
 

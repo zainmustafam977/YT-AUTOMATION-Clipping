@@ -11,6 +11,7 @@ from shorts_engine.services.monitoring.alerter import PipelineAlerter
 def _make_alerter(**kwargs) -> PipelineAlerter:
     """Creates a PipelineAlerter with settings overridden via mock."""
     alerter = PipelineAlerter.__new__(PipelineAlerter)
+    alerter.alert_webhook_url = kwargs.get("alert_webhook_url")
     alerter.slack_url = kwargs.get("slack_url")
     alerter.discord_url = kwargs.get("discord_url")
     alerter.telegram_bot = kwargs.get("telegram_bot")

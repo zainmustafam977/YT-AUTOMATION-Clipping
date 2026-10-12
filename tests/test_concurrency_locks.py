@@ -117,6 +117,8 @@ def test_status_endpoint_rejects_in_progress_duplicate(memory_db):
     )
     app.dependency_overrides[require_operator] = lambda: operator
     app.dependency_overrides[verify_csrf] = lambda: True
+    from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
+    app.dependency_overrides[rate_limit_ingestion] = lambda: operator
 
     channel = Channel(
         youtube_channel_id="UC_TEST_CHAN",

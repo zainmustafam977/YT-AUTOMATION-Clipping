@@ -178,6 +178,8 @@ def test_event_taxonomy_complete_set():
         "clip.published",
         "channel.health",
         "quota.low",
+        "budget.exceeded",
+        "storage.cleanup",
     }
     assert set(ALL_TAXONOMY_EVENTS) == expected
 
@@ -305,6 +307,13 @@ def test_api_events_recent_polling_and_catchup(api_client, db_session):
         entity_type="clip",
         db=db_session,
     )
+
+    from datetime import datetime, timedelta
+    t0 = datetime.utcnow()
+    event1.created_at = t0
+    event2.created_at = t0 + timedelta(seconds=1)
+    event3.created_at = t0 + timedelta(seconds=2)
+    db_session.commit()
 
     # 1. Base polling returns all recent events
     res = api_client.get("/api/events/recent?limit=10")

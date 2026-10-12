@@ -55,15 +55,20 @@ def test_mask_secret():
     assert masked.endswith("7890")
 
 
-def test_bulk_rotate_all_channel_tokens_success():
+def test_bulk_rotate_all_channel_tokens_success(tmp_path, monkeypatch):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
     from shorts_engine.db.session import Base
     from shorts_engine.db.models import Channel
     from shorts_engine.db.security import rotate_all_channel_tokens
+    from shorts_engine.config.settings import settings
 
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db_path = tmp_path / "bulk_rotate_succ.db"
+    db_url = f"sqlite:///{db_path}"
+    monkeypatch.setattr(settings, "DATABASE_URL", db_url)
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "storage"))
+
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
@@ -91,15 +96,20 @@ def test_bulk_rotate_all_channel_tokens_success():
         decrypt_secret(ch1.encrypted_oauth_token, master_key=old_key)
 
 
-def test_bulk_rotate_all_channel_tokens_atomic_rollback():
+def test_bulk_rotate_all_channel_tokens_atomic_rollback(tmp_path, monkeypatch):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from sqlalchemy.pool import StaticPool
     from shorts_engine.db.session import Base
     from shorts_engine.db.models import Channel
     from shorts_engine.db.security import rotate_all_channel_tokens
+    from shorts_engine.config.settings import settings
 
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db_path = tmp_path / "bulk_rotate_fail.db"
+    db_url = f"sqlite:///{db_path}"
+    monkeypatch.setattr(settings, "DATABASE_URL", db_url)
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "storage"))
+
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     db = Session()
