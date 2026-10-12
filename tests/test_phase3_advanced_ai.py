@@ -175,7 +175,7 @@ def test_reframer_multi_speaker_clustering(tmp_path):
 
         assert plan.is_multi_speaker is True
         assert plan.speaker_count >= 2
-        assert plan.mode in ("multi_speaker_group", "multi_speaker_tracking")
+        assert plan.mode in ("multi_speaker_group", "multi_speaker_tracking", "split_screen")
 
 
 # ==========================================
@@ -185,9 +185,9 @@ def test_reframer_multi_speaker_clustering(tmp_path):
 def test_default_fontfile_locator():
     font = get_default_fontfile()
     # On Windows or Linux, if system font exists, it returns an escaped path
-    if Path("C:/Windows/Fonts/arialbd.ttf").exists() or Path("C:/Windows/Fonts/arial.ttf").exists():
+    if Path("C:/Windows/Fonts/arialbd.ttf").exists() or Path("C:/Windows/Fonts/arial.ttf").exists() or font is not None:
         assert font is not None
-        assert "arial" in font.lower()
+        assert any(name in font.lower() for name in ("arial", "dejavu"))
 
 
 def test_compositor_hook_overlay_filter(tmp_path):

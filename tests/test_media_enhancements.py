@@ -365,14 +365,22 @@ def test_winner_daemon_promotes_both_title_and_thumbnail(db_session, tmp_path):
         generated_title="Baseline Title",
     )
     clip.variations = [
-        {"variant_id": "var_a", "title": "Baseline Title", "thumbnail_path": str(thumb_a), "clicks": 5, "impressions": 100, "is_active": True},
-        {"variant_id": "var_b", "title": "Winning High-CTR Title", "thumbnail_path": str(thumb_b), "clicks": 45, "impressions": 100, "is_active": False},
+        {"variant_id": "var_a", "title": "Baseline Title", "thumbnail_path": str(thumb_a), "clicks": 60, "impressions": 1200, "is_active": True},
+        {"variant_id": "var_b", "title": "Winning High-CTR Title", "thumbnail_path": str(thumb_b), "clicks": 540, "impressions": 1200, "is_active": False},
     ]
     clip.analytics = {"baseline_velocity": 10.0, "current_velocity": 45.0}
     db_session.add(clip)
     db_session.flush()
 
-    pub_log = PublishLog(clip_id=clip.id, youtube_video_id="yt_win_789", status="PUBLISHED", title="Baseline Title", description="Test Description")
+    from datetime import datetime, timedelta
+    pub_log = PublishLog(
+        clip_id=clip.id,
+        youtube_video_id="yt_win_789",
+        status="PUBLISHED",
+        title="Baseline Title",
+        description="Test Description",
+        published_at=datetime.utcnow() - timedelta(days=4),
+    )
     db_session.add(pub_log)
     db_session.commit()
 
