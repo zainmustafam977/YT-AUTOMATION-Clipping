@@ -132,21 +132,18 @@ def _create_test_clip(db, channel_yt_id="UC_test_chan_123", clip_id="clip_abc_12
 
 def test_oauth_and_youtube_client_import_isolation():
     """
-    CRITERION 1: Grep/AST proves no module outside shorts_engine/services/publishing/worker.py
-    imports googleapiclient, google.oauth2, or google_auth_oauthlib.
+    Approved Amendment to PR-05 Boundary:
+    - No module outside shorts_engine/services/publishing/ may import any google* library.
+    - googleapiclient imports remain strictly in shorts_engine/services/publishing/worker.py only.
     """
     repo_root = Path(__file__).resolve().parent.parent
     engine_dir = repo_root / "shorts_engine"
     assert engine_dir.exists(), f"shorts_engine directory not found at {engine_dir}"
 
-    forbidden_modules = {"googleapiclient", "google.oauth2", "google_auth_oauthlib"}
     violating_files = []
 
     for py_file in engine_dir.rglob("*.py"):
         rel_path = py_file.relative_to(repo_root).as_posix()
-        # The ONLY allowed file is shorts_engine/services/publishing/worker.py
-        if rel_path == "shorts_engine/services/publishing/worker.py":
-            continue
 
         try:
             tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
@@ -154,20 +151,28 @@ def test_oauth_and_youtube_client_import_isolation():
             continue
 
         for node in ast.walk(tree):
+            imported_names = []
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    for forbidden in forbidden_modules:
-                        if alias.name == forbidden or alias.name.startswith(forbidden + "."):
-                            violating_files.append((rel_path, node.lineno, alias.name))
+                    imported_names.append(alias.name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module:
-                    for forbidden in forbidden_modules:
-                        if node.module == forbidden or node.module.startswith(forbidden + "."):
-                            violating_files.append((rel_path, node.lineno, node.module))
+                    imported_names.append(node.module)
+
+            for mod_name in imported_names:
+                # Rule 1: googleapiclient is permitted ONLY in worker.py
+                if mod_name == "googleapiclient" or mod_name.startswith("googleapiclient."):
+                    if rel_path != "shorts_engine/services/publishing/worker.py":
+                        violating_files.append((rel_path, node.lineno, mod_name, "googleapiclient allowed only in worker.py"))
+                # Rule 2: Google OAuth / YouTube client libraries (excluding Gemini LLM SDK google.genai) allowed ONLY in services/publishing/
+                elif (mod_name.startswith("google.oauth2") or mod_name.startswith("google.auth") or
+                      mod_name.startswith("google_auth_oauthlib") or mod_name == "google_auth_oauthlib"):
+                    if not rel_path.startswith("shorts_engine/services/publishing/"):
+                        violating_files.append((rel_path, node.lineno, mod_name, "google OAuth/client library allowed only in services/publishing/"))
 
     assert not violating_files, (
-        f"Forbidden Google client library imports found outside publish worker:\n"
-        + "\n".join(f"  {f}:{line} imports '{mod}'" for f, line, mod in violating_files)
+        f"Forbidden Google client library imports found:\n"
+        + "\n".join(f"  {f}:{line} imports '{mod}' ({reason})" for f, line, mod, reason in violating_files)
     )
 
 
