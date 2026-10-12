@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 
+import portalocker
+
 from shorts_engine.config.settings import settings
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import QuotaLedger
@@ -26,7 +28,7 @@ from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
-VIDEOS_INSERT_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 100)
+VIDEOS_INSERT_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 1600)
 UPLOAD_COST_UNITS = VIDEOS_INSERT_COST_UNITS
 VIDEOS_UPDATE_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_UPDATE_COST", 50)
 VIDEOS_DELETE_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_DELETE_COST", 50)
@@ -80,14 +82,23 @@ class QuotaTracker:
     def daily_upload_cap(self) -> int:
         """
         Calculates daily upload cap across all channels combined:
-        Respects separate videos.insert bucket limit and unit budget:
-        min(insert_bucket_limit, floor((daily_limit - safety_reserve) / upload_cost))
+        Derived daily cap: max_uploads = (QUOTA_DAILY_UNITS - QUOTA_RESERVED_OTHER_UNITS) // insert_cost
+        An explicit operator cap, if set, is clamped to the derived max with a startup warning.
         """
-        insert_bucket_limit = getattr(settings, "QUOTA_DAILY_VIDEOS_INSERT_LIMIT", 50)
-        upload_cost = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 100)
-        effective_budget = max(0, self.daily_limit - self.safety_reserve)
-        unit_cap = effective_budget // max(1, upload_cost)
-        return min(insert_bucket_limit, unit_cap)
+        daily_units = getattr(settings, "DAILY_QUOTA_LIMIT", 10000)
+        reserved_units = getattr(settings, "QUOTA_SAFETY_RESERVE", 300)
+        insert_cost = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 1600)
+        derived_cap = max(0, daily_units - reserved_units) // max(1, insert_cost)
+        operator_cap = getattr(settings, "QUOTA_DAILY_VIDEOS_INSERT_LIMIT", None)
+        if operator_cap is not None:
+            if operator_cap > derived_cap:
+                logger.warning(
+                    "Operator-configured QUOTA_DAILY_VIDEOS_INSERT_LIMIT (%d) exceeds "
+                    "derived budget limit (%d). Clamping to derived limit.",
+                    operator_cap, derived_cap,
+                )
+            return min(operator_cap, derived_cap)
+        return derived_cap
 
     def record_usage(
         self,
@@ -99,19 +110,25 @@ class QuotaTracker:
     ) -> int:
         """
         Appends an immutable entry to `quota_ledger` or isolated state file.
+        Holds file lock across the full read-modify-write cycle on state_file.
         """
         if self.state_file:
             try:
-                today_str = datetime.now(PACIFIC_TZ).date().isoformat()
-                current_file_used = 0
-                if self.state_file.exists():
-                    data = json.loads(self.state_file.read_text(encoding="utf-8"))
-                    if data.get("date") == today_str:
-                        current_file_used = int(data.get("used_units", 0) or 0)
-                new_used = current_file_used + units
-                atomic_write_json(self.state_file, {"date": today_str, "used_units": new_used}, indent=2)
-            except Exception:
-                pass
+                self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+                with portalocker.Lock(str(self.lock_file), timeout=10.0):
+                    today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                    current_file_used = 0
+                    if self.state_file.exists():
+                        try:
+                            data = json.loads(self.state_file.read_text(encoding="utf-8"))
+                            if data.get("date") == today_str:
+                                current_file_used = int(data.get("used_units", 0) or 0)
+                        except Exception:
+                            pass
+                    new_used = current_file_used + units
+                    atomic_write_json(self.state_file, {"date": today_str, "used_units": new_used}, indent=2)
+            except Exception as e:
+                logger.warning("Failed to record quota usage in state file with lock: %s", e)
 
         def _execute(session: Session) -> int:
             entry = QuotaLedger(
@@ -374,10 +391,21 @@ class QuotaTracker:
         cap = self.daily_upload_cap
         pct = round((used / self.daily_limit) * 100, 1) if self.daily_limit > 0 else 0.0
 
-        if self.state_file:
+        if self.state_file and db is not None:
             try:
-                today_str = datetime.now(PACIFIC_TZ).date().isoformat()
-                atomic_write_json(self.state_file, {"date": today_str, "used_units": used}, indent=2)
+                self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+                with portalocker.Lock(str(self.lock_file), timeout=10.0):
+                    today_str = datetime.now(PACIFIC_TZ).date().isoformat()
+                    current_file_used = 0
+                    if self.state_file.exists():
+                        try:
+                            data = json.loads(self.state_file.read_text(encoding="utf-8"))
+                            if data.get("date") == today_str:
+                                current_file_used = int(data.get("used_units", 0) or 0)
+                        except Exception:
+                            pass
+                    effective_used = max(current_file_used, used)
+                    atomic_write_json(self.state_file, {"date": today_str, "used_units": effective_used}, indent=2)
             except Exception:
                 pass
 

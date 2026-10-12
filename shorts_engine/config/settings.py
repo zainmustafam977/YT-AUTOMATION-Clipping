@@ -357,12 +357,12 @@ class PipelineSettings(BaseSettings):
     DAILY_QUOTA_LIMIT: int = 10000
     QUOTA_SAFETY_RESERVE: int = 300
     QUOTA_WARNING_THRESHOLD: float = 0.80  # Alert when 80% quota is used
-    QUOTA_VIDEOS_INSERT_COST: int = Field(default=100, description="Quota cost for videos.insert (Dec 2025 revision)")
+    QUOTA_VIDEOS_INSERT_COST: int = Field(default=1600, description="Quota cost for videos.insert (official YouTube API v3)")
     QUOTA_VIDEOS_UPDATE_COST: int = Field(default=50, description="Quota cost for videos.update")
     QUOTA_VIDEOS_DELETE_COST: int = Field(default=50, description="Quota cost for videos.delete")
     QUOTA_CHANNELS_LIST_COST: int = Field(default=1, description="Quota cost for channels.list")
     QUOTA_SEARCH_LIST_COST: int = Field(default=100, description="Quota cost for search.list")
-    QUOTA_DAILY_VIDEOS_INSERT_LIMIT: int = Field(default=50, description="Daily limit of videos.insert calls (separate insert bucket)")
+    QUOTA_DAILY_VIDEOS_INSERT_LIMIT: int = Field(default=6, description="Daily limit of videos.insert calls (derived from daily quota: (10000 - 300) // 1600 = 6)")
 
     # Publish Slots & Scheduling Policy
     PUBLISH_SLOT_TIMES_LOCAL: List[str] = Field(
