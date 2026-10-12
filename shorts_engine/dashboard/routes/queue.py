@@ -22,6 +22,12 @@ from shorts_engine.services.clip_selection.selector import parse_ai_provenance
 from shorts_engine.services.analytics.predictor import viral_predictor
 from shorts_engine.services.captioning.templates import list_caption_templates
 from shorts_engine.services.publishing.quota import QuotaTracker
+from shorts_engine.services.publishing.actions import (
+    approve_clip_for_publishing,
+    reject_clip_action,
+    bulk_approve_clips,
+    bulk_reject_clips,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +96,51 @@ def queue_list(
         needs_review_count = int(db.query(Clip).filter_by(status=ClipStatus.FAILED_NEEDS_REVIEW).count())
     except Exception:
         needs_review_count = 0
+
+    # Global oldest-item age across all WAITING_APPROVAL clips (independent of active filters)
+    oldest_age_display = "—"
+    try:
+        oldest_waiting_clip = (
+            db.query(Clip)
+            .filter_by(status=ClipStatus.WAITING_APPROVAL)
+            .order_by(
+                Clip.queued_at.asc().nullslast() if hasattr(Clip, "queued_at") else Clip.created_at.asc(),
+                Clip.created_at.asc(),
+            )
+            .first()
+        )
+        if oldest_waiting_clip:
+            queued_time = getattr(oldest_waiting_clip, "queued_at", None) or oldest_waiting_clip.created_at
+            if queued_time:
+                delta = datetime.utcnow() - queued_time
+                total_secs = max(0, int(delta.total_seconds()))
+                days = total_secs // 86400
+                hours = (total_secs % 86400) // 3600
+                minutes = (total_secs % 3600) // 60
+                if days > 0:
+                    oldest_age_display = f"{days}d {hours}h"
+                elif hours > 0:
+                    oldest_age_display = f"{hours}h {minutes}m"
+                else:
+                    oldest_age_display = f"{max(1, minutes)}m"
+    except Exception as age_err:
+        logger.warning("Could not calculate oldest waiting clip age: %s", age_err)
+
+    # Distinct source videos for filter dropdown
+    try:
+        source_videos = (
+            db.query(SourceVideo)
+            .join(ClipCandidate, ClipCandidate.source_video_id == SourceVideo.id)
+            .join(Clip, Clip.clip_candidate_id == ClipCandidate.id)
+            .filter(Clip.status == ClipStatus.WAITING_APPROVAL)
+            .distinct()
+            .order_by(SourceVideo.title.asc())
+            .all()
+        )
+        if not source_videos:
+            source_videos = db.query(SourceVideo).order_by(SourceVideo.title.asc()).limit(50).all()
+    except Exception:
+        source_videos = []
 
     if tab == "rejected":
         current_tab = "rejected"
@@ -355,6 +406,9 @@ def queue_list(
             "active_count": active_count,
             "rejected_count": rejected_count,
             "needs_review_count": needs_review_count,
+            "queue_depth": active_count,
+            "oldest_item_age": oldest_age_display,
+            "source_videos": source_videos,
             "page": page,
             "limit": limit,
             "sort_by": sort_by_clean,
@@ -628,53 +682,58 @@ def approve_clip(
     current_user: User = Depends(require_operator),
     csrf_ok: bool = Depends(verify_csrf),
 ):
-    clip = db.query(Clip).filter_by(id=clip_id).first()
-    if not clip:
-        raise HTTPException(status_code=404, detail="Clip not found")
-    if clip.status != ClipStatus.WAITING_APPROVAL:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Clip is in status {clip.status.value}, not WAITING_APPROVAL",
-        )
-    clip.status = ClipStatus.APPROVED
-    db.commit()
-    logger.info("Operator '%s' approved clip %s for publishing", current_user.username, clip_id)
+    res = approve_clip_for_publishing(
+        clip_id=clip_id,
+        db=db,
+        actor=current_user.username,
+        publish_inline=True,
+    )
 
-    try:
-        from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_APPROVED
-        emit_platform_event(
-            event_name=CLIP_APPROVED,
-            payload={
-                "clip_id": clip_id,
-                "video_id": clip.candidate.source_video_id if (clip.candidate and clip.candidate.source_video_id) else None,
-                "approved_by": current_user.username,
-                "title": clip.generated_title,
-            },
-            entity_id=clip_id,
-            entity_type="clip",
-            level="SUCCESS",
-            title="Clip Approved",
-            message=f"Clip '{clip.generated_title or clip_id[:8]}' approved by {current_user.username}.",
-            db=db,
-        )
-    except Exception as ev_err:
-        logger.warning("Failed to emit clip.approved event: %s", ev_err)
+    if not res.get("ok"):
+        err_type = res.get("error_type")
+        if err_type == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Clip not found")
+        if err_type == "CONFLICT":
+            raise HTTPException(status_code=409, detail=res.get("error"))
+        
+        # In-line publish error (moved to FAILED_NEEDS_REVIEW)
+        toast_msg = f"Upload error: {res.get('error')}. Clip moved to Needs Review."
+        msg_type = "danger"
+    else:
+        slot_iso = res.get("slot_start", "")
+        yt_id = res.get("youtube_video_id") or "scheduled"
+        toast_msg = f"Clip {clip_id[:8]} scheduled for {slot_iso[:16].replace('T', ' ')} UTC (YouTube ID: {yt_id})."
+        msg_type = "success"
 
     if request.headers.get("hx-request") == "true":
-        undo_html = f"Clip {clip_id[:8]} approved. <button class='btn btn-sm btn-dark py-0 ms-2' hx-post='/queue/{clip_id}/undo' hx-swap='none'>Undo</button>"
+        undo_html = f"{toast_msg} <button class='btn btn-sm btn-dark py-0 ms-2' hx-post='/queue/{clip_id}/undo' hx-swap='none'>Undo</button>"
         return Response(
             content="",
-            headers={"HX-Trigger": json.dumps({"showToast": {"message": undo_html, "type": "success"}, "clipApproved": clip_id})}
+            headers={
+                "HX-Trigger": json.dumps({
+                    "showToast": {"message": undo_html, "type": msg_type},
+                    "clipApproved": clip_id,
+                })
+            }
         )
 
     if return_query or request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return _make_queue_redirect(
             request,
-            default_msg=f"Clip {clip_id[:8]} approved for publishing.",
-            msg_type="success",
+            default_msg=toast_msg,
+            msg_type=msg_type,
             return_query=return_query,
         )
-    return {"clip_id": clip_id, "new_status": ClipStatus.APPROVED.value}
+
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+
+    return {
+        "clip_id": clip_id,
+        "new_status": res.get("status", "APPROVED"),
+        "slot_start": res.get("slot_start"),
+        "pub_result": res.get("pub_result"),
+    }
 
 
 @router.post("/queue/{clip_id}/undo", summary="Undo an approval or rejection")
@@ -687,14 +746,17 @@ def undo_action(
     clip = db.query(Clip).filter_by(id=clip_id).first()
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
-    clip.status = ClipStatus.WAITING_APPROVAL
-    db.commit()
-    logger.info("Operator '%s' undid action for clip %s", current_user.username, clip_id)
+
+    from shorts_engine.services.publishing.slots import publish_slot_service
+    unapp_res = publish_slot_service.unapprove_clip(clip_id=clip.id, db=db)
+
+    logger.info("Operator '%s' undid action for clip %s (unapprove result: %s)", current_user.username, clip_id, unapp_res)
+    deleted_note = " (deleted from YouTube)" if unapp_res.get("deleted_on_youtube") else ""
     return Response(
         content="",
         headers={
             "HX-Trigger": json.dumps({
-                "showToast": {"message": f"Action undone for {clip_id[:8]}. Refresh page to see clip.", "type": "info"},
+                "showToast": {"message": f"Action undone for {clip_id[:8]}{deleted_note}. Clip restored to Review Queue.", "type": "info"},
                 "clipRestored": clip_id
             })
         }
@@ -720,19 +782,20 @@ def schedule_clip(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {e}")
 
-    clip.scheduled_publish_at = dt
-    clip.status = ClipStatus.APPROVED
-    db.commit()
-    logger.info("Operator '%s' scheduled clip %s for %s", current_user.username, clip_id, dt.isoformat())
+    from shorts_engine.services.publishing.slots import publish_slot_service
+    res = publish_slot_service.reschedule_clip(clip_id=clip.id, new_slot_time=dt, db=db)
+
+    logger.info("Operator '%s' scheduled/rescheduled clip %s for %s", current_user.username, clip_id, dt.isoformat())
 
     dt_display = dt.strftime("%Y-%m-%d %H:%M")
+    upd_note = " (updated on YouTube)" if res.get("updated_on_youtube") else ""
     if request.headers.get("hx-request") == "true":
         return Response(
             content="",
             headers={
                 "HX-Trigger": json.dumps({
                     "showToast": {
-                        "message": f"Clip {clip_id[:8]} scheduled for {dt_display}!",
+                        "message": f"Clip {clip_id[:8]} scheduled for {dt_display}{upd_note}!",
                         "type": "success"
                     },
                     "clipApproved": clip_id
@@ -742,7 +805,7 @@ def schedule_clip(
 
     return _make_queue_redirect(
         request,
-        default_msg=f"Clip {clip_id[:8]} scheduled for publishing at {dt_display}.",
+        default_msg=f"Clip {clip_id[:8]} scheduled for {dt_display}{upd_note}.",
         msg_type="success",
         return_query=return_query,
     )
@@ -1012,26 +1075,24 @@ def reject_clip(
     request: Request,
     clip_id: str,
     reason: Optional[str] = Form(default=None),
+    reason_code: Optional[str] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
     csrf_ok: bool = Depends(verify_csrf),
 ):
-    clip = db.query(Clip).filter_by(id=clip_id).first()
-    if not clip:
-        raise HTTPException(status_code=404, detail="Clip not found")
-    if clip.status != ClipStatus.WAITING_APPROVAL:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Clip is in status {clip.status.value}, not WAITING_APPROVAL",
-        )
-    clip.status = ClipStatus.REJECTED
-    if reason:
-        existing = json.loads(clip.quality_check_result or "{}")
-        existing["rejection_reason"] = reason
-        clip.quality_check_result = json.dumps(existing)
-    db.commit()
-    logger.info("Operator '%s' rejected clip %s (reason: %s)", current_user.username, clip_id, reason)
+    res = reject_clip_action(
+        clip_id=clip_id,
+        db=db,
+        actor=current_user.username,
+        reason_code=reason_code,
+        note=reason,
+    )
+    if not res.get("ok"):
+        err_type = res.get("error_type")
+        if err_type == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail="Clip not found")
+        raise HTTPException(status_code=409, detail=res.get("error"))
 
     if request.headers.get("hx-request") == "true":
         undo_html = f"Clip {clip_id[:8]} rejected. <button class='btn btn-sm btn-dark py-0 ms-2' hx-post='/queue/{clip_id}/undo' hx-swap='none'>Undo</button>"
@@ -1048,7 +1109,7 @@ def reject_clip(
             return_query=return_query,
             extra_params={"rejected_id": clip_id},
         )
-    return {"clip_id": clip_id, "new_status": ClipStatus.REJECTED.value, "reason": reason}
+    return {"clip_id": clip_id, "new_status": ClipStatus.REJECTED.value, "reason": reason, "reason_code": res.get("reason_code")}
 
 
 @router.post("/queue/{clip_id}/restore", summary="Restore a rejected clip back to review queue")
@@ -1069,6 +1130,7 @@ def restore_clip(
             detail=f"Clip is in status {clip.status.value}, not REJECTED",
         )
     clip.status = ClipStatus.WAITING_APPROVAL
+    clip.queued_at = datetime.utcnow()
     db.commit()
     logger.info("Operator '%s' restored clip %s from REJECTED back to WAITING_APPROVAL", current_user.username, clip_id)
 
@@ -1262,6 +1324,8 @@ def bulk_action(
     request: Request,
     action: str = Form(...),
     clip_ids: List[str] = Form(...),
+    reason: Optional[str] = Form(default=None),
+    reason_code: Optional[str] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_operator),
@@ -1270,25 +1334,47 @@ def bulk_action(
     if action not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="Invalid action; must be 'approve' or 'reject'")
 
-    count = 0
-    target_status = ClipStatus.APPROVED if action == "approve" else ClipStatus.REJECTED
-    for cid in clip_ids:
-        c = db.query(Clip).filter_by(id=cid, status=ClipStatus.WAITING_APPROVAL).first()
-        if c:
-            c.status = target_status
-            count += 1
-    db.commit()
-    logger.info("Operator '%s' performed bulk %s on %d clips", current_user.username, action, count)
+    if action == "approve":
+        res = bulk_approve_clips(
+            clip_ids=clip_ids,
+            db=db,
+            actor=current_user.username,
+        )
+    else:
+        res = bulk_reject_clips(
+            clip_ids=clip_ids,
+            db=db,
+            actor=current_user.username,
+            reason_code=reason_code,
+            note=reason,
+        )
 
-    msg = f"Bulk {action} completed for {count} clip(s)."
+    succeeded = res.get("succeeded", 0)
+    failed = res.get("failed", 0)
+    msg = f"Bulk {action} completed: {succeeded} succeeded, {failed} failed."
+    msg_type = "success" if failed == 0 else ("warning" if succeeded > 0 else "danger")
+
+    if request.headers.get("hx-request") == "true":
+        return Response(
+            content=json.dumps({"action": action, **res}),
+            media_type="application/json",
+            headers={
+                "HX-Trigger": json.dumps({
+                    "showToast": {"message": msg, "type": msg_type},
+                    "bulkActionCompleted": {"action": action, **res},
+                })
+            },
+        )
+
     if return_query or request.headers.get("sec-fetch-dest") == "document" or ("text/html" in request.headers.get("accept", "") and "application/json" not in request.headers.get("accept", "")):
         return _make_queue_redirect(
             request,
             default_msg=msg,
-            msg_type="success",
+            msg_type=msg_type,
             return_query=return_query,
         )
-    return {"action": action, "count": count}
+
+    return {"status": "success", "action": action, "count": succeeded, **res}
 
 
 @router.post("/queue/{clip_id}/re-render-style", summary="Re-render a clip with custom or preset caption styling")
@@ -1900,11 +1986,19 @@ def api_clip_action(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     if action == "approve":
-        clip.status = ClipStatus.APPROVED
+        res = approve_clip_for_publishing(clip_id, db=db, actor=current_user.username, publish_inline=True)
+        if not res.get("ok"):
+            raise HTTPException(status_code=400, detail=res.get("error"))
+        return {"status": "success", "clip_id": clip_id, "action": action, "new_status": res.get("status", "APPROVED"), "res": res}
     elif action == "reject":
-        clip.status = ClipStatus.REJECTED
+        res = reject_clip_action(clip_id, db=db, actor=current_user.username)
+        if not res.get("ok"):
+            raise HTTPException(status_code=400, detail=res.get("error"))
+        return {"status": "success", "clip_id": clip_id, "action": action, "new_status": ClipStatus.REJECTED.value}
     elif action in ("restore", "recover"):
         clip.status = ClipStatus.WAITING_APPROVAL
+        clip.queued_at = datetime.utcnow()
+        db.commit()
     elif action == "open-folder":
         from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
         if not clip.rendered_path:

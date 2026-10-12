@@ -27,18 +27,24 @@ from shorts_engine.dashboard.routes import (
 )
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
-from shorts_engine.services.publishing.drip_feed import DripFeedDaemon
 from shorts_engine.services.ab_testing.winner_daemon import ABWinnerPromotionDaemon
 from shorts_engine.services.storage.housekeeping import HousekeepingDaemon
 from shorts_engine.services.ingestion.hotfolder_watcher import hotfolder_watcher
+from shorts_engine.services.publishing.slots import PublishSlotService
+from shorts_engine.db.session import SessionLocal
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    drip_daemon = DripFeedDaemon()
+    # Run legacy drip-feed unorphaned clips migration on startup
+    try:
+        with SessionLocal() as db:
+            PublishSlotService.migrate_unorphaned_drip_feed_clips(db=db)
+    except Exception as mig_err:
+        logging.getLogger(__name__).warning("Startup slot migration warning: %s", mig_err)
+
     ab_daemon = ABWinnerPromotionDaemon()
     housekeeping_daemon = HousekeepingDaemon()
-    await drip_daemon.start()
     await ab_daemon.start()
     await housekeeping_daemon.start()
     if getattr(settings, "HOTFOLDER_ENABLED", True):
@@ -50,7 +56,6 @@ async def lifespan(app: FastAPI):
             await hotfolder_watcher.stop()
         await housekeeping_daemon.stop()
         await ab_daemon.stop()
-        await drip_daemon.stop()
 
 
 def create_dashboard_app() -> FastAPI:

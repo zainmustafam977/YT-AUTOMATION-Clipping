@@ -40,7 +40,7 @@ from shorts_engine.db.models import (
     ClipStatus,
 )
 from shorts_engine.config.dynamic_store import DynamicConfigStore
-from shorts_engine.services.publishing.drip_feed import (
+from shorts_engine.services.publishing.metadata import (
     extract_clip_id_from_description,
     check_duplicate_upload,
 )

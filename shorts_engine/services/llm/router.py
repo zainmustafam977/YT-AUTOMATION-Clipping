@@ -244,31 +244,47 @@ class LLMRouter:
         video_id: Optional[str] = None,
         clip_id: Optional[str] = None,
         stage: Optional[str] = None,
+        job_id: Optional[str] = None,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         reload_runtime_settings()
+
+        # Pre-flight Daily Budget Brake (never silently overspend)
+        if token_tracker.is_daily_budget_exceeded():
+            cost_today = token_tracker.get_cost_today()
+            budget = getattr(settings, "LLM_DAILY_BUDGET_USD", 5.0)
+            logger.warning(
+                "Daily LLM budget of $%.2f exceeded (spent today: $%.4f). Refusing call.",
+                budget, cost_today,
+            )
+            from shorts_engine.orchestration.exceptions import DailyBudgetExceededError
+            raise DailyBudgetExceededError(
+                f"Daily LLM budget of ${budget:.2f} exceeded (spent today: ${cost_today:.4f}). "
+                "Job deferred until tomorrow 00:00:00 UTC."
+            )
+
         provider_mode = self.provider
 
         # Explicit single provider mode
         if provider_mode == "groq":
-            res, meta = self._call_groq(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
+            res, meta = self._call_groq(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage, job_id=job_id)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "gemini":
-            res, meta = self._call_gemini(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
+            res, meta = self._call_gemini(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage, job_id=job_id)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "openrouter":
-            res, meta = self._call_openrouter(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
+            res, meta = self._call_openrouter(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage, job_id=job_id)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
                 return None, meta
         elif provider_mode == "openai":
-            res, meta = self._call_openai(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage)
+            res, meta = self._call_openai(prompt, schema, temperature=temperature, video_id=video_id, clip_id=clip_id, stage=stage, job_id=job_id)
             if res is not None:
                 return res, meta
             if not settings.LLM_FALLBACK_ON_RATE_LIMIT:
@@ -317,6 +333,7 @@ class LLMRouter:
                 video_id=video_id,
                 clip_id=clip_id,
                 stage=stage,
+                job_id=job_id,
             )
             if res is not None:
                 failover_trail.append({
@@ -380,6 +397,7 @@ class LLMRouter:
         video_id: Optional[str] = None,
         clip_id: Optional[str] = None,
         stage: Optional[str] = None,
+        job_id: Optional[str] = None,
         **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls Groq Chat Completions API with multi-key round-robin, permanent 404 fast-skip & retry delay."""
@@ -555,6 +573,7 @@ class LLMRouter:
                         if out_tok is None:
                             out_tok = int(len(clean_content.split()) * 1.33)
 
+                        key_pool_idx = self.groq_api_keys.index(active_key) if active_key in self.groq_api_keys else key_idx
                         tok_res = token_tracker.record_usage(
                             provider="groq",
                             model=target_model,
@@ -563,6 +582,9 @@ class LLMRouter:
                             clip_id=clip_id,
                             video_id=video_id,
                             stage=stage,
+                            job_id=job_id,
+                            key_index=key_pool_idx,
+                            key_masked=mask_api_key(active_key),
                         )
 
                         self.tracker.record_request(
@@ -580,6 +602,8 @@ class LLMRouter:
                             "model": target_model,
                             "badge": f"⚡ Groq ({target_model})",
                             "key_masked": mask_api_key(active_key),
+                            "key_index": key_pool_idx,
+                            "job_id": job_id,
                             "failover": failover_triggered or is_key_failover,
                             "latency_ms": latency_ms,
                             "tokens_per_sec": tokens_per_sec,
@@ -617,6 +641,7 @@ class LLMRouter:
         video_id: Optional[str] = None,
         clip_id: Optional[str] = None,
         stage: Optional[str] = None,
+        job_id: Optional[str] = None,
         **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls Google Gemini with client-side rate pacing (3.0s/key), retry delay parsing, and multi-key failover."""
@@ -717,6 +742,7 @@ class LLMRouter:
                     if out_tok is None:
                         out_tok = int(len(str(raw_text).split()) * 1.33)
 
+                    key_pool_idx = self.gemini_api_keys.index(active_key) if active_key in self.gemini_api_keys else key_idx
                     tok_res = token_tracker.record_usage(
                         provider="gemini",
                         model=target_model,
@@ -725,6 +751,9 @@ class LLMRouter:
                         clip_id=clip_id,
                         video_id=video_id,
                         stage=stage,
+                        job_id=job_id,
+                        key_index=key_pool_idx,
+                        key_masked=mask_api_key(active_key),
                     )
 
                     self.tracker.record_request("gemini", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
@@ -734,6 +763,8 @@ class LLMRouter:
                         "model": target_model,
                         "badge": f"🤖 Gemini ({target_model})",
                         "key_masked": mask_api_key(active_key),
+                        "key_index": key_pool_idx,
+                        "job_id": job_id,
                         "failover": failover_triggered or is_key_failover,
                         "latency_ms": latency_ms,
                         "api": used_api,
@@ -797,14 +828,32 @@ class LLMRouter:
                                 else:
                                     validated = parsed
                                 self.tracker.record_request("gemini", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
+                                key_pool_idx = self.gemini_api_keys.index(active_key) if active_key in self.gemini_api_keys else key_idx
+                                r_inp_tok = int(len(prompt.split()) * 1.33)
+                                r_out_tok = int(len(str(raw_text).split()) * 1.33)
+                                r_tok = token_tracker.record_usage(
+                                    provider="gemini",
+                                    model=target_model,
+                                    input_tokens=r_inp_tok,
+                                    output_tokens=r_out_tok,
+                                    clip_id=clip_id,
+                                    video_id=video_id,
+                                    stage=stage,
+                                    job_id=job_id,
+                                    key_index=key_pool_idx,
+                                    key_masked=mask_api_key(active_key),
+                                )
                                 return validated, {
                                     "provider": "gemini",
                                     "model": target_model,
                                     "badge": f"🤖 Gemini ({target_model})",
                                     "key_masked": mask_api_key(active_key),
+                                    "key_index": key_pool_idx,
+                                    "job_id": job_id,
                                     "failover": failover_triggered or is_key_failover,
                                     "latency_ms": latency_ms,
                                     "api": used_api,
+                                    "cost_usd": r_tok["cost_usd"],
                                 }
                             except Exception as retry_err:
                                 last_error = retry_err
@@ -918,6 +967,7 @@ class LLMRouter:
         video_id: Optional[str] = None,
         clip_id: Optional[str] = None,
         stage: Optional[str] = None,
+        job_id: Optional[str] = None,
         **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls OpenRouter Chat Completions API with multi-key round-robin, backup free slug failover, and retry delay."""
@@ -1030,6 +1080,7 @@ class LLMRouter:
                         if out_tok is None:
                             out_tok = int(len(clean_content.split()) * 1.33)
 
+                        key_pool_idx = self.openrouter_api_keys.index(active_key) if active_key in self.openrouter_api_keys else key_idx
                         tok_res = token_tracker.record_usage(
                             provider="openrouter",
                             model=target_model,
@@ -1038,6 +1089,9 @@ class LLMRouter:
                             clip_id=clip_id,
                             video_id=video_id,
                             stage=stage,
+                            job_id=job_id,
+                            key_index=key_pool_idx,
+                            key_masked=mask_api_key(active_key),
                         )
 
                         self.tracker.record_request("openrouter", active_key, status="SUCCESS", latency_ms=latency_ms, model=target_model)
@@ -1047,6 +1101,8 @@ class LLMRouter:
                             "model": target_model,
                             "badge": f"🌐 OpenRouter ({target_model})",
                             "key_masked": mask_api_key(active_key),
+                            "key_index": key_pool_idx,
+                            "job_id": job_id,
                             "failover": failover_triggered or is_key_failover,
                             "latency_ms": latency_ms,
                             "input_tokens": inp_tok,
@@ -1083,6 +1139,7 @@ class LLMRouter:
         video_id: Optional[str] = None,
         clip_id: Optional[str] = None,
         stage: Optional[str] = None,
+        job_id: Optional[str] = None,
         **kwargs,
     ) -> Tuple[Optional[T], Dict[str, Any]]:
         """Calls OpenAI Chat Completions API with multi-key round-robin & retry delay."""
@@ -1165,6 +1222,7 @@ class LLMRouter:
                     if out_tok is None:
                         out_tok = int(len(clean_content.split()) * 1.33)
 
+                    key_pool_idx = self.openai_api_keys.index(active_key) if active_key in self.openai_api_keys else key_idx
                     tok_res = token_tracker.record_usage(
                         provider="openai",
                         model=self.openai_model,
@@ -1173,6 +1231,9 @@ class LLMRouter:
                         clip_id=clip_id,
                         video_id=video_id,
                         stage=stage,
+                        job_id=job_id,
+                        key_index=key_pool_idx,
+                        key_masked=mask_api_key(active_key),
                     )
 
                     self.tracker.record_request("openai", active_key, status="SUCCESS", latency_ms=latency_ms, model=self.openai_model)
@@ -1182,6 +1243,8 @@ class LLMRouter:
                         "model": self.openai_model,
                         "badge": f"🟢 OpenAI ({self.openai_model})",
                         "key_masked": mask_api_key(active_key),
+                        "key_index": key_pool_idx,
+                        "job_id": job_id,
                         "failover": failover_triggered or is_key_failover,
                         "latency_ms": latency_ms,
                         "input_tokens": inp_tok,

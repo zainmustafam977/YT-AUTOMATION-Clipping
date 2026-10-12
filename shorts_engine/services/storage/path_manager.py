@@ -8,7 +8,7 @@ import time
 import logging
 import unicodedata
 from pathlib import Path
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, Dict, List
 
 from shorts_engine.config.settings import settings
 
@@ -285,6 +285,119 @@ class PathManager:
         Returns the deterministic file path for a lightweight 720p H.264 preview proxy video (Enhancement 4).
         """
         return get_preview_proxy_path(source_path)
+
+    @classmethod
+    def purge_source_video_files(cls, video: Any) -> Dict[str, Any]:
+        """
+        Safely deletes raw source video files (.mp4), extracted audio (.wav),
+        and preview proxies associated with a SourceVideo entity.
+        Prunes empty parent directories up to settings.STORAGE_DIR / 'downloads'.
+        Returns dict detailing deleted files and freed bytes.
+        """
+        deleted_files: List[str] = []
+        freed_bytes = 0
+        parent_dirs = set()
+
+        # 1. Downloaded video file
+        video_path = getattr(video, "downloaded_path", None)
+        resolved_v = cls.resolve_download_path(video_path or video)
+        if resolved_v and resolved_v.exists() and resolved_v.is_file():
+            try:
+                freed_bytes += resolved_v.stat().st_size
+                parent_dirs.add(resolved_v.parent)
+                if cls.safe_unlink(resolved_v):
+                    deleted_files.append(str(resolved_v))
+            except Exception as e:
+                logger.warning("Error checking size/deleting video %s: %s", resolved_v, e)
+
+        # 2. Audio track file
+        audio_path = getattr(video, "audio_path", None)
+        if audio_path:
+            p_audio = Path(audio_path)
+            if p_audio.exists() and p_audio.is_file():
+                try:
+                    freed_bytes += p_audio.stat().st_size
+                    parent_dirs.add(p_audio.parent)
+                    if cls.safe_unlink(p_audio):
+                        deleted_files.append(str(p_audio))
+                except Exception as e:
+                    logger.warning("Error checking size/deleting audio %s: %s", p_audio, e)
+
+        # 3. Preview proxy file (if exists alongside video)
+        if resolved_v:
+            proxy_path = cls.get_preview_proxy_path(resolved_v)
+            if proxy_path.exists() and proxy_path.is_file():
+                try:
+                    freed_bytes += proxy_path.stat().st_size
+                    parent_dirs.add(proxy_path.parent)
+                    if cls.safe_unlink(proxy_path):
+                        deleted_files.append(str(proxy_path))
+                except Exception as e:
+                    logger.warning("Error deleting proxy %s: %s", proxy_path, e)
+
+        # 4. Prune empty directories up to downloads root
+        downloads_root = Path(settings.STORAGE_DIR) / "downloads"
+        for p_dir in parent_dirs:
+            cls.prune_empty_dirs(p_dir, downloads_root)
+
+        return {
+            "deleted_files": deleted_files,
+            "freed_bytes": freed_bytes,
+            "file_count": len(deleted_files),
+        }
+
+    @classmethod
+    def purge_clip_intermediates(cls, clip: Any, video_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Safely deletes intermediate assets (crop plan JSON, subtitle .ass, temp chunks)
+        for a specific clip, preserving the final rendered clip.
+        Returns dict detailing deleted files and freed bytes.
+        """
+        deleted_files: List[str] = []
+        freed_bytes = 0
+
+        clip_id = getattr(clip, "id", str(clip) if isinstance(clip, (str, int)) else None)
+        cand = getattr(clip, "candidate", None) or getattr(clip, "clip_candidate", None)
+        start_ms = getattr(cand, "start_ms", None)
+        end_ms = getattr(cand, "end_ms", None)
+
+        # Resolve video_id if not explicitly provided
+        if not video_id and cand and getattr(cand, "source_video", None):
+            video_id = getattr(cand.source_video, "youtube_video_id", cand.source_video.id)
+
+        # 1. Crop plan file
+        if clip_id:
+            crop_plan = Path(settings.STORAGE_DIR) / "crops" / f"{clip_id}_crop_plan.json"
+            if crop_plan.exists() and crop_plan.is_file():
+                try:
+                    freed_bytes += crop_plan.stat().st_size
+                    if cls.safe_unlink(crop_plan):
+                        deleted_files.append(str(crop_plan))
+                except Exception as e:
+                    logger.warning("Error deleting crop plan %s: %s", crop_plan, e)
+
+        # 2. Subtitle .ass file
+        if video_id and start_ms is not None and end_ms is not None:
+            sub_file = cls.get_subtitle_path(str(video_id), int(start_ms), int(end_ms))
+            if sub_file.exists() and sub_file.is_file():
+                try:
+                    freed_bytes += sub_file.stat().st_size
+                    if cls.safe_unlink(sub_file):
+                        deleted_files.append(str(sub_file))
+                except Exception as e:
+                    logger.warning("Error deleting subtitle %s: %s", sub_file, e)
+
+        # 3. Temp directory chunks
+        if video_id:
+            temp_dir = Path(settings.TEMP_DIR) / str(video_id)
+            if temp_dir.exists():
+                cls.prune_empty_dirs(temp_dir, Path(settings.TEMP_DIR))
+
+        return {
+            "deleted_files": deleted_files,
+            "freed_bytes": freed_bytes,
+            "file_count": len(deleted_files),
+        }
 
 
 def get_preview_proxy_path(source_path: Union[str, Path]) -> Path:

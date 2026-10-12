@@ -111,6 +111,105 @@
     </div>
 </div>
 
+<!-- ── LLM Cost & Budget Brake Panel ───────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-4">
+        <div class="card stat-card {% if snapshot.cost and snapshot.cost.is_budget_exceeded %}danger{% else %}info{% endif %} h-100 p-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="text-muted small text-uppercase fw-semibold">LLM Spend Today</span>
+                <span class="badge {% if snapshot.cost and snapshot.cost.is_budget_exceeded %}bg-danger{% else %}bg-primary{% endif %}" id="kpi-budget-status">
+                    {% if snapshot.cost and snapshot.cost.is_budget_exceeded %}BUDGET EXCEEDED{% else %}WITHIN BUDGET{% endif %}
+                </span>
+            </div>
+            <div class="stat-number my-1 {% if snapshot.cost and snapshot.cost.is_budget_exceeded %}text-danger{% else %}text-info{% endif %}" id="kpi-cost-today" style="font-size: 1.6rem;">
+                ${{ "%.4f"|format(snapshot.cost.cost_today_usd if snapshot.cost else 0.0) }}
+            </div>
+            <div class="small text-muted mb-2 d-flex justify-content-between">
+                <span>Daily Budget: ${{ "%.2f"|format(snapshot.cost.daily_budget_usd if snapshot.cost else 5.0) }}</span>
+                <span>Used: <strong id="kpi-cost-pct">{{ snapshot.cost.budget_used_pct if snapshot.cost else 0.0 }}%</strong></span>
+            </div>
+            <div class="progress mb-2" style="height: 8px;">
+                <div class="progress-bar {% if snapshot.cost and snapshot.cost.is_budget_exceeded %}bg-danger{% else %}bg-info{% endif %}" id="kpi-cost-progress" style="width: min(100%, {{ snapshot.cost.budget_used_pct if snapshot.cost else 0 }}%);"></div>
+            </div>
+            <small class="text-muted">Headroom: <strong id="kpi-cost-remaining">${{ "%.4f"|format(snapshot.cost.budget_remaining_usd if snapshot.cost else 5.0) }}</strong> remaining today</small>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="card bg-dark-subtle border-secondary-subtle h-100 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="d-flex align-items-center gap-2">
+                    <span>💰</span> <span>LLM Cost by Video & Provider</span>
+                </span>
+                <span class="badge bg-secondary" id="kpi-provider-count">{{ (snapshot.cost.rollups_by_provider|length) if snapshot.cost else 0 }} Providers</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="row g-0">
+                    <div class="col-md-7 border-end border-secondary-subtle">
+                        <div class="p-2 border-bottom border-secondary-subtle small fw-bold text-muted">Cost Per Video</div>
+                        <div class="table-responsive" style="max-height: 160px; overflow-y: auto;">
+                            <table class="table table-dark table-hover table-sm align-middle mb-0" style="font-size: 0.8rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Video ID</th>
+                                        <th>Calls</th>
+                                        <th>Tokens</th>
+                                        <th>Cost (USD)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cost-videos-tbody">
+                                    {% if snapshot.cost and snapshot.cost.rollups_by_video %}
+                                        {% for v in snapshot.cost.rollups_by_video %}
+                                        <tr>
+                                            <td><code class="text-info">{{ v.video_id[:12] }}</code></td>
+                                            <td>{{ v.total_calls }}</td>
+                                            <td>{{ "{:,}".format(v.total_tokens) }}</td>
+                                            <td class="text-success fw-semibold">${{ "%.4f"|format(v.cost_usd) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-2">No video LLM logs yet today.</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="p-2 border-bottom border-secondary-subtle small fw-bold text-muted">Spend by Provider</div>
+                        <div class="table-responsive" style="max-height: 160px; overflow-y: auto;">
+                            <table class="table table-dark table-hover table-sm align-middle mb-0" style="font-size: 0.8rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Provider</th>
+                                        <th>Calls</th>
+                                        <th>Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cost-providers-tbody">
+                                    {% if snapshot.cost and snapshot.cost.rollups_by_provider %}
+                                        {% for p in snapshot.cost.rollups_by_provider %}
+                                        <tr>
+                                            <td><span class="badge bg-secondary text-uppercase">{{ p.provider }}</span></td>
+                                            <td>{{ p.total_calls }}</td>
+                                            <td class="text-success fw-semibold">${{ "%.4f"|format(p.cost_usd) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-2">No provider logs yet.</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ── Queue Depth Per Stage Breakdown ─────────────────────────────────── -->
 <div class="card bg-dark-subtle border-secondary-subtle mb-4 shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -415,6 +514,35 @@ function updateVisibilityUI(snapshot) {
 
     if (snapshot.jobs_24h) {
         document.getElementById('kpi-jobs-rate').innerText = snapshot.jobs_24h.success_rate_pct + '%';
+    }
+
+    if (snapshot.cost) {
+        var costTodayEl = document.getElementById('kpi-cost-today');
+        if (costTodayEl) {
+            costTodayEl.innerText = '$' + Number(snapshot.cost.cost_today_usd || 0).toFixed(4);
+        }
+        var costPctEl = document.getElementById('kpi-cost-pct');
+        if (costPctEl) {
+            costPctEl.innerText = (snapshot.cost.budget_used_pct || 0) + '%';
+        }
+        var costRemEl = document.getElementById('kpi-cost-remaining');
+        if (costRemEl) {
+            costRemEl.innerText = '$' + Number(snapshot.cost.budget_remaining_usd || 0).toFixed(4);
+        }
+        var progEl = document.getElementById('kpi-cost-progress');
+        if (progEl) {
+            progEl.style.width = Math.min(100, snapshot.cost.budget_used_pct || 0) + '%';
+        }
+        var statusBadge = document.getElementById('kpi-budget-status');
+        if (statusBadge) {
+            if (snapshot.cost.is_budget_exceeded) {
+                statusBadge.className = 'badge bg-danger';
+                statusBadge.innerText = 'BUDGET EXCEEDED';
+            } else {
+                statusBadge.className = 'badge bg-primary';
+                statusBadge.innerText = 'WITHIN BUDGET';
+            }
+        }
     }
 }
 

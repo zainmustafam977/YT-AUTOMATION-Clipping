@@ -6,7 +6,7 @@ Implements unified single source of truth for all pipeline constants.
 import os
 import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -119,6 +119,45 @@ class PipelineSettings(BaseSettings):
         le=1.0,
         description="Sampling temperature for viral hook generation",
     )
+    LLM_DAILY_BUDGET_USD: float = Field(
+        default=5.0,
+        ge=0.0,
+        description="Daily spend limit in USD for LLM inference; refuses calls and defers jobs when exceeded",
+    )
+    LLM_MODEL_PRICING: Dict[str, Dict[str, Dict[str, float]]] = Field(
+        default_factory=lambda: {
+            "groq": {
+                "openai/gpt-oss-120b": {"input": 0.15, "output": 0.60},
+                "openai/gpt-oss-20b": {"input": 0.075, "output": 0.30},
+                "qwen/qwen3.8-27b": {"input": 0.20, "output": 0.60},
+                "groq/compound-mini": {"input": 0.05, "output": 0.08},
+                "groq/compound": {"input": 0.10, "output": 0.15},
+                "_default": {"input": 0.05, "output": 0.08},
+            },
+            "gemini": {
+                "gemini-3.8-flash": {"input": 0.075, "output": 0.30},
+                "gemini-3.6-flash": {"input": 0.075, "output": 0.30},
+                "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+                "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
+                "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+                "gemini-2.5-pro": {"input": 1.25, "output": 5.00},
+                "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+                "_default": {"input": 0.075, "output": 0.30},
+            },
+            "openrouter": {
+                "meta-llama/llama-3.3-70b-instruct:free": {"input": 0.0, "output": 0.0},
+                "google/gemini-2.0-flash-exp:free": {"input": 0.0, "output": 0.0},
+                "liquid/lfm-2.5-2.6b:free": {"input": 0.0, "output": 0.0},
+                "_default": {"input": 0.0, "output": 0.0},
+            },
+            "openai": {
+                "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+                "gpt-4o": {"input": 2.50, "output": 10.00},
+                "_default": {"input": 0.15, "output": 0.60},
+            },
+        },
+        description="LLM pricing matrix (USD per 1,000,000 tokens) mapped by provider and model",
+    )
 
     # Transcription & Face Tracking
     WHISPER_MODEL_SIZE: str = Field(
@@ -209,7 +248,8 @@ class PipelineSettings(BaseSettings):
         default="hormozi",
         description="Default caption style template: hormozi, mrbeast, neon, minimalist, high_contrast_box",
     )
-    CAPTION_FONT_NAME: str = "Arial Black"
+    CAPTION_FONT_NAME: str = "DejaVu Sans"
+    CAPTION_FONT_FILE: Path = ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf"
     CAPTION_FONT_SIZE: int = 24
     CAPTION_PRIMARY_COLOR: str = "&H00FFFFFF"  # White
     CAPTION_HIGHLIGHT_COLOR: str = "&H0000FFFF"  # Yellow / Neon
@@ -296,21 +336,56 @@ class PipelineSettings(BaseSettings):
     SENTRY_DSN: Optional[str] = Field(default=None, description="Sentry DSN for error telemetry")
     DISK_ALERT_THRESHOLD_PCT: float = Field(default=80.0, description="Disk usage alert threshold percentage")
     QUOTA_REMAINING_ALERT_THRESHOLD_PCT: float = Field(default=20.0, description="Quota remaining alert threshold percentage")
+    RETENTION_RAW_SOURCE_DAYS: int = Field(
+        default=14,
+        ge=1,
+        description="Days to retain raw source videos after all its clips are published",
+    )
+    RETENTION_INTERMEDIATES_DAYS: int = Field(
+        default=3,
+        ge=0,
+        description="Days to retain intermediate assets (crop plans, subtitles, temp chunks) after final render is published",
+    )
+    RETENTION_KEEP_FINAL_RENDERS: bool = Field(
+        default=True,
+        description="Whether to keep final rendered clips permanently (never auto-deleted by default)",
+    )
 
-    # Publishing & Quotas
+    # Publishing & Quotas (Dec 2025 revisions)
     DRY_RUN_PUBLISHING: bool = Field(default=True, description="When true, simulates upload without calling YouTube API")
     DEFAULT_PRIVACY_STATUS: str = Field(default="unlisted", description="unlisted, private, or public")
     DAILY_QUOTA_LIMIT: int = 10000
+    QUOTA_SAFETY_RESERVE: int = 300
     QUOTA_WARNING_THRESHOLD: float = 0.80  # Alert when 80% quota is used
+    QUOTA_VIDEOS_INSERT_COST: int = Field(default=100, description="Quota cost for videos.insert (Dec 2025 revision)")
+    QUOTA_VIDEOS_UPDATE_COST: int = Field(default=50, description="Quota cost for videos.update")
+    QUOTA_VIDEOS_DELETE_COST: int = Field(default=50, description="Quota cost for videos.delete")
+    QUOTA_CHANNELS_LIST_COST: int = Field(default=1, description="Quota cost for channels.list")
+    QUOTA_SEARCH_LIST_COST: int = Field(default=100, description="Quota cost for search.list")
+    QUOTA_DAILY_VIDEOS_INSERT_LIMIT: int = Field(default=50, description="Daily limit of videos.insert calls (separate insert bucket)")
+
+    # Publish Slots & Scheduling Policy
+    PUBLISH_SLOT_TIMES_LOCAL: List[str] = Field(
+        default=["10:00", "18:00"],
+        description="Daily release times in channel local time (e.g. 2 per day at 10:00 and 18:00)",
+    )
+    PUBLISH_DEFAULT_TIMEZONE: str = Field(
+        default="America/New_York",
+        description="Default timezone for scheduling slots if not set by channel",
+    )
+    PUBLISH_MIN_SLOT_LEAD_MINUTES: int = Field(
+        default=15,
+        description="Minimum buffer minutes ahead of current time for slot selection",
+    )
     DRIP_FEED_ENABLED: bool = Field(
-        default=True,
-        description="Enable background automated drip-feed publishing for scheduled clips",
+        default=False,
+        description="Deprecated: Drip-feed daemon replaced by native publishAt and publish slots",
     )
     DRIP_FEED_POLL_INTERVAL_SECONDS: int = Field(
         default=60,
         ge=10,
         le=3600,
-        description="Polling interval in seconds for checking scheduled clips to publish",
+        description="Deprecated polling interval in seconds",
     )
     PEXELS_API_KEY: Optional[str] = Field(
         default=None,
@@ -736,6 +811,29 @@ class PipelineSettings(BaseSettings):
             self.INGESTION_PROXY_POOL.remove(clean)
             return True
         return False
+
+    def get_llm_pricing(self, provider: str, model: Optional[str] = None) -> Dict[str, float]:
+        """
+        Returns {'input': float, 'output': float} USD cost per 1M tokens
+        for the given provider and model.
+        """
+        prov_key = (provider or "").lower().strip()
+        prov_table = self.LLM_MODEL_PRICING.get(prov_key, {})
+        if not prov_table:
+            return {"input": 0.05, "output": 0.15}
+
+        model_key = (model or "").lower().strip()
+        # Direct match or case-insensitive match
+        for m_name, pricing in prov_table.items():
+            if m_name.lower() == model_key:
+                return pricing
+
+        # Partial matching (e.g. if model has prefixes or suffixes)
+        for m_name, pricing in prov_table.items():
+            if m_name != "_default" and m_name.lower() in model_key:
+                return pricing
+
+        return prov_table.get("_default", {"input": 0.05, "output": 0.15})
 
 
 

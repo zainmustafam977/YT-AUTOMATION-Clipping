@@ -37,6 +37,7 @@ from shorts_engine.services.monitoring.visibility import (
     get_quota_visibility,
     get_media_root_disk_usage,
     get_jobs_summary_24h,
+    get_llm_cost_visibility,
     evaluate_system_thresholds_and_alert,
 )
 
@@ -117,6 +118,15 @@ def api_visibility_jobs_24h(
 ) -> Dict[str, Any]:
     """Returns 24h rolling window job outcomes and completion rate."""
     return get_jobs_summary_24h(db)
+
+
+@router.get("/api/visibility/cost", summary="LLM cost today, budget, and per-video rollups")
+def api_visibility_cost(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+) -> Dict[str, Any]:
+    """Returns LLM cost today, daily budget headroom, and rollups per video and provider."""
+    return get_llm_cost_visibility(db)
 
 
 @router.post("/api/visibility/alerts/check", summary="Evaluate thresholds and dispatch alerts")

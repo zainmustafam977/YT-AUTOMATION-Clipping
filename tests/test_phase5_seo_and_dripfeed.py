@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from shorts_engine.services.seo.engine import SEOMetadataEngine, SEOResult
-from shorts_engine.services.publishing.drip_feed import extract_clip_id_from_description, check_duplicate_upload
+from shorts_engine.services.publishing.metadata import extract_clip_id_from_description, check_duplicate_upload
 from shorts_engine.config.dynamic_store import DynamicConfigStore
 from shorts_engine.db.models import Clip
 

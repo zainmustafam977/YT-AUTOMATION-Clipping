@@ -34,6 +34,7 @@ from shorts_engine.orchestration.exceptions import (
     PipelineError,
     TransientError,
     PermanentError,
+    DailyBudgetExceededError,
     classify_exception,
 )
 from shorts_engine.orchestration.telemetry import emit, get_telemetry_emitter
@@ -49,7 +50,7 @@ class StageContext:
     Makes stage callables independently unit-testable.
     """
     db_session: Session
-    video_id: str
+    video_id: Optional[str] = None
     clip_id: Optional[str] = None
     job_id: Optional[str] = None
     paths: Dict[str, Path] = field(default_factory=dict)
@@ -200,12 +201,38 @@ def analyze_candidates_stage(ctx: StageContext) -> Dict[str, Any]:
 
     try:
         service = ClipSelectionService()
+        video_dur = None
+        if video and video.duration_sec and video.duration_sec > 0:
+            video_dur = float(video.duration_sec)
+        elif ctx.artifacts.get("download", {}).get("duration_sec"):
+            video_dur = float(ctx.artifacts["download"]["duration_sec"])
+        elif video and video.downloaded_path and Path(video.downloaded_path).exists():
+            from shorts_engine.services.ingestion.downloader import Downloader
+            try:
+                video_dur = float(Downloader().probe_duration_sec(Path(video.downloaded_path)))
+            except Exception:
+                video_dur = None
+
         if hasattr(service, "select_clips"):
-            candidates = service.select_clips(transcript_obj)
+            candidates = service.select_clips(
+                transcript_obj,
+                video_duration_sec=video_dur,
+                video_id=ctx.video_id,
+            )
         elif hasattr(service, "select_candidates"):
-            candidates = service.select_candidates(transcript_obj, video_id=ctx.video_id)
+            candidates = service.select_candidates(
+                transcript_obj,
+                video_id=ctx.video_id,
+                video_duration_sec=video_dur,
+            )
         else:
             candidates = []
+
+        if not candidates:
+            logger.warning(
+                "Clip candidate discovery completed with 0 candidates for video %s.",
+                ctx.video_id,
+            )
         candidates_out = []
 
         for cand in candidates:
@@ -491,6 +518,35 @@ def analytics_poll_stage(ctx: StageContext) -> Dict[str, Any]:
         raise classify_exception(e)
 
 
+def daily_cleanup_stage(ctx: StageContext) -> Dict[str, Any]:
+    """Daily Storage Retention Policy & Disk Maintenance Stage."""
+    from shorts_engine.services.storage.retention_service import RetentionPolicyService
+    from shorts_engine.services.queue.durable_queue import durable_job_queue
+
+    ctx.heartbeat()
+    dry_run = bool(ctx.payload.get("dry_run", False))
+    try:
+        summary = RetentionPolicyService.run_cleanup(db=ctx.db_session, dry_run=dry_run)
+
+        # Self-schedule next daily cleanup in 24 hours
+        import uuid
+        interval_days = int(ctx.payload.get("interval_days", 1))
+        next_run = datetime.utcnow() + timedelta(days=interval_days)
+        cleanup_id = f"cleanup_{uuid.uuid4().hex[:12]}"
+        durable_job_queue.enqueue(
+            job_type="daily_cleanup",
+            entity_id=cleanup_id,
+            entity_type="system",
+            stage="daily_cleanup",
+            next_run_at=next_run,
+            payload={"action": "retention_cleanup", "interval_days": interval_days},
+            db=ctx.db_session,
+        )
+        return summary
+    except Exception as e:
+        raise classify_exception(e)
+
+
 # The canonical PIPELINE registry mapping
 PIPELINE: Dict[str, Stage] = {
     "ingest": Stage(
@@ -571,6 +627,18 @@ PIPELINE: Dict[str, Stage] = {
         produces=None,
         max_attempts=3,
     ),
+    "daily_cleanup": Stage(
+        name="daily_cleanup",
+        callable=daily_cleanup_stage,
+        produces=None,
+        max_attempts=3,
+    ),
+    "cleanup": Stage(
+        name="cleanup",
+        callable=daily_cleanup_stage,
+        produces=None,
+        max_attempts=3,
+    ),
 }
 
 
@@ -630,6 +698,75 @@ class StageExecutor:
                 ctx.db_session.commit()
 
             return result
+
+        except DailyBudgetExceededError as budget_err:
+            error_msg = str(budget_err)
+            logger.warning(
+                "Daily LLM budget exceeded in stage '%s': %s (deferring job to tomorrow)",
+                stage.name, error_msg,
+            )
+            tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            if job:
+                job.status = PipelineJobStatus.PENDING
+                job.next_run_at = tomorrow
+                job.last_error = error_msg
+                job.locked_by = None
+                if job.attempt_count > 0:
+                    job.attempt_count -= 1
+                ctx.db_session.commit()
+
+            try:
+                from shorts_engine.services.events.taxonomy import emit_platform_event, BUDGET_EXCEEDED
+                from shorts_engine.services.monitoring.token_tracker import token_tracker
+                emit_platform_event(
+                    event_name=BUDGET_EXCEEDED,
+                    payload={
+                        "job_id": job.id if job else (ctx.job_id or "job"),
+                        "stage": stage.name,
+                        "error": error_msg,
+                        "deferred_until": tomorrow.isoformat(),
+                        "cost_today": token_tracker.get_cost_today(db=ctx.db_session),
+                        "budget_usd": settings.LLM_DAILY_BUDGET_USD,
+                    },
+                    entity_id=job.id if job else ctx.job_id,
+                    entity_type="job",
+                    level="WARNING",
+                    title=f"LLM Budget Exceeded in Stage: {stage.name}",
+                    message=f"Job {job.id[:8] if job else 'job'} deferred to tomorrow: {error_msg}",
+                    db=ctx.db_session,
+                )
+            except Exception as emit_err:
+                logger.debug("Failed to emit budget_exceeded event: %s", emit_err)
+
+            try:
+                from shorts_engine.services.monitoring.alerter import pipeline_alerter
+                from shorts_engine.services.monitoring.token_tracker import token_tracker
+                pipeline_alerter.alert(
+                    title=f"LLM Budget Exceeded: Stage {stage.name}",
+                    message=f"Daily LLM budget exceeded. Job deferred until {tomorrow.isoformat()}: {error_msg}",
+                    level="WARNING",
+                    context={
+                        "alert_type": "budget_exceeded",
+                        "job_id": job.id if job else ctx.job_id,
+                        "stage": stage.name,
+                        "cost_today": token_tracker.get_cost_today(db=ctx.db_session),
+                        "budget_usd": settings.LLM_DAILY_BUDGET_USD,
+                    },
+                )
+            except Exception as alert_err:
+                logger.debug("Failed to dispatch budget alert: %s", alert_err)
+
+            emit(
+                "job_retried",
+                job_id=job.id if job else (ctx.job_id or "job"),
+                attempt_count=job.attempt_count if job else ctx.attempt_count,
+                next_run_at=tomorrow,
+                error=error_msg,
+                stage=stage.name,
+            )
+            raise budget_err
 
         except PermanentError as perm_err:
             error_msg = str(perm_err)

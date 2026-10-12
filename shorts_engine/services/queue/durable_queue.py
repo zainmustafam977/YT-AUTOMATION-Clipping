@@ -57,6 +57,7 @@ class DurableJobQueue:
             "ingest", "download", "transcribe", "select", "analyze_candidates",
             "reframe", "crop_plan", "captions", "caption", "render", "publish",
             "metadata_update", "daily_health", "analytics_poll",
+            "daily_cleanup", "cleanup",
         }
         if stage:
             eff_stage = stage.lower()
@@ -512,6 +513,38 @@ class DurableJobQueue:
                     reclaimed_count += 1
 
             return reclaimed_count
+        finally:
+            if should_close:
+                session.close()
+
+    def ensure_daily_cleanup_scheduled(self, db: Optional[Session] = None) -> PipelineJob:
+        """
+        Ensures a pending daily_cleanup job exists in the durable queue.
+        If none exists, enqueues a new daily_cleanup job.
+        """
+        session, should_close = self._get_session(db)
+        try:
+            existing = (
+                session.query(PipelineJob)
+                .filter(
+                    PipelineJob.stage == "daily_cleanup",
+                    PipelineJob.status.in_([PipelineJobStatus.PENDING, PipelineJobStatus.RUNNING]),
+                )
+                .first()
+            )
+            if existing:
+                return existing
+
+            import uuid
+            cleanup_id = f"cleanup_{uuid.uuid4().hex[:12]}"
+            return self.enqueue(
+                job_type="daily_cleanup",
+                entity_id=cleanup_id,
+                entity_type="system",
+                stage="daily_cleanup",
+                payload={"action": "retention_cleanup"},
+                db=session,
+            )
         finally:
             if should_close:
                 session.close()

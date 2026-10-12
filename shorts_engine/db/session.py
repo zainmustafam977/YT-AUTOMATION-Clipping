@@ -205,6 +205,49 @@ def ensure_schema_upgrades(target_engine=None):
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clips ADD COLUMN source VARCHAR(32) DEFAULT 'pipeline' NOT NULL"))
                     conn.commit()
+            if "rejection_reason_code" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN rejection_reason_code VARCHAR(64)"))
+                    conn.commit()
+            if "rejection_note" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clips ADD COLUMN rejection_note TEXT"))
+                    conn.commit()
+            if "rejected_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE clips ADD COLUMN rejected_at {dt_type}"))
+                    conn.commit()
+            if "queued_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE clips ADD COLUMN queued_at {dt_type}"))
+                    conn.commit()
+
+            # Backfill queued_at for clips in WAITING_APPROVAL where queued_at is null
+            with eng.connect() as conn:
+                conn.execute(text("UPDATE clips SET queued_at = created_at WHERE queued_at IS NULL AND status = 'WAITING_APPROVAL'"))
+                conn.commit()
+
+            # Backfill rejection columns from quality_check_result JSON where rejection_note is null
+            with eng.connect() as conn:
+                try:
+                    res = conn.execute(text("SELECT id, quality_check_result, updated_at FROM clips WHERE quality_check_result IS NOT NULL AND rejection_note IS NULL")).fetchall()
+                    for row in res:
+                        cid, qc_raw, upd_at = row[0], row[1], row[2]
+                        if qc_raw and "rejection_reason" in qc_raw:
+                            try:
+                                import json
+                                qr = json.loads(qc_raw)
+                                r_reason = qr.get("rejection_reason")
+                                if r_reason:
+                                    conn.execute(
+                                        text("UPDATE clips SET rejection_reason_code = 'LEGACY_REJECTION', rejection_note = :note, rejected_at = :ts WHERE id = :cid"),
+                                        {"note": str(r_reason), "ts": upd_at or datetime.utcnow(), "cid": cid}
+                                    )
+                            except Exception:
+                                pass
+                    conn.commit()
+                except Exception as b_err:
+                    logger.warning("Could not backfill rejection data: %s", b_err)
 
         if "platform_publish_logs" not in table_names:
             from shorts_engine.db.models import PlatformPublishLog

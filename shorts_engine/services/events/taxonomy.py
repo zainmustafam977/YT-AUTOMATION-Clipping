@@ -37,6 +37,8 @@ CLIP_APPROVED = "clip.approved"
 CLIP_PUBLISHED = "clip.published"
 CHANNEL_HEALTH = "channel.health"
 QUOTA_LOW = "quota.low"
+BUDGET_EXCEEDED = "budget.exceeded"
+STORAGE_CLEANUP = "storage.cleanup"
 
 ALL_TAXONOMY_EVENTS: List[str] = [
     STAGE_FINISHED,
@@ -47,6 +49,8 @@ ALL_TAXONOMY_EVENTS: List[str] = [
     CLIP_PUBLISHED,
     CHANNEL_HEALTH,
     QUOTA_LOW,
+    BUDGET_EXCEEDED,
+    STORAGE_CLEANUP,
 ]
 
 

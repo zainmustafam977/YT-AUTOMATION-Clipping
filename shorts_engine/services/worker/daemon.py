@@ -60,6 +60,7 @@ DEFAULT_STAGE_GROUPS: Dict[str, List[str]] = {
     "clip_prep": ["reframe", "crop_plan", "captions", "caption"],
     "render": ["render"],
     "publish": ["publish"],
+    "maintenance": ["daily_cleanup", "cleanup"],
 }
 
 DEFAULT_GROUP_CONCURRENCY: Dict[str, int] = {

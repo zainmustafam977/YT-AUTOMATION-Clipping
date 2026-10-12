@@ -75,7 +75,7 @@ def calendar_events_feed(
     sched_clips = (
         db.query(Clip)
         .filter(
-            Clip.status.in_([ClipStatus.APPROVED, ClipStatus.WAITING_APPROVAL]),
+            Clip.status.in_([ClipStatus.APPROVED, ClipStatus.WAITING_APPROVAL, ClipStatus.SCHEDULED]),
             Clip.scheduled_publish_at.isnot(None),
         )
         .all()
@@ -148,6 +148,21 @@ def calendar_events_feed(
     return JSONResponse(content=events)
 
 
+@router.get("/api/schedule/slots", summary="Get upcoming publish slots schedule")
+def upcoming_schedule_slots(
+    channel_id: Optional[str] = None,
+    platform: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_viewer),
+):
+    """Returns upcoming publish slots and their scheduled release timestamps."""
+    from shorts_engine.services.publishing.slots import publish_slot_service
+    slots = publish_slot_service.get_upcoming_schedule(
+        db=db, channel_id=channel_id, platform=platform, limit=50,
+    )
+    return {"schedule": slots, "count": len(slots)}
+
+
 @router.post("/api/calendar/reschedule/{clip_id}", summary="Drag-and-drop reschedule clip")
 def calendar_reschedule_clip(
     clip_id: str,
@@ -168,10 +183,8 @@ def calendar_reschedule_clip(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {e}")
 
-    clip.scheduled_publish_at = dt
-    if clip.status == ClipStatus.WAITING_APPROVAL:
-        clip.status = ClipStatus.APPROVED
-    db.commit()
+    from shorts_engine.services.publishing.slots import publish_slot_service
+    res = publish_slot_service.reschedule_clip(clip_id=clip.id, new_slot_time=dt, db=db)
 
     logger.info("Operator '%s' rescheduled clip %s to %s via Calendar", current_user.username, clip_id, dt.isoformat())
     return {
@@ -179,4 +192,5 @@ def calendar_reschedule_clip(
         "clip_id": clip_id,
         "scheduled_publish_at": dt.isoformat(),
         "display": dt.strftime("%b %d, %Y at %H:%M"),
+        "updated_on_youtube": res.get("updated_on_youtube", False),
     }

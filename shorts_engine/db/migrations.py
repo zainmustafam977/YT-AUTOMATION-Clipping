@@ -95,6 +95,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds event_logs table for persistent event bus history and 7-day telemetry retention",
         upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
     ),
+    Migration(
+        version="010_clip_rejection_and_queued_metadata",
+        description="Adds rejection_reason_code, rejection_note, rejected_at, and queued_at to clips table",
+        upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
+    ),
 ]
 
 

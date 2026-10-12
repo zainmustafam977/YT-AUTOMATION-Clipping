@@ -4,6 +4,8 @@
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
         <h4 class="text-light m-0">Review Queue</h4>
+        <span class="badge bg-primary border border-secondary" title="Global items awaiting approval">📥 Depth: {{ queue_depth }}</span>
+        <span class="badge bg-dark border border-secondary text-warning" title="Age of oldest item awaiting approval">⏳ Oldest: {{ oldest_item_age }}</span>
         <span class="badge bg-dark border border-secondary text-muted">{{ total_items }} total in this view</span>
         <!-- YouTube Data API Quota Telemetry -->
         <div class="quota-box px-3 py-1 rounded bg-black border border-secondary d-flex align-items-center gap-2 ms-lg-2">
@@ -92,10 +94,10 @@
 <div class="card p-3 mb-4 bg-dark border-secondary shadow-sm">
     <form method="get" action="/queue" class="row g-2 align-items-center">
         <input type="hidden" name="tab" value="{{ current_tab }}">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="input-group input-group-sm">
                 <span class="input-group-text bg-black text-muted border-secondary">🔍</span>
-                <input type="text" class="form-control bg-black text-light border-secondary" name="q" value="{{ q }}" placeholder="Search hook or video title...">
+                <input type="text" class="form-control bg-black text-light border-secondary" name="q" value="{{ q }}" placeholder="Search...">
             </div>
         </div>
         <div class="col-md-2">
@@ -103,6 +105,14 @@
                 <option value="">— All Channels —</option>
                 {% for ch in channels %}
                 <option value="{{ ch.id }}" {% if channel_id == ch.id %}selected{% endif %}>{{ ch.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="source_video_id" class="form-select form-select-sm bg-black text-light border-secondary" title="Filter by Source Video">
+                <option value="">— All Source Videos —</option>
+                {% for sv in source_videos %}
+                <option value="{{ sv.id }}" {% if source_video_id == sv.id %}selected{% endif %}>{{ sv.title[:28] }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -119,8 +129,8 @@
         </div>
         <div class="col-md-2">
             <select name="sort_by" class="form-select form-select-sm bg-black text-light border-secondary">
-                <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Sort: Date Created</option>
-                <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Sort: Virality Score</option>
+                <option value="date" {% if sort_by == 'date' %}selected{% endif %}>Sort: Date</option>
+                <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Sort: Virality</option>
                 <option value="duration" {% if sort_by == 'duration' %}selected{% endif %}>Sort: Duration</option>
             </select>
         </div>
@@ -130,17 +140,9 @@
                 <option value="asc" {% if order == 'asc' %}selected{% endif %}>Asc</option>
             </select>
         </div>
-        <div class="col-md-1">
-            <select name="limit" class="form-select form-select-sm bg-black text-light border-secondary" title="Page size">
-                <option value="10" {% if limit == 10 %}selected{% endif %}>10 / pg</option>
-                <option value="20" {% if limit == 20 %}selected{% endif %}>20 / pg</option>
-                <option value="50" {% if limit == 50 %}selected{% endif %}>50 / pg</option>
-                <option value="100" {% if limit == 100 %}selected{% endif %}>100 / pg</option>
-            </select>
-        </div>
         <div class="col-md-1 d-flex gap-1">
             <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">Filter</button>
-            {% if q or channel_id or ai_provider or sort_by != 'date' or order != 'desc' or limit != 20 %}
+            {% if q or channel_id or source_video_id or ai_provider or sort_by != 'date' or order != 'desc' %}
             <a href="/queue?tab={{ current_tab }}" class="btn btn-sm btn-outline-secondary" title="Reset Filters">✕</a>
             {% endif %}
         </div>
@@ -280,6 +282,28 @@
                                     {% if clip.is_failover %}
                                     <span class="badge bg-warning text-dark" style="font-size:0.65rem;" title="Failover clip">🔀 Failover</span>
                                     {% endif %}
+                                </div>
+                            </div>
+
+                            {% if clip.rendered_path %}
+                            <div class="video-preview-wrapper mb-2 rounded overflow-hidden position-relative border border-secondary" style="width: 100%; aspect-ratio: 9/16; max-height: 360px; background-color: #000; display: flex; align-items: center; justify-content: center;">
+                                <video class="queue-inline-player w-100 h-100"
+                                       style="object-fit: contain;"
+                                       controls
+                                       preload="none"
+                                       playsinline
+                                       {% if clip.youtube_video_id %}poster="/api/thumbnails/{{ clip.youtube_video_id }}"{% elif group.youtube_video_id %}poster="/api/thumbnails/{{ group.youtube_video_id }}"{% endif %}
+                                       src="/api/video/{{ clip.id }}">
+                                </video>
+                            </div>
+                            {% endif %}
+
+                            <div class="mb-2">
+                                <div class="fw-bold text-light text-truncate" style="font-size: 0.92rem;" title="{{ clip.generated_title or 'Untitled Clip' }}">
+                                    {{ clip.generated_title or 'Untitled Clip' }}
+                                </div>
+                                <div class="small text-muted text-truncate" style="font-size: 0.72rem;" title="{{ clip.source_title }}">
+                                    📺 {{ clip.source_title }}
                                 </div>
                             </div>
 
@@ -423,8 +447,8 @@
                                         ✓ Approve
                                     </button>
                                     <button type="button" class="btn btn-reject btn-sm py-0 px-2 fw-bold" style="font-size: 0.75rem;"
-                                            hx-post="/queue/{{ clip.id }}/reject" hx-swap="none"
-                                            title="Reject Clip">
+                                            onclick="openRejectModal('{{ clip.id }}')"
+                                            title="Reject Clip with Reason">
                                         ✗ Reject
                                     </button>
                                     <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size: 0.75rem;"
@@ -483,7 +507,7 @@
         </thead>
         <tbody>
         {% for clip in clips %}
-        <tr>
+        <tr data-clip-id="{{ clip.id }}">
             {% if current_tab == 'active' %}
             <td>
                 <input type="checkbox" name="clip_ids" value="{{ clip.id }}" data-clip-id="{{ clip.id }}" class="form-check-input clip-select-cb" onchange="onClipCheckboxChange(this)">
@@ -505,8 +529,11 @@
                     <span class="badge bg-secondary" style="font-size:0.7rem;" title="Retried {{ clip.retry_count }} times">↻ {{ clip.retry_count }}</span>
                     {% endif %}
                 </div>
-                <div class="fw-bold text-light small text-truncate" style="max-width: 220px;" title="{{ clip.source_title }}">
-                    {{ clip.source_title }}
+                <div class="fw-bold text-light small text-truncate" style="max-width: 220px;" title="{{ clip.generated_title or clip.source_title }}">
+                    {{ clip.generated_title or 'Untitled Clip' }}
+                </div>
+                <div class="text-muted small text-truncate" style="max-width: 220px; font-size: 0.72rem;" title="{{ clip.source_title }}">
+                    Source: {{ clip.source_title }}
                 </div>
                 {% if clip.source_vid %}
                 <div>
@@ -538,6 +565,15 @@
             <td>
                 {% if clip.rendered_path %}
                 <div class="d-flex flex-column align-items-start gap-1">
+                    <div class="video-preview-wrapper mb-1 rounded overflow-hidden position-relative border border-secondary" style="width: 100px; aspect-ratio: 9/16; background-color: #000;">
+                        <video class="queue-inline-player w-100 h-100"
+                               style="object-fit: contain;"
+                               controls
+                               preload="none"
+                               playsinline
+                               src="/api/video/{{ clip.id }}">
+                        </video>
+                    </div>
                     <span class="text-light small text-break" style="font-size: 0.8rem;">
                         {{ clip.rendered_path.split('/')[-1] if '/' in clip.rendered_path else clip.rendered_path.split('\\')[-1] }}
                     </span>
@@ -650,16 +686,8 @@
                 {% if current_tab == 'active' %}
                 <div class="d-flex gap-1 align-items-center">
                     <button type="button" class="btn btn-outline-info btn-sm fw-bold" title="Schedule Auto-Publish" onclick="openScheduleModal('{{ clip.id }}')">📅 Schedule</button>
-                    <form method="post" action="/queue/{{ clip.id }}/approve">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="hidden" name="return_query" value="{{ current_query }}">
-                        <button type="submit" class="btn btn-approve btn-sm fw-bold">✓ Approve</button>
-                    </form>
-                    <form method="post" action="/queue/{{ clip.id }}/reject">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="hidden" name="return_query" value="{{ current_query }}">
-                        <button type="submit" class="btn btn-reject btn-sm fw-bold">✗ Reject</button>
-                    </form>
+                    <button type="button" class="btn btn-approve btn-sm fw-bold" hx-post="/queue/{{ clip.id }}/approve" hx-swap="none" title="Approve Clip">✓ Approve</button>
+                    <button type="button" class="btn btn-reject btn-sm fw-bold" onclick="openRejectModal('{{ clip.id }}')" title="Reject Clip with Reason">✗ Reject</button>
                 </div>
                 {% else %}
                 <div class="d-flex flex-column gap-1">
@@ -927,6 +955,44 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+<!-- Modal: Reject Clip with Reason -->
+<div class="modal fade" id="clipRejectModal" tabindex="-1" aria-labelledby="clipRejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-danger shadow-lg">
+            <div class="modal-header border-danger bg-danger-subtle py-2">
+                <h5 class="modal-title text-danger fw-bold" id="clipRejectModalLabel">✗ Reject Clip</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rejectModalClipId" value="">
+                <input type="hidden" id="rejectModalIsBulk" value="false">
+
+                <p class="small text-muted mb-3" id="rejectModalDescription">
+                    Select a rejection category and add an optional note to help improve hook selection and editorial filters.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-light">Rejection Reason Code</label>
+                    <select id="rejectModalReasonCode" class="form-select form-select-sm bg-black text-light border-secondary">
+                        <option value="WEAK_HOOK">Weak Hook / Boring Intro</option>
+                        <option value="PACING_ISSUE">Pacing / Dead Air</option>
+                        <option value="FRAMING_CUTOFF">Framing / Cropping Issue</option>
+                        <option value="AUDIO_GLITCH">Audio / Loudness / Clipping</option>
+                        <option value="LOW_VIRALITY">Low Virality / No Retention</option>
+                        <option value="MANUAL_REJECTION" selected>Other / Manual Decision</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-light">Operator Note (Optional)</label>
+                    <textarea id="rejectModalNote" rows="3" class="form-control form-control-sm bg-black text-light border-secondary" placeholder="Specific reason or notes for editorial tuning..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmRejectBtn" class="btn btn-sm btn-danger fw-bold" onclick="submitRejectModal()">Confirm Reject</button>
             </div>
         </div>
     </div>
@@ -1294,7 +1360,163 @@
         submitBulkAction('reject');
     }
 
+    function removeCardElement(clipId) {
+        var card = document.getElementById('clip-card-' + clipId);
+        if (card) {
+            var col = card.closest('.col');
+            if (col) {
+                col.style.transition = 'all 0.35s ease';
+                col.style.opacity = '0';
+                col.style.transform = 'scale(0.92)';
+                setTimeout(function() { col.remove(); updateBulkButtons(); }, 360);
+            } else {
+                card.remove();
+                updateBulkButtons();
+            }
+        }
+        var row = document.querySelector('tr[data-clip-id="' + clipId + '"]');
+        if (row) {
+            row.style.transition = 'all 0.35s ease';
+            row.style.opacity = '0';
+            setTimeout(function() { row.remove(); updateBulkButtons(); }, 360);
+        }
+    }
+
+    function markCardError(clipId, errorMsg) {
+        var card = document.getElementById('clip-card-' + clipId);
+        if (card) {
+            card.classList.remove('border-secondary');
+            card.classList.add('border-danger');
+            var errEl = card.querySelector('.clip-action-error');
+            if (!errEl) {
+                errEl = document.createElement('div');
+                errEl.className = 'alert alert-danger py-1 px-2 mt-2 small clip-action-error';
+                card.appendChild(errEl);
+            }
+            errEl.textContent = '✗ ' + (errorMsg || 'Action failed');
+        }
+        var row = document.querySelector('tr[data-clip-id="' + clipId + '"]');
+        if (row) {
+            row.classList.add('table-danger');
+        }
+    }
+
+    function openRejectModal(clipId) {
+        document.getElementById('rejectModalClipId').value = clipId;
+        document.getElementById('rejectModalIsBulk').value = 'false';
+        document.getElementById('clipRejectModalLabel').textContent = '✗ Reject Clip ' + (clipId ? clipId.substring(0, 8) : '');
+        document.getElementById('rejectModalDescription').textContent = 'Select a rejection category and optional note to help improve hook selection.';
+        document.getElementById('rejectModalReasonCode').value = 'MANUAL_REJECTION';
+        document.getElementById('rejectModalNote').value = '';
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('clipRejectModal'));
+        modal.show();
+    }
+
+    function openBulkRejectModal() {
+        var checkedBoxes = document.querySelectorAll('.clip-select-cb:checked');
+        var uniqueIds = new Set();
+        checkedBoxes.forEach(function(cb) { uniqueIds.add(cb.value); });
+        if (uniqueIds.size === 0) {
+            alert('Please select at least one clip.');
+            return;
+        }
+        document.getElementById('rejectModalClipId').value = Array.from(uniqueIds).join(',');
+        document.getElementById('rejectModalIsBulk').value = 'true';
+        document.getElementById('clipRejectModalLabel').textContent = '✗ Bulk Reject (' + uniqueIds.size + ' clips)';
+        document.getElementById('rejectModalDescription').textContent = 'Categorize the rejection for all ' + uniqueIds.size + ' selected clips.';
+        document.getElementById('rejectModalReasonCode').value = 'MANUAL_REJECTION';
+        document.getElementById('rejectModalNote').value = '';
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('clipRejectModal'));
+        modal.show();
+    }
+
+    function submitRejectModal() {
+        var isBulk = document.getElementById('rejectModalIsBulk').value === 'true';
+        var clipIdVal = document.getElementById('rejectModalClipId').value;
+        var reasonCode = document.getElementById('rejectModalReasonCode').value;
+        var note = document.getElementById('rejectModalNote').value;
+        var csrfToken = document.querySelector('input[name="csrf_token"]')?.value || 
+                        document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        var btn = document.getElementById('confirmRejectBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Rejecting...';
+
+        if (isBulk) {
+            var clipIds = clipIdVal.split(',').filter(Boolean);
+            var fd = new FormData();
+            fd.append('action', 'reject');
+            fd.append('reason_code', reasonCode);
+            fd.append('reason', note);
+            clipIds.forEach(function(id) { fd.append('clip_ids', id); });
+            fd.append('csrf_token', csrfToken);
+
+            fetch('/queue/bulk-action', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var modal = bootstrap.Modal.getInstance(document.getElementById('clipRejectModal'));
+                if (modal) modal.hide();
+                if (data.results) {
+                    data.results.forEach(function(res) {
+                        if (res.ok) {
+                            removeCardElement(res.clip_id);
+                        } else {
+                            markCardError(res.clip_id, res.error);
+                        }
+                    });
+                }
+                window.showToast('Bulk rejected: ' + data.succeeded + ' succeeded, ' + data.failed + ' failed', data.failed > 0 ? 'warning' : 'info');
+                updateBulkButtons();
+            })
+            .catch(function(err) {
+                window.showToast('Bulk reject error: ' + err.message, 'danger');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = 'Confirm Reject';
+            });
+        } else {
+            var fd = new FormData();
+            fd.append('reason_code', reasonCode);
+            fd.append('reason', note);
+            fd.append('csrf_token', csrfToken);
+
+            fetch('/queue/' + encodeURIComponent(clipIdVal) + '/reject', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+                body: fd
+            })
+            .then(function(r) {
+                if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+                return r.json().catch(function() { return { ok: true }; });
+            })
+            .then(function(data) {
+                var modal = bootstrap.Modal.getInstance(document.getElementById('clipRejectModal'));
+                if (modal) modal.hide();
+                removeCardElement(clipIdVal);
+                window.showToast('Clip rejected (' + reasonCode + ')', 'warning');
+                updateBulkButtons();
+            })
+            .catch(function(err) {
+                window.showToast('Reject error: ' + err.message, 'danger');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = 'Confirm Reject';
+            });
+        }
+    }
+
     function submitBulkAction(action) {
+        if (action === 'reject') {
+            openBulkRejectModal();
+            return;
+        }
+
         var checkedBoxes = document.querySelectorAll('.clip-select-cb:checked');
         var uniqueIds = new Set();
         checkedBoxes.forEach(function(cb) { uniqueIds.add(cb.value); });
@@ -1304,30 +1526,66 @@
             return;
         }
 
-        var confirmMsg = 'Are you sure you want to ' + action + ' ' + uniqueIds.size + ' clip(s)?';
-        if (confirm(confirmMsg)) {
-            var form = document.getElementById('bulkActionForm');
-            document.getElementById('bulkActionType').value = action;
-
-            // Remove existing clip_ids to prevent duplication
-            var existingInputs = form.querySelectorAll('input[type="hidden"][data-dynamic="true"]');
-            existingInputs.forEach(function(h) { h.remove(); });
-
-            // Uncheck or clean existing cbs, append distinct hidden inputs
-            form.querySelectorAll('input.clip-select-cb').forEach(function(cb) { cb.disabled = true; });
-
-            uniqueIds.forEach(function(id) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'clip_ids';
-                input.value = id;
-                input.setAttribute('data-dynamic', 'true');
-                form.appendChild(input);
-            });
-
-            form.submit();
+        if (!confirm('Are you sure you want to approve ' + uniqueIds.size + ' clip(s)? Slots will be allocated and publishing queued in the background.')) {
+            return;
         }
+
+        var approveBtns = document.querySelectorAll('#bulkApproveBtn');
+        approveBtns.forEach(function(b) {
+            b.disabled = true;
+            b.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Approving...';
+        });
+
+        var csrfToken = document.querySelector('input[name="csrf_token"]')?.value || 
+                        document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        var fd = new FormData();
+        fd.append('action', 'approve');
+        uniqueIds.forEach(function(id) { fd.append('clip_ids', id); });
+        fd.append('csrf_token', csrfToken);
+
+        fetch('/queue/bulk-action', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: fd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.results) {
+                data.results.forEach(function(res) {
+                    if (res.ok) {
+                        removeCardElement(res.clip_id);
+                    } else {
+                        markCardError(res.clip_id, res.error);
+                    }
+                });
+            }
+            window.showToast('Bulk approved: ' + data.succeeded + ' scheduled, ' + data.failed + ' failed', data.failed > 0 ? 'warning' : 'success');
+            updateBulkButtons();
+        })
+        .catch(function(err) {
+            window.showToast('Bulk approve error: ' + err.message, 'danger');
+        })
+        .finally(function() {
+            approveBtns.forEach(function(b) {
+                b.disabled = false;
+                b.innerHTML = '✓ Approve Selected (<span id="bulkApproveCount">0</span>)';
+            });
+            updateBulkButtons();
+        });
     }
+
+    // Global listener: Pause other videos when any video plays
+    document.addEventListener('play', function(e) {
+        if (e.target && e.target.tagName === 'VIDEO') {
+            var allVideos = document.querySelectorAll('video');
+            allVideos.forEach(function(v) {
+                if (v !== e.target && !v.paused) {
+                    v.pause();
+                }
+            });
+        }
+    }, true);
 
     // Modal video player lifecycle management & Cover Frame Scrubber (Enhancement 7)
     var videoModal = document.getElementById('videoPlayerModal');

@@ -681,10 +681,10 @@ def test_ass_generator_sanitizes_transcript_braces(tmp_path):
     gen.generate_ass(words, 0, 1000, out_file)
     content = out_file.read_text(encoding="utf-8")
 
-    # Braces sanitized to parens
-    assert "(laughter)" in content
-    assert "(applause)" in content
-    assert "{laughter}" not in content
+    # Braces escaped so literal speech renders correctly
+    assert r"\{laughter\}" in content or r"\{LAUGHTER\}" in content
+    assert r"\{applause\}" in content or r"\{APPLAUSE\}" in content
+    assert " {laughter} " not in content and " {applause} " not in content
 
 
 def test_ass_generator_gap_bridging_prevents_flicker(tmp_path):

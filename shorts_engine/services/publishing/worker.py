@@ -1077,6 +1077,143 @@ class YouTubePublishWorker:
 
         return {"success": True, "youtube_video_id": youtube_video_id, "title": new_title}
 
+    def execute_delete_intent(
+        self,
+        youtube_video_id: str,
+        channel_id: Optional[str] = None,
+        db: Optional[Session] = None,
+        job_entity: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Deletes a video from YouTube (videos.delete = 50 units default).
+        Used when un-approving a clip that was already uploaded.
+        """
+        if not youtube_video_id:
+            return {"success": False, "error": "No youtube_video_id provided"}
+
+        channel = None
+        if channel_id and db:
+            channel = db.query(Channel).filter(
+                (Channel.id == channel_id) | (Channel.youtube_channel_id == channel_id)
+            ).first()
+        if not channel and db:
+            channel = db.query(Channel).first()
+
+        is_dry_run = self.dry_run or youtube_video_id.startswith("dry_run_")
+        if is_dry_run:
+            logger.info("[DRY-RUN] Simulating videos().delete for %s", youtube_video_id)
+            return {"success": True, "dry_run": True, "youtube_video_id": youtube_video_id, "deleted": True}
+
+        refresh_token = self._get_channel_refresh_token(channel, db) if (channel and db) else None
+        if not refresh_token:
+            if channel and db:
+                self._handle_invalid_grant(channel, db, "Missing refresh token for video delete", job=job_entity)
+            return {"success": False, "status": "QUARANTINED", "error": "No OAuth refresh token"}
+
+        client = build_youtube_client(refresh_token, client_config=self._resolve_client_config())
+        try:
+            client.videos().delete(id=youtube_video_id).execute()
+            self.quota_tracker.record_videos_delete(
+                channel_id=channel.youtube_channel_id if channel else None,
+                job_id=getattr(job_entity, "id", None),
+                db=db,
+            )
+            logger.info("Successfully deleted video %s from YouTube", youtube_video_id)
+            return {"success": True, "youtube_video_id": youtube_video_id, "deleted": True}
+        except HttpError as e:
+            raw_content = getattr(e, "content", b"") or b""
+            content_str = raw_content.decode("utf-8", errors="ignore") if isinstance(raw_content, bytes) else str(raw_content)
+            err_str = f"{str(e)} {content_str}".strip()
+            try:
+                status_code = int(getattr(e.resp, "status", 0))
+            except (ValueError, TypeError):
+                status_code = 0
+            if status_code == 404:
+                logger.info("Video %s not found on YouTube (404); treating as already deleted.", youtube_video_id)
+                return {"success": True, "youtube_video_id": youtube_video_id, "deleted": True, "note": "404 not found"}
+            if "invalid_grant" in err_str or status_code == 401:
+                if channel and db:
+                    self._handle_invalid_grant(channel, db, err_str, job=job_entity)
+                return {"success": False, "status": "QUARANTINED", "error": err_str}
+            raise
+
+    def execute_reschedule_intent(
+        self,
+        youtube_video_id: str,
+        new_slot_time: datetime,
+        channel_id: Optional[str] = None,
+        db: Optional[Session] = None,
+        job_entity: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Updates publishAt on YouTube without re-uploading (videos.update = 50 units).
+        Used when rescheduling an already uploaded clip.
+        """
+        if not youtube_video_id:
+            return {"success": False, "error": "No youtube_video_id provided"}
+
+        channel = None
+        if channel_id and db:
+            channel = db.query(Channel).filter(
+                (Channel.id == channel_id) | (Channel.youtube_channel_id == channel_id)
+            ).first()
+        if not channel and db:
+            channel = db.query(Channel).first()
+
+        is_dry_run = self.dry_run or youtube_video_id.startswith("dry_run_")
+        dt_sched = new_slot_time
+        if dt_sched.tzinfo is None:
+            dt_sched = dt_sched.replace(tzinfo=timezone.utc)
+        publish_at_iso = dt_sched.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        if is_dry_run:
+            logger.info("[DRY-RUN] Simulating videos().update status.publishAt=%s for %s", publish_at_iso, youtube_video_id)
+            return {"success": True, "dry_run": True, "youtube_video_id": youtube_video_id, "publishAt": publish_at_iso}
+
+        refresh_token = self._get_channel_refresh_token(channel, db) if (channel and db) else None
+        if not refresh_token:
+            if channel and db:
+                self._handle_invalid_grant(channel, db, "Missing refresh token for video reschedule", job=job_entity)
+            return {"success": False, "status": "QUARANTINED", "error": "No OAuth refresh token"}
+
+        client = build_youtube_client(refresh_token, client_config=self._resolve_client_config())
+        try:
+            update_req = client.videos().update(
+                part="status",
+                body={
+                    "id": youtube_video_id,
+                    "status": {
+                        "privacyStatus": "private",
+                        "publishAt": publish_at_iso,
+                        "selfDeclaredMadeForKids": getattr(settings, "YOUTUBE_MADE_FOR_KIDS", False),
+                    },
+                },
+            )
+            update_req.execute()
+            self.quota_tracker.record_videos_update(
+                channel_id=channel.youtube_channel_id if channel else None,
+                job_id=getattr(job_entity, "id", None),
+                db=db,
+            )
+            logger.info("Successfully updated publishAt for video %s -> %s", youtube_video_id, publish_at_iso)
+            return {"success": True, "youtube_video_id": youtube_video_id, "publishAt": publish_at_iso}
+        except HttpError as e:
+            raw_content = getattr(e, "content", b"") or b""
+            content_str = raw_content.decode("utf-8", errors="ignore") if isinstance(raw_content, bytes) else str(raw_content)
+            err_str = f"{str(e)} {content_str}".strip()
+            try:
+                status_code = int(getattr(e.resp, "status", 0))
+            except (ValueError, TypeError):
+                status_code = 0
+            if status_code == 403 and ("quota" in err_str.lower() or "uploadlimitexceeded" in err_str.lower()):
+                self._handle_quota_exceeded(job_entity, db, err_str)
+                return {"success": False, "status": "DEFERRED", "error": err_str}
+            if "invalid_grant" in err_str or status_code == 401:
+                if channel and db:
+                    self._handle_invalid_grant(channel, db, err_str, job=job_entity)
+                return {"success": False, "status": "QUARANTINED", "error": err_str}
+            raise
+
     # ==========================================================================
     # Intent 3: 'daily_health' Job Execution
     # ==========================================================================

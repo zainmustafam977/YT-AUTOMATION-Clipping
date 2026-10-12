@@ -3,14 +3,147 @@ Karaoke-style ASS Subtitle Generator: creates styled, word-synchronized vertical
 optimized for mobile screens and compliant with YouTube Shorts safe-zone guidelines.
 """
 
+import logging
 import re
 import sys
+import unicodedata
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Set
 from shorts_engine.config.settings import settings
 from shorts_engine.services.transcription.formatter import WordSegment
 
+logger = logging.getLogger(__name__)
+
+DEFAULT_BUNDLED_FONT_NAME = "DejaVu Sans"
+DEFAULT_BUNDLED_FONT_FILE = settings.ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf"
 DEFAULT_EMOJI_FONT = "Segoe UI Emoji" if sys.platform == "win32" else "Noto Color Emoji"
+
+_FONT_CMAP_CACHE: Dict[str, Set[int]] = {}
+
+UNICODE_REPLACEMENTS = {
+    "\u201c": '"', "\u201d": '"',  # smart double quotes
+    "\u2018": "'", "\u2019": "'",  # smart single quotes / apostrophes
+    "\u2014": "-", "\u2013": "-", "\u2015": "-",  # dashes
+    "\u2026": "...",  # ellipsis
+    "\u00a0": " ", "\u2002": " ", "\u2003": " ", "\u2009": " ",  # spaces
+    "\u2022": "*", "\u00b7": "*",  # bullets
+    "\u00ab": '"', "\u00bb": '"',  # guillemets
+}
+
+DROP_CHARACTERS = {
+    "\u200b", "\u200c", "\u200d", "\ufeff",  # zero-width spaces, joiners, BOM
+    "\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08",
+    "\x0b", "\x0c", "\x0e", "\x0f",
+}
+
+
+def get_font_supported_codepoints(font_name: Optional[str] = None, font_file: Optional[Path] = None) -> Set[int]:
+    """
+    Extracts and caches the set of unicode codepoints supported by the bundled font.
+    Prefers the bundled project font in assets/fonts to eliminate host system dependencies.
+    """
+    target = font_file
+    if target is None:
+        fonts_dir = getattr(settings, "FONTS_DIR", settings.ROOT_DIR / "assets" / "fonts")
+        if font_name and ("bold" in font_name.lower()):
+            candidate = fonts_dir / "DejaVuSans-Bold.ttf"
+        elif font_name:
+            candidate = fonts_dir / f"{font_name.replace(' ', '')}.ttf"
+            if not candidate.exists():
+                candidate = fonts_dir / "DejaVuSans-Bold.ttf"
+        else:
+            candidate = fonts_dir / "DejaVuSans-Bold.ttf"
+        target = candidate if candidate.exists() else DEFAULT_BUNDLED_FONT_FILE
+
+    if not target or not Path(target).exists():
+        return set()
+
+    cache_key = str(Path(target).resolve())
+    if cache_key in _FONT_CMAP_CACHE:
+        return _FONT_CMAP_CACHE[cache_key]
+
+    try:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(target)
+        cmap = tt.getBestCmap()
+        codepoints = set(cmap.keys()) if cmap else set()
+        _FONT_CMAP_CACHE[cache_key] = codepoints
+        return codepoints
+    except Exception as e:
+        logger.debug("Failed to extract font codepoint table from %s: %s", target, e)
+        return set()
+
+
+def _sanitize_non_emoji_span(text: str, font_codepoints: Optional[Set[int]] = None) -> str:
+    clean_chars = []
+    for char in text:
+        if char in DROP_CHARACTERS:
+            continue
+        code = ord(char)
+        # Always allow standard printable ASCII and characters present in font cmap
+        if (font_codepoints and code in font_codepoints) or (32 <= code <= 126):
+            clean_chars.append(char)
+            continue
+        # Common typographic substitution
+        if char in UNICODE_REPLACEMENTS:
+            clean_chars.append(UNICODE_REPLACEMENTS[char])
+            continue
+        # NFKD decomposition (strips combining accents to keep base character)
+        decomp = unicodedata.normalize("NFKD", char)
+        base = "".join(c for c in decomp if not unicodedata.combining(c))
+        if base and all((font_codepoints and ord(b) in font_codepoints) or (32 <= ord(b) <= 126) for b in base):
+            clean_chars.append(base)
+        else:
+            clean_chars.append("?")
+    return "".join(clean_chars)
+
+
+def sanitize_word_for_font(word: str, font_codepoints: Optional[Set[int]] = None) -> str:
+    """
+    Handles characters missing from the font (fallback or safe replacement).
+    - Preserves emojis (including flags, variation selectors, and ZWJ sequences)
+    - Replaces typographic quotes, dashes, ellipsis with safe ASCII equivalents
+    - Normalizes accented / diacritical characters to base ASCII via NFKD decomposition
+    - Strips non-printable / zero-width characters
+    - Falls back to safe printable '?' for unsupported glyphs
+    """
+    if not word:
+        return word
+
+    if font_codepoints is None:
+        font_codepoints = get_font_supported_codepoints()
+
+    # If emojis are present, preserve multi-codepoint emoji spans (flags, ZWJ, variation selectors)
+    if not EMOJI_PATTERN.search(word):
+        return _sanitize_non_emoji_span(word, font_codepoints)
+
+    parts = []
+    last_end = 0
+    for match in EMOJI_PATTERN.finditer(word):
+        start, end = match.span()
+        if start > last_end:
+            parts.append(_sanitize_non_emoji_span(word[last_end:start], font_codepoints))
+        parts.append(match.group(0))
+        last_end = end
+    if last_end < len(word):
+        parts.append(_sanitize_non_emoji_span(word[last_end:], font_codepoints))
+    return "".join(parts)
+
+
+def escape_ass_dialogue_text(text: str) -> str:
+    """
+    Escapes ASS override control characters in caption dialogue text:
+    - '\\' -> '\\\\' (prevents tag interpretation and command expansion)
+    - '{' -> '\\{'  (prevents opening an override tag block)
+    - '}' -> '\\}'  (prevents closing an override tag block prematurely)
+
+    Order is critical: backslashes must be escaped FIRST so that the backslashes
+    introduced to escape curly braces are not themselves doubled.
+    """
+    if not text:
+        return text
+    return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+
 
 EMOJI_PATTERN = re.compile(
     r"("
@@ -192,9 +325,10 @@ class ASSSubtitleGenerator:
 
                 # Format words with active word highlighted
                 line_parts = []
+                font_codepoints = get_font_supported_codepoints(font_name=font_name)
                 for idx, w in enumerate(chunk):
-                    # Sanitize backslashes and ASS override block delimiters to prevent tag swallowing
-                    word_clean = w.word.replace("\\", "").replace("{", "(").replace("}", ")")
+                    # Handle characters missing from font (fallback or safe replacement)
+                    word_clean = sanitize_word_for_font(w.word, font_codepoints=font_codepoints)
                     if case_transform == "uppercase":
                         word_clean = word_clean.upper()
                     elif case_transform == "lowercase":
@@ -202,7 +336,9 @@ class ASSSubtitleGenerator:
                     elif case_transform == "capitalize":
                         word_clean = word_clean.capitalize()
 
-                    word_formatted = self._format_word_emojis(word_clean, font_name)
+                    # Escape '{', '}', and backslash in dialogue text so literal speech never corrupts override blocks
+                    word_escaped = escape_ass_dialogue_text(word_clean)
+                    word_formatted = self._format_word_emojis(word_escaped, font_name)
 
                     if idx == active_idx:
                         hl_color = highlight_color

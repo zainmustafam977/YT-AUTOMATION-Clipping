@@ -36,9 +36,10 @@ def escape_ffmpeg_filter_path(path: Path) -> str:
 def get_default_fontfile() -> Optional[str]:
     """Finds a reliable system font path for drawtext on Windows/Linux (PLAN-P2-09 / F-35)."""
     candidates = [
+        settings.ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf",
+        settings.ROOT_DIR / "assets" / "fonts" / "DejaVuSans.ttf",
         Path("C:/Windows/Fonts/arialbd.ttf"),
         Path("C:/Windows/Fonts/arial.ttf"),
-        settings.ROOT_DIR / "assets" / "fonts" / "DejaVuSans-Bold.ttf",
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         Path("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),
         Path("/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
@@ -791,6 +792,20 @@ class VideoCompositor:
                     raise RuntimeError(f"FFmpeg render failed: {result.stderr[-400:]}")
 
             logger.info("Render completed successfully: %s", output_path)
+            if normalize_audio and output_path.exists():
+                try:
+                    out_lufs_data = mastering_engine.measure_loudness(output_path, duration_sec=duration_sec)
+                    out_lufs_val = out_lufs_data.get("input_i")
+                    if out_lufs_val is not None:
+                        logger.info(
+                            "Rendered clip %s measured loudness: %.2f LUFS (target: %.1f LUFS, true peak: %.2f dBTP)",
+                            output_filename,
+                            out_lufs_val,
+                            mastering_engine.target_lufs,
+                            out_lufs_data.get("input_tp", 0.0),
+                        )
+                except Exception as ex:
+                    logger.debug("Could not measure output loudness for %s: %s", output_filename, ex)
             try:
                 global_event_bus.publish_sync(PlatformEvent(
                     category="rendering",

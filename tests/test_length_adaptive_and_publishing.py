@@ -142,7 +142,7 @@ def test_generate_complete_upload_package():
 
 def test_drip_feed_preserves_seo_and_channel_defaults():
     """Verify build_clip_metadata in drip_feed preserves rich generated SEO and channel defaults."""
-    from shorts_engine.services.publishing.drip_feed import build_clip_metadata
+    from shorts_engine.services.publishing.metadata import build_clip_metadata
 
     ch = Channel(
         id="ch-gaming",

@@ -26,12 +26,13 @@ from shorts_engine.utils.fs import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_COST_UNITS = 1600
-VIDEOS_INSERT_COST_UNITS = 1600
-VIDEOS_UPDATE_COST_UNITS = 50
-SEARCH_LIST_COST_UNITS = 100
-CHANNELS_LIST_COST_UNITS = 1
-DEFAULT_SAFETY_RESERVE = 300
+VIDEOS_INSERT_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 100)
+UPLOAD_COST_UNITS = VIDEOS_INSERT_COST_UNITS
+VIDEOS_UPDATE_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_UPDATE_COST", 50)
+VIDEOS_DELETE_COST_UNITS = getattr(settings, "QUOTA_VIDEOS_DELETE_COST", 50)
+SEARCH_LIST_COST_UNITS = getattr(settings, "QUOTA_SEARCH_LIST_COST", 100)
+CHANNELS_LIST_COST_UNITS = getattr(settings, "QUOTA_CHANNELS_LIST_COST", 1)
+DEFAULT_SAFETY_RESERVE = getattr(settings, "QUOTA_SAFETY_RESERVE", 300)
 PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
 
 
@@ -79,11 +80,14 @@ class QuotaTracker:
     def daily_upload_cap(self) -> int:
         """
         Calculates daily upload cap across all channels combined:
-        floor((daily_limit - safety_reserve) / upload_cost)
-        Defaults: floor((10000 - 300) / 1600) = 6 uploads/day
+        Respects separate videos.insert bucket limit and unit budget:
+        min(insert_bucket_limit, floor((daily_limit - safety_reserve) / upload_cost))
         """
+        insert_bucket_limit = getattr(settings, "QUOTA_DAILY_VIDEOS_INSERT_LIMIT", 50)
+        upload_cost = getattr(settings, "QUOTA_VIDEOS_INSERT_COST", 100)
         effective_budget = max(0, self.daily_limit - self.safety_reserve)
-        return effective_budget // UPLOAD_COST_UNITS
+        unit_cap = effective_budget // max(1, upload_cost)
+        return min(insert_bucket_limit, unit_cap)
 
     def record_usage(
         self,
@@ -184,6 +188,25 @@ class QuotaTracker:
         )
         self.check_and_alert_quota(db=db)
         return cost
+
+    def record_videos_delete(
+        self,
+        cost: Optional[int] = None,
+        channel_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> int:
+        """Records videos.delete cost (50 units default) in the ledger."""
+        del_cost = cost if cost is not None else getattr(settings, "QUOTA_VIDEOS_DELETE_COST", 50)
+        self.record_usage(
+            units=del_cost,
+            operation="youtube.videos.delete",
+            channel_id=channel_id,
+            job_id=job_id,
+            db=db,
+        )
+        self.check_and_alert_quota(db=db)
+        return del_cost
 
     def record_search_list(
         self,

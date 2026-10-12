@@ -38,6 +38,7 @@ class SourceVideoStatus(str, Enum):
     FAILED = "FAILED"
     POLICY_RESTRICTED = "POLICY_RESTRICTED"
     PENDING_POLICY_REVIEW = "PENDING_POLICY_REVIEW"
+    PURGED = "PURGED"
 
 
 class ClipStatus(str, Enum):
@@ -45,11 +46,13 @@ class ClipStatus(str, Enum):
     QUALITY_CHECK = "QUALITY_CHECK"
     WAITING_APPROVAL = "WAITING_APPROVAL"
     APPROVED = "APPROVED"
+    SCHEDULED = "SCHEDULED"
     REJECTED = "REJECTED"
     PUBLISHING = "PUBLISHING"
     PUBLISHED = "PUBLISHED"
     FAILED = "FAILED"
     FAILED_NEEDS_REVIEW = "FAILED_NEEDS_REVIEW"
+    PURGED = "PURGED"
 
 
 class UserRole(str, Enum):
@@ -113,6 +116,7 @@ class Channel(Base):
 
     source_videos = relationship("SourceVideo", back_populates="channel", cascade="all, delete-orphan")
     credential = relationship("ChannelCredential", back_populates="channel", uselist=False, cascade="all, delete-orphan")
+    publish_slots = relationship("PublishSlot", back_populates="channel", cascade="all, delete-orphan")
 
     @property
     def display_title(self) -> str:
@@ -343,7 +347,10 @@ class Clip(Base):
     draft_made_for_kids = Column(Boolean, nullable=True)
     draft_target_channel_id = Column(String(64), nullable=True)
     draft_scheduled_at = Column(DateTime, nullable=True)
-    draft_version = Column(Integer, default=1, nullable=False)
+    rejection_reason_code = Column(String(64), nullable=True, index=True)
+    rejection_note = Column(Text, nullable=True)
+    rejected_at = Column(DateTime, nullable=True)
+    queued_at = Column(DateTime, nullable=True, index=True)
     source = Column(String(32), default="pipeline", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -352,6 +359,7 @@ class Clip(Base):
     publish_log = relationship("PublishLog", back_populates="clip", uselist=False, cascade="all, delete-orphan")
     platform_publish_logs = relationship("PlatformPublishLog", back_populates="clip", cascade="all, delete-orphan")
     publish_jobs = relationship("PublishJob", back_populates="clip", cascade="all, delete-orphan")
+    publish_slots = relationship("PublishSlot", back_populates="clip")
     analytics_metrics = relationship("AnalyticsMetric", back_populates="clip", cascade="all, delete-orphan")
 
     @property
@@ -398,6 +406,41 @@ class Clip(Base):
             self.analytics_json = None
         else:
             self.analytics_json = json.dumps(val)
+
+    @property
+    def rejection_reason(self) -> Optional[str]:
+        """Backward-compatible rejection reason getter (prefers note/code, falls back to JSON)."""
+        if self.rejection_note and self.rejection_reason_code:
+            return f"[{self.rejection_reason_code}] {self.rejection_note}"
+        if self.rejection_note:
+            return self.rejection_note
+        if self.rejection_reason_code:
+            return self.rejection_reason_code
+        if self.quality_check_result:
+            try:
+                qr = json.loads(self.quality_check_result)
+                return qr.get("rejection_reason")
+            except Exception:
+                pass
+        return None
+
+    @rejection_reason.setter
+    def rejection_reason(self, val: Optional[str]) -> None:
+        """Dual-write setter for rejection reason."""
+        self.rejection_note = val
+        if val and not self.rejection_reason_code:
+            self.rejection_reason_code = "MANUAL_REJECTION"
+        if val and not self.rejected_at:
+            self.rejected_at = datetime.utcnow()
+        try:
+            qr = json.loads(self.quality_check_result or "{}")
+        except Exception:
+            qr = {}
+        if val:
+            qr["rejection_reason"] = val
+        else:
+            qr.pop("rejection_reason", None)
+        self.quality_check_result = json.dumps(qr)
 
 
 class PublishLog(Base):
@@ -512,6 +555,39 @@ class PublishJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     clip = relationship("Clip", back_populates="publish_jobs")
+
+
+class PublishSlotStatus(str, Enum):
+    RESERVED = "RESERVED"     # Slot allocated, upload in progress or queued
+    SCHEDULED = "SCHEDULED"   # Uploaded to YouTube with publishAt set
+    PUBLISHED = "PUBLISHED"   # Video went live / verified published
+    CANCELLED = "CANCELLED"   # Un-approved or cancelled
+
+
+class PublishSlot(Base):
+    """
+    Publish slot allocation table.
+    Ensures collision-free, atomic scheduling per channel via UniqueConstraint(channel_id, slot_start).
+    Supports platform-agnostic scheduling (YouTube native publishAt, TikTok/Instagram deferred jobs).
+    """
+    __tablename__ = "publish_slots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    channel_id = Column(String(36), ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="SET NULL"), nullable=True, index=True)
+    slot_start = Column(DateTime, nullable=False, index=True)
+    platform = Column(String(32), default="youtube", nullable=False, index=True)
+    status = Column(String(32), default=PublishSlotStatus.RESERVED.value, nullable=False, index=True)
+    youtube_video_id = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("channel_id", "slot_start", name="uq_publish_slots_channel_slot_start"),
+    )
+
+    channel = relationship("Channel", back_populates="publish_slots")
+    clip = relationship("Clip", back_populates="publish_slots")
 
 
 class PipelineJob(Base):
@@ -784,6 +860,48 @@ def prune_old_event_logs(db: Session, retention_days: int = 7) -> int:
     )
     db.commit()
     return deleted_count
+
+
+class LLMUsageLog(Base):
+    """
+    Persistent audit ledger for tracking all LLM inference calls, token volume,
+    and USD expenditure across providers, models, and API keys.
+    """
+    __tablename__ = "llm_usage_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    provider = Column(String(64), nullable=False, index=True)
+    model = Column(String(128), nullable=False, index=True)
+    key_index = Column(Integer, nullable=True)
+    key_masked = Column(String(64), nullable=True)
+    prompt_tokens = Column(Integer, default=0, nullable=False)
+    completion_tokens = Column(Integer, default=0, nullable=False)
+    total_tokens = Column(Integer, default=0, nullable=False)
+    cost_usd = Column(Float, default=0.0, nullable=False)
+    job_id = Column(String(64), nullable=True, index=True)
+    video_id = Column(String(64), nullable=True, index=True)
+    clip_id = Column(String(64), nullable=True, index=True)
+    stage = Column(String(64), nullable=True, index=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "provider": self.provider,
+            "model": self.model,
+            "key_index": self.key_index,
+            "key_masked": self.key_masked,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "cost_usd": self.cost_usd,
+            "job_id": self.job_id,
+            "video_id": self.video_id,
+            "clip_id": self.clip_id,
+            "stage": self.stage,
+        }
+
 
 
 

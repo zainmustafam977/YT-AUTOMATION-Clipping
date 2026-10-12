@@ -74,6 +74,14 @@ class PolicyPermanentError(PermanentError):
     pass
 
 
+class DailyBudgetExceededError(PipelineError):
+    """
+    LLM daily inference expenditure budget ceiling exceeded.
+    Stages refuse new calls and defer jobs to tomorrow 00:00:00 UTC without burning retry attempts.
+    """
+    pass
+
+
 def classify_exception(exc: Exception) -> PipelineError:
     """
     Classifies an arbitrary exception according to the pipeline failure taxonomy.

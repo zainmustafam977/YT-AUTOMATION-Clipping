@@ -398,6 +398,13 @@ def get_full_visibility_snapshot(db: Session) -> Dict[str, Any]:
     quota_data = get_quota_visibility(db)
     disk_data = get_media_root_disk_usage()
     jobs_24h_data = get_jobs_summary_24h(db)
+    cost_data = get_llm_cost_visibility(db)
+
+    try:
+        from shorts_engine.services.publishing.slots import publish_slot_service
+        upcoming_data = publish_slot_service.get_upcoming_schedule(db=db, limit=10)
+    except Exception:
+        upcoming_data = []
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
@@ -410,6 +417,27 @@ def get_full_visibility_snapshot(db: Session) -> Dict[str, Any]:
         "quota": quota_data,
         "disk": disk_data,
         "jobs_24h": jobs_24h_data,
+        "cost": cost_data,
+        "upcoming_schedule": upcoming_data,
+        "upcoming_count": len(upcoming_data),
+    }
+
+
+def get_llm_cost_visibility(db: Session) -> Dict[str, Any]:
+    """Derives current LLM inference expenditure, daily budget headroom, and rollups."""
+    from shorts_engine.services.monitoring.token_tracker import token_tracker
+    cost_today = token_tracker.get_cost_today(db=db)
+    budget = float(getattr(settings, "LLM_DAILY_BUDGET_USD", 5.0))
+    used_pct = round((cost_today / budget) * 100, 1) if budget > 0 else 0.0
+    return {
+        "cost_today_usd": cost_today,
+        "daily_budget_usd": budget,
+        "budget_used_pct": used_pct,
+        "budget_remaining_usd": max(0.0, round(budget - cost_today, 4)),
+        "is_budget_exceeded": token_tracker.is_daily_budget_exceeded(db=db),
+        "rollups_by_provider": token_tracker.get_rollups_by_provider(db=db),
+        "rollups_by_video": token_tracker.get_rollups_by_video(db=db, limit=10),
+        "daily_rollups": token_tracker.get_daily_rollups(days=7, db=db),
     }
 
 
@@ -419,6 +447,7 @@ def evaluate_system_thresholds_and_alert(db: Session, wait: bool = False) -> Dic
     - Disk usage >= 80%
     - Quota remaining <= 20%
     - Channels marked needs_reauth
+    - LLM daily budget exceeded
     """
     alerts_fired: List[str] = []
 
@@ -459,6 +488,23 @@ def evaluate_system_thresholds_and_alert(db: Session, wait: bool = False) -> Dic
             )
             if sent:
                 alerts_fired.append(f"channel_needs_reauth:{ch['channel_id']}")
+
+    # 4. LLM Daily Budget Check
+    cost_info = get_llm_cost_visibility(db)
+    if cost_info["is_budget_exceeded"]:
+        sent = pipeline_alerter.alert(
+            title=f"LLM Daily Budget Exceeded (${cost_info['cost_today_usd']:.4f} / ${cost_info['daily_budget_usd']:.2f})",
+            message=f"LLM spend today reached ${cost_info['cost_today_usd']:.4f}, exceeding the daily budget ceiling of ${cost_info['daily_budget_usd']:.2f}.",
+            level="WARNING",
+            context={
+                "alert_type": "llm_budget_exceeded",
+                "cost_today_usd": cost_info["cost_today_usd"],
+                "daily_budget_usd": cost_info["daily_budget_usd"],
+            },
+            wait=wait,
+        )
+        if sent:
+            alerts_fired.append("llm_budget_exceeded")
 
     return {
         "alerts_checked_at": datetime.utcnow().isoformat(),
