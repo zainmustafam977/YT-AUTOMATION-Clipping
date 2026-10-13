@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 STAGE_FINISHED = "stage.finished"
 STAGE_FAILED = "stage.failed"
 STAGE_QUARANTINED = "stage.quarantined"
+JOB_RECONCILED = "job.reconciled"
 VIDEO_INGESTED = "video.ingested"
 CLIP_APPROVED = "clip.approved"
 CLIP_PUBLISHED = "clip.published"

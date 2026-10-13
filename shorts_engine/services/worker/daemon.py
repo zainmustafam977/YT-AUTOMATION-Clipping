@@ -517,11 +517,26 @@ class WorkerDaemon:
             self.worker_id, self.pinned_groups or "all", self.stage_concurrency_limits, self.poll_interval_sec,
         )
 
+        # Startup reconciliation sweep: heal stale leases & downstream orphans
+        try:
+            durable_job_queue.reconcile_orphaned_jobs()
+        except Exception as e:
+            logger.warning("Startup reconciliation sweep failed: %s", e)
+
+        idle_ticks = 0
         try:
             while not self.shutdown_requested:
                 job = self.run_once()
                 if not job:
+                    idle_ticks += 1
+                    if idle_ticks % 10 == 0:
+                        try:
+                            durable_job_queue.reconcile_orphaned_jobs()
+                        except Exception as e:
+                            logger.debug("Idle reconciliation check failed: %s", e)
                     self._stop_event.wait(timeout=self.poll_interval_sec)
+                else:
+                    idle_ticks = 0
         finally:
             logger.info("Worker daemon %s shutting down cleanly.", self.worker_id)
             self.release_sqlite_lock()

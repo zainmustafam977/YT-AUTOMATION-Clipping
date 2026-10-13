@@ -110,6 +110,9 @@ storage/config/**
 storage/backups/**
 !storage/backups/.gitkeep
 
+storage/crops/**
+!storage/crops/.gitkeep
+
 # Root/Global logs
 *.log
 /logs/

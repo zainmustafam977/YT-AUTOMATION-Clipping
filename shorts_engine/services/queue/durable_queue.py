@@ -22,6 +22,45 @@ from shorts_engine.services.events.models import PlatformEvent
 logger = logging.getLogger(__name__)
 
 
+# Single Table of Truth for Stage Aliases & Canonical Mapping
+CANONICAL_STAGE_MAP: Dict[str, str] = {
+    "download": "ingest",
+    "ingest": "ingest",
+    "transcribe": "transcribe",
+    "analyze_candidates": "select",
+    "select": "select",
+    "crop_plan": "reframe",
+    "reframe": "reframe",
+    "caption": "captions",
+    "captions": "captions",
+    "render": "render",
+    "publish": "publish",
+    "metadata_update": "metadata_update",
+    "daily_health": "daily_health",
+    "analytics_poll": "analytics_poll",
+    "daily_cleanup": "daily_cleanup",
+    "cleanup": "cleanup",
+}
+
+STAGE_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "ingest": ("ingest", "download"),
+    "transcribe": ("transcribe",),
+    "select": ("select", "analyze_candidates"),
+    "reframe": ("reframe", "crop_plan"),
+    "captions": ("captions", "caption"),
+    "render": ("render",),
+    "publish": ("publish",),
+}
+
+
+def canonicalize_stage_name(stage: Optional[str]) -> str:
+    """Normalizes any stage alias or raw name into its canonical identifier."""
+    if not stage:
+        return "unknown"
+    s = stage.strip().lower()
+    return CANONICAL_STAGE_MAP.get(s, s)
+
+
 class DurableJobQueue:
     """
     Production-grade durable job queue backed by SQLite / PostgreSQL.
@@ -30,6 +69,7 @@ class DurableJobQueue:
 
     def __init__(self, session_factory=SessionLocal):
         self.session_factory = session_factory
+        self.reconciled_jobs_count: int = 0
 
     def _get_session(self, db: Optional[Session] = None) -> Tuple[Session, bool]:
         if db is not None:
@@ -512,7 +552,377 @@ class DurableJobQueue:
                     self.fail_job(job.id, f"Worker lease expired (inactive > {stale_timeout_sec}s)", db=session)
                     reclaimed_count += 1
 
+            # Sweep downstream orphans
+            try:
+                self.reconcile_downstream_orphans(db=session)
+            except Exception as sweep_err:
+                logger.warning("Downstream orphan reconciliation sweep failed: %s", sweep_err)
+
             return reclaimed_count
+        finally:
+            if should_close:
+                session.close()
+
+    def _emit_reconciled_event(
+        self,
+        job: PipelineJob,
+        downstream_stage: str,
+        upstream_stage: str,
+        session: Session,
+    ) -> None:
+        """Emits job.reconciled event via taxonomy platform event emitter with provided db session."""
+        try:
+            from shorts_engine.services.events.taxonomy import emit_platform_event, JOB_RECONCILED
+            emit_platform_event(
+                event_name=JOB_RECONCILED,
+                payload={
+                    "job_id": job.id,
+                    "stage": downstream_stage,
+                    "entity_id": job.entity_id,
+                    "upstream_stage": upstream_stage,
+                },
+                entity_id=job.id,
+                entity_type="pipeline_job",
+                level="INFO",
+                title=f"Downstream Job Reconciled: {downstream_stage}",
+                message=f"Reconciled missing downstream {downstream_stage} job for {job.entity_id} following {upstream_stage}.",
+                db=session,
+            )
+        except Exception as e:
+            logger.debug("Failed emitting job.reconciled event: %s", e)
+
+    def reconcile_downstream_orphans(
+        self,
+        window_days: int = 7,
+        db: Optional[Session] = None,
+    ) -> int:
+        """
+        Sweeps completed jobs in non-terminal entities to reconcile missing downstream jobs.
+        Guarantees self-healing across worker crashes, power loss, and concurrent join races.
+        """
+        from shorts_engine.db.models import (
+            SourceVideo,
+            SourceVideoStatus,
+            ClipCandidate,
+            Clip,
+            ClipStatus,
+        )
+
+        TERMINAL_VIDEO_STATUSES = {
+            SourceVideoStatus.DONE,
+            SourceVideoStatus.FAILED,
+            SourceVideoStatus.PURGED,
+            SourceVideoStatus.POLICY_RESTRICTED,
+            SourceVideoStatus.PENDING_POLICY_REVIEW,
+        }
+
+        TERMINAL_CLIP_STATUSES = {
+            ClipStatus.REJECTED,
+            ClipStatus.PURGED,
+            ClipStatus.FAILED,
+            ClipStatus.FAILED_NEEDS_REVIEW,
+            ClipStatus.WAITING_APPROVAL,
+            ClipStatus.APPROVED,
+            ClipStatus.SCHEDULED,
+            ClipStatus.PUBLISHING,
+            ClipStatus.PUBLISHED,
+        }
+
+        session, should_close = self._get_session(db)
+        reconciled_count = 0
+        cutoff = datetime.utcnow() - timedelta(days=window_days)
+
+        try:
+            done_jobs = (
+                session.query(PipelineJob)
+                .filter(
+                    PipelineJob.status == PipelineJobStatus.DONE,
+                    or_(PipelineJob.completed_at >= cutoff, PipelineJob.completed_at.is_(None)),
+                )
+                .order_by(PipelineJob.completed_at.asc())
+                .all()
+            )
+
+            seen_transitions: set = set()
+
+            for job in done_jobs:
+                canonical_stage = canonicalize_stage_name(job.stage)
+                transition_key = (job.entity_id, canonical_stage)
+                if transition_key in seen_transitions:
+                    continue
+                seen_transitions.add(transition_key)
+
+                # --- 1. Ingest -> Transcribe ---
+                if canonical_stage == "ingest":
+                    video = (
+                        session.query(SourceVideo)
+                        .filter(
+                            or_(
+                                SourceVideo.youtube_video_id == job.entity_id,
+                                SourceVideo.id == job.entity_id,
+                            )
+                        )
+                        .first()
+                    )
+                    if not video or video.status in TERMINAL_VIDEO_STATUSES:
+                        continue
+
+                    transcribe_job = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.entity_id == job.entity_id,
+                            PipelineJob.stage.in_(STAGE_ALIASES["transcribe"]),
+                        )
+                        .first()
+                    )
+                    if not transcribe_job:
+                        payload = {}
+                        if job.payload_json:
+                            try:
+                                payload = json.loads(job.payload_json)
+                            except Exception:
+                                pass
+                        if "file_path" not in payload and video.downloaded_path:
+                            payload["file_path"] = str(video.downloaded_path)
+                        try:
+                            new_job = self.enqueue(
+                                job_type="transcribe",
+                                entity_id=job.entity_id,
+                                entity_type="source_video",
+                                stage="transcribe",
+                                payload=payload,
+                                db=session,
+                            )
+                            reconciled_count += 1
+                            self.reconciled_jobs_count += 1
+                            self._emit_reconciled_event(new_job, "transcribe", "ingest", session)
+                        except IntegrityError:
+                            session.rollback()
+
+                # --- 2. Transcribe -> Select ---
+                elif canonical_stage == "transcribe":
+                    video = (
+                        session.query(SourceVideo)
+                        .filter(
+                            or_(
+                                SourceVideo.youtube_video_id == job.entity_id,
+                                SourceVideo.id == job.entity_id,
+                            )
+                        )
+                        .first()
+                    )
+                    if not video or video.status in TERMINAL_VIDEO_STATUSES:
+                        continue
+
+                    select_job = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.entity_id == job.entity_id,
+                            PipelineJob.stage.in_(STAGE_ALIASES["select"]),
+                        )
+                        .first()
+                    )
+                    if not select_job:
+                        payload = {}
+                        if job.payload_json:
+                            try:
+                                payload = json.loads(job.payload_json)
+                            except Exception:
+                                pass
+                        try:
+                            new_job = self.enqueue(
+                                job_type="select",
+                                entity_id=job.entity_id,
+                                entity_type="source_video",
+                                stage="select",
+                                payload=payload,
+                                db=session,
+                            )
+                            reconciled_count += 1
+                            self.reconciled_jobs_count += 1
+                            self._emit_reconciled_event(new_job, "select", "transcribe", session)
+                        except IntegrityError:
+                            session.rollback()
+
+                # --- 3. Select -> Reframe & Captions Fan-Out ---
+                elif canonical_stage == "select":
+                    video = (
+                        session.query(SourceVideo)
+                        .filter(
+                            or_(
+                                SourceVideo.youtube_video_id == job.entity_id,
+                                SourceVideo.id == job.entity_id,
+                            )
+                        )
+                        .first()
+                    )
+                    if not video or video.status in TERMINAL_VIDEO_STATUSES:
+                        continue
+
+                    clips = (
+                        session.query(Clip)
+                        .join(ClipCandidate, Clip.clip_candidate_id == ClipCandidate.id)
+                        .filter(ClipCandidate.source_video_id == video.id)
+                        .all()
+                    )
+                    for clip in clips:
+                        if clip.status in TERMINAL_CLIP_STATUSES:
+                            continue
+
+                        reframe_job = (
+                            session.query(PipelineJob)
+                            .filter(
+                                PipelineJob.entity_id == clip.id,
+                                PipelineJob.stage.in_(STAGE_ALIASES["reframe"]),
+                            )
+                            .first()
+                        )
+                        if not reframe_job:
+                            try:
+                                new_job = self.enqueue(
+                                    job_type="reframe",
+                                    entity_id=clip.id,
+                                    entity_type="clip",
+                                    stage="reframe",
+                                    payload={"clip_id": clip.id, "video_id": video.youtube_video_id},
+                                    db=session,
+                                )
+                                reconciled_count += 1
+                                self.reconciled_jobs_count += 1
+                                self._emit_reconciled_event(new_job, "reframe", "select", session)
+                            except IntegrityError:
+                                session.rollback()
+
+                        captions_job = (
+                            session.query(PipelineJob)
+                            .filter(
+                                PipelineJob.entity_id == clip.id,
+                                PipelineJob.stage.in_(STAGE_ALIASES["captions"]),
+                            )
+                            .first()
+                        )
+                        if not captions_job:
+                            try:
+                                new_job = self.enqueue(
+                                    job_type="captions",
+                                    entity_id=clip.id,
+                                    entity_type="clip",
+                                    stage="captions",
+                                    payload={"clip_id": clip.id, "video_id": video.youtube_video_id},
+                                    db=session,
+                                )
+                                reconciled_count += 1
+                                self.reconciled_jobs_count += 1
+                                self._emit_reconciled_event(new_job, "captions", "select", session)
+                            except IntegrityError:
+                                session.rollback()
+
+                # --- 4. Reframe / Captions Dual-Dependency Join -> Render ---
+                elif canonical_stage in ("reframe", "captions"):
+                    clip_id = job.entity_id
+                    clip = session.query(Clip).filter_by(id=clip_id).first()
+                    if not clip or clip.status in TERMINAL_CLIP_STATUSES:
+                        continue
+
+                    if clip.clip_candidate and clip.clip_candidate.source_video:
+                        if clip.clip_candidate.source_video.status in TERMINAL_VIDEO_STATUSES:
+                            continue
+
+                    reframe_jobs = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.entity_id == clip_id,
+                            PipelineJob.stage.in_(STAGE_ALIASES["reframe"]),
+                        )
+                        .all()
+                    )
+                    captions_jobs = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.entity_id == clip_id,
+                            PipelineJob.stage.in_(STAGE_ALIASES["captions"]),
+                        )
+                        .all()
+                    )
+
+                    video_id = None
+                    if clip.clip_candidate and clip.clip_candidate.source_video:
+                        video_id = clip.clip_candidate.source_video.youtube_video_id
+
+                    # T5: Partial fanout recovery if sibling was completely missing
+                    if not reframe_jobs:
+                        try:
+                            new_job = self.enqueue(
+                                job_type="reframe",
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                stage="reframe",
+                                payload={"clip_id": clip.id, "video_id": video_id},
+                                db=session,
+                            )
+                            reconciled_count += 1
+                            self.reconciled_jobs_count += 1
+                            self._emit_reconciled_event(new_job, "reframe", "partial_fanout", session)
+                        except IntegrityError:
+                            session.rollback()
+                        continue
+
+                    if not captions_jobs:
+                        try:
+                            new_job = self.enqueue(
+                                job_type="captions",
+                                entity_id=clip.id,
+                                entity_type="clip",
+                                stage="captions",
+                                payload={"clip_id": clip.id, "video_id": video_id},
+                                db=session,
+                            )
+                            reconciled_count += 1
+                            self.reconciled_jobs_count += 1
+                            self._emit_reconciled_event(new_job, "captions", "partial_fanout", session)
+                        except IntegrityError:
+                            session.rollback()
+                        continue
+
+                    # A3: DONE-ONLY SATISFACTION:
+                    reframe_done = any(j.status == PipelineJobStatus.DONE for j in reframe_jobs)
+                    captions_done = any(j.status == PipelineJobStatus.DONE for j in captions_jobs)
+
+                    reframe_has_bad = any(
+                        j.status in (PipelineJobStatus.FAILED, PipelineJobStatus.DEAD_LETTER, PipelineJobStatus.QUARANTINED)
+                        for j in reframe_jobs
+                    )
+                    captions_has_bad = any(
+                        j.status in (PipelineJobStatus.FAILED, PipelineJobStatus.DEAD_LETTER, PipelineJobStatus.QUARANTINED)
+                        for j in captions_jobs
+                    )
+
+                    if reframe_done and captions_done and not reframe_has_bad and not captions_has_bad:
+                        render_job = (
+                            session.query(PipelineJob)
+                            .filter(
+                                PipelineJob.entity_id == clip_id,
+                                PipelineJob.stage.in_(STAGE_ALIASES["render"]),
+                            )
+                            .first()
+                        )
+                        if not render_job:
+                            try:
+                                new_job = self.enqueue(
+                                    job_type="render",
+                                    entity_id=clip_id,
+                                    entity_type="clip",
+                                    stage="render",
+                                    payload={"clip_id": clip.id, "video_id": video_id},
+                                    db=session,
+                                )
+                                reconciled_count += 1
+                                self.reconciled_jobs_count += 1
+                                self._emit_reconciled_event(new_job, "render", "reframe+captions", session)
+                            except IntegrityError:
+                                session.rollback()
+
+            return reconciled_count
         finally:
             if should_close:
                 session.close()
