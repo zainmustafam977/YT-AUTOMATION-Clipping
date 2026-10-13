@@ -87,10 +87,12 @@ class DurableJobQueue:
         next_run_at: Optional[datetime] = None,
         db: Optional[Session] = None,
         stage: Optional[str] = None,
+        commit: bool = True,
     ) -> PipelineJob:
         """
         Enqueues a new job or returns the existing job for the same (entity_id, stage).
         Idempotent and deduplicated at both application and unique constraint level.
+        Supports commit=False for enclosing callers managing multi-operation atomic transactions.
         """
         session, should_close = self._get_session(db)
         known_stages = {
@@ -146,22 +148,26 @@ class DurableJobQueue:
                 next_run_at=next_run_at,
             )
             session.add(job)
-            try:
-                session.commit()
-                session.refresh(job)
-            except IntegrityError:
-                session.rollback()
-                conflict_job = (
-                    session.query(PipelineJob)
-                    .filter(
-                        PipelineJob.entity_id == entity_id,
-                        PipelineJob.stage == eff_stage,
+            if commit:
+                try:
+                    session.commit()
+                    session.refresh(job)
+                except IntegrityError:
+                    session.rollback()
+                    conflict_job = (
+                        session.query(PipelineJob)
+                        .filter(
+                            PipelineJob.entity_id == entity_id,
+                            PipelineJob.stage == eff_stage,
+                        )
+                        .first()
                     )
-                    .first()
-                )
-                if conflict_job:
-                    return conflict_job
-                raise
+                    if conflict_job:
+                        return conflict_job
+                    raise
+            else:
+                session.flush()
+                session.refresh(job)
 
             logger.info("Enqueued %s job %s (stage=%s) for entity %s", job_type, job.id, eff_stage, entity_id)
 

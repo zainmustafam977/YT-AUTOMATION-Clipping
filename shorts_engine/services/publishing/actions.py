@@ -28,20 +28,24 @@ def approve_clip_for_publishing(
     clip_id: str,
     db: Session,
     actor: str = "operator",
-    publish_inline: bool = True,
+    publish_inline: bool = False,
 ) -> Dict[str, Any]:
     """
-    Atomically approves a clip for publishing.
+    Atomically approves a clip for publishing in an enqueue-only workflow (W3-2).
     
-    Guarantees:
-    - Status-guarded update prevents double-approval across concurrent requests.
-    - Idempotent and race-safe.
-    - Channel resolved and vacant slot allocated atomically.
-    - If publish_inline=True: executes native publishAt upload. On failure, releases
-      the slot and marks clip FAILED_NEEDS_REVIEW.
-    - If publish_inline=False: schedules clip, allocates slot, and enqueues to durable queue
-      without blocking the HTTP thread with synchronous upload calls.
-    - Emits CLIP_APPROVED platform telemetry event on all success paths.
+    Scheduling Semantics (A2):
+    Moves from upload-now-private-publishAt to upload-at-slot-time.
+    Rationale:
+    1. Quota pacing across days: YouTube Data API v3 imposes daily write quota (1,600 units/insert).
+       Uploading at slot time paces API consumption across multiple daily quota resets rather than
+       exhausting quota in burst approval sessions.
+    2. Spreads bulk approvals cleanly across calendar slots without holding HTTP connections open.
+    3. Guarantees zero in-request WAN uploads, eliminating HTTP timeout vulnerabilities.
+    
+    Transaction Atomicity (A3):
+    Clip status update + slot allocation + publish job creation are committed in a
+    SINGLE atomic database transaction. Any exception before final commit rolls back all
+    mutations, leaving the clip in its initial status (no slot without job, no APPROVED without slot).
     """
     clip = db.query(Clip).filter_by(id=clip_id).first()
     if not clip:
@@ -52,7 +56,7 @@ def approve_clip_for_publishing(
             "error_type": "NOT_FOUND",
         }
 
-    # 1. Status-guarded atomic transition
+    # 1. Status-guarded atomic check
     allowed_statuses = [
         ClipStatus.WAITING_APPROVAL,
         ClipStatus.FAILED,
@@ -67,26 +71,6 @@ def approve_clip_for_publishing(
             "error_type": "CONFLICT",
         }
 
-    row_count = (
-        db.query(Clip)
-        .filter(
-            Clip.id == clip_id,
-            Clip.status.in_(allowed_statuses),
-        )
-        .update({Clip.status: ClipStatus.APPROVED}, synchronize_session=False)
-    )
-    if row_count == 0:
-        db.refresh(clip)
-        return {
-            "clip_id": clip_id,
-            "ok": False,
-            "status": clip.status.value,
-            "error": "Clip status changed concurrently",
-            "error_type": "CONFLICT",
-        }
-    db.commit()
-    db.refresh(clip)
-
     # 2. Resolve Channel
     cand = clip.candidate
     channel = (
@@ -95,11 +79,6 @@ def approve_clip_for_publishing(
         else db.query(Channel).first()
     )
     if not channel:
-        # Revert status
-        db.query(Clip).filter_by(id=clip_id).update(
-            {Clip.status: ClipStatus.WAITING_APPROVAL}, synchronize_session=False
-        )
-        db.commit()
         return {
             "clip_id": clip_id,
             "ok": False,
@@ -107,72 +86,22 @@ def approve_clip_for_publishing(
             "error_type": "NO_CHANNEL",
         }
 
-    # 3. Atomic Slot Allocation
+    # 3. Single Atomic Transaction: Status update + Slot allocation + Publish job enqueue
     try:
+        # Atomic slot allocation (staged, uncommitted)
         slot = publish_slot_service.allocate_slot(
             channel_id=channel.id,
             clip_id=clip.id,
             db=db,
+            commit=False,
         )
-    except Exception as slot_err:
-        logger.warning("Slot allocation failed for clip %s: %s", clip_id, slot_err)
-        db.query(Clip).filter_by(id=clip_id).update(
-            {Clip.status: ClipStatus.WAITING_APPROVAL}, synchronize_session=False
-        )
-        db.commit()
-        return {
-            "clip_id": clip_id,
-            "ok": False,
-            "error": f"Slot allocation failed: {slot_err}",
-            "error_type": "SLOT_ALLOCATION_FAILED",
-        }
 
-    # 4. Publication Path
-    if publish_inline:
-        # Single approve path: immediate native publishAt upload
-        pub_res = publish_slot_service.publish_slot_now(slot=slot, clip=clip, db=db)
-
-        if not pub_res.get("success"):
-            # On publish failure: release the slot and move clip to FAILED_NEEDS_REVIEW
-            logger.warning(
-                "Inline publishing failed for clip %s (%s). Releasing slot and marking FAILED_NEEDS_REVIEW.",
-                clip_id,
-                pub_res.get("reason"),
-            )
-            slot.status = PublishSlotStatus.CANCELLED.value
-            clip.status = ClipStatus.FAILED_NEEDS_REVIEW
-            db.commit()
-            return {
-                "clip_id": clip_id,
-                "ok": False,
-                "status": ClipStatus.FAILED_NEEDS_REVIEW.value,
-                "error": pub_res.get("reason") or "Publishing failed",
-                "error_type": pub_res.get("error_type", "PUBLISH_FAILED"),
-                "slot_id": slot.id,
-            }
-
-        # Success inline
-        clip.scheduled_publish_at = slot.slot_start
-        db.commit()
-
-        _emit_approval_event(clip, slot, actor, pub_res, db)
-        return {
-            "clip_id": clip_id,
-            "ok": True,
-            "status": clip.status.value,
-            "slot_id": slot.id,
-            "slot_start": slot.slot_start.isoformat(),
-            "youtube_video_id": pub_res.get("youtube_video_id"),
-            "pub_result": pub_res,
-        }
-
-    else:
-        # Bulk approve path: do NOT publish synchronously inline.
-        # Mark scheduled and hand off to durable queue for worker processing.
-        clip.scheduled_publish_at = slot.slot_start
+        # Mutate clip and slot state
         clip.status = ClipStatus.APPROVED
+        clip.scheduled_publish_at = slot.slot_start
         slot.status = PublishSlotStatus.RESERVED.value
 
+        # Enqueue durable publish job bound to slot (staged, uncommitted)
         job = durable_job_queue.enqueue(
             job_type="publish",
             entity_id=clip.id,
@@ -185,25 +114,39 @@ def approve_clip_for_publishing(
                 "scheduled_at": slot.slot_start.isoformat(),
             },
             db=db,
+            commit=False,
         )
-        db.commit()
 
-        _emit_approval_event(
-            clip,
-            slot,
-            actor,
-            {"status": "QUEUED", "job_id": job.id if job else None},
-            db,
-        )
+        # Single atomic commit for clip + slot + job
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Atomic approval transaction failed for clip %s: %s", clip_id, exc)
         return {
             "clip_id": clip_id,
-            "ok": True,
-            "status": clip.status.value,
-            "slot_id": slot.id,
-            "slot_start": slot.slot_start.isoformat(),
-            "enqueued": True,
-            "job_id": job.id if job else None,
+            "ok": False,
+            "error": f"Slot allocation failed: {exc}",
+            "error_type": "SLOT_ALLOCATION_FAILED",
         }
+
+    # 4. Telemetry event emission
+    _emit_approval_event(
+        clip,
+        slot,
+        actor,
+        {"status": "QUEUED", "job_id": job.id if job else None},
+        db,
+    )
+
+    return {
+        "clip_id": clip_id,
+        "ok": True,
+        "status": clip.status.value,
+        "slot_id": slot.id,
+        "slot_start": slot.slot_start.isoformat(),
+        "job_id": job.id if job else None,
+        "enqueued": True,
+    }
 
 
 def reject_clip_action(

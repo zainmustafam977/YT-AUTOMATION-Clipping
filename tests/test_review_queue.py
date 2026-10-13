@@ -31,7 +31,16 @@ from shorts_engine.db.models import (
     ClipStatus,
     User,
     UserRole,
+    PublishSlot,
+    PublishLog,
+    PipelineJob,
+    PipelineJobStatus,
+    EventLog,
 )
+from shorts_engine.config.settings import settings
+from shorts_engine.services.queue.durable_queue import durable_job_queue
+from shorts_engine.services.worker.daemon import WorkerDaemon
+from shorts_engine.services.publishing.worker import YouTubePublishWorker
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.routes import status as status_route
 from shorts_engine.dashboard.routes import queue as queue_route
@@ -141,6 +150,12 @@ def _seed_clip(db, video, clip_id, status=ClipStatus.WAITING_APPROVAL, queued_de
 # ── 1. Isolated Single Approval & Inline Publish ─────────────────────────────
 
 def test_approve_clip_single_inline_success(test_env):
+    """
+    Cluster-C regression test updated for W3-2:
+    Single approval is enqueue-only (no inline synchronous publish).
+    Allocates slot atomically with commit=False, enqueues publish job with commit=False,
+    and commits in one single atomic database transaction.
+    """
     _, db, _, _ = test_env
     channel, video = _seed_channel_and_video(db, "vid_approve_1")
     clip = _seed_clip(db, video, "clip-app-01")
@@ -149,21 +164,39 @@ def test_approve_clip_single_inline_success(test_env):
     mock_slot.id = "slot-test-01"
     mock_slot.slot_start = datetime.utcnow() + timedelta(hours=2)
 
+    mock_job = MagicMock()
+    mock_job.id = "job-publish-01"
+
     with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot) as mock_alloc, \
-         patch("shorts_engine.services.publishing.actions.publish_slot_service.publish_slot_now", return_value={"success": True, "youtube_video_id": "yt_123"}) as mock_pub, \
+         patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue", return_value=mock_job) as mock_enqueue, \
          patch("shorts_engine.services.publishing.actions.emit_platform_event") as mock_telem:
 
-        result = approve_clip_for_publishing(clip.id, db=db, actor="operator_reviewer", publish_inline=True)
+        result = approve_clip_for_publishing(clip.id, db=db, actor="operator_reviewer")
 
         assert result["ok"] is True
         assert result["slot_id"] == "slot-test-01"
-        assert result["youtube_video_id"] == "yt_123"
-        mock_alloc.assert_called_once_with(channel_id=channel.id, clip_id=clip.id, db=db)
-        mock_pub.assert_called_once_with(slot=mock_slot, clip=clip, db=db)
+        assert result["job_id"] == "job-publish-01"
+        assert result["enqueued"] is True
+        mock_alloc.assert_called_once_with(channel_id=channel.id, clip_id=clip.id, db=db, commit=False)
+        mock_enqueue.assert_called_once_with(
+            job_type="publish",
+            entity_id=clip.id,
+            entity_type="clip",
+            stage="publish",
+            next_run_at=mock_slot.slot_start,
+            payload={
+                "clip_id": clip.id,
+                "slot_id": mock_slot.id,
+                "scheduled_at": mock_slot.slot_start.isoformat(),
+            },
+            db=db,
+            commit=False,
+        )
         mock_telem.assert_called_once()
 
         db.refresh(clip)
         assert clip.status == ClipStatus.APPROVED
+        assert clip.scheduled_publish_at == mock_slot.slot_start
 
 
 # ── 2. Race Safety & Double-Approve Prevention ───────────────────────────────
@@ -177,16 +210,19 @@ def test_approve_clip_race_condition_guard(test_env):
     mock_slot.id = "slot-test-race"
     mock_slot.slot_start = datetime.utcnow() + timedelta(hours=3)
 
+    mock_job = MagicMock()
+    mock_job.id = "job-publish-race"
+
     with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot), \
-         patch("shorts_engine.services.publishing.actions.publish_slot_service.publish_slot_now", return_value={"success": True, "youtube_video_id": "yt_race"}), \
+         patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue", return_value=mock_job), \
          patch("shorts_engine.services.publishing.actions.emit_platform_event"):
 
         # First call succeeds
-        res1 = approve_clip_for_publishing(clip.id, db=db, actor="operator_1", publish_inline=True)
+        res1 = approve_clip_for_publishing(clip.id, db=db, actor="operator_1")
         assert res1["ok"] is True
 
         # Second concurrent or duplicate call must be rejected atomically
-        res2 = approve_clip_for_publishing(clip.id, db=db, actor="operator_2", publish_inline=True)
+        res2 = approve_clip_for_publishing(clip.id, db=db, actor="operator_2")
         assert res2["ok"] is False
         assert res2["error_type"] == "CONFLICT"
         assert "not reviewable" in res2["error"]
@@ -195,25 +231,27 @@ def test_approve_clip_race_condition_guard(test_env):
 # ── 3. Failure Rollback to FAILED_NEEDS_REVIEW ──────────────────────────────
 
 def test_approve_clip_failure_rollback(test_env):
+    """
+    A3: Failure rollback in atomic approval transaction.
+    If slot allocation or job enqueuing fails, the entire transaction rolls back:
+    clip status remains UNCHANGED (WAITING_APPROVAL), scheduled_publish_at is None.
+    """
     _, db, _, _ = test_env
     channel, video = _seed_channel_and_video(db, "vid_approve_fail")
-    clip = _seed_clip(db, video, "clip-app-fail")
+    clip = _seed_clip(db, video, "clip-app-fail", status=ClipStatus.WAITING_APPROVAL)
 
-    mock_slot = MagicMock()
-    mock_slot.id = "slot-fail-01"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=1)
-
-    with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot), \
-         patch("shorts_engine.services.publishing.actions.publish_slot_service.publish_slot_now", return_value={"success": False, "reason": "Simulated quota cap exceeded", "error_type": "PUBLISH_FAILED"}), \
+    with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", side_effect=RuntimeError("Simulated allocation conflict")), \
          patch("shorts_engine.services.publishing.actions.emit_platform_event"):
 
-        result = approve_clip_for_publishing(clip.id, db=db, actor="operator_reviewer", publish_inline=True)
+        result = approve_clip_for_publishing(clip.id, db=db, actor="operator_reviewer")
 
         assert result["ok"] is False
-        assert result["error_type"] == "PUBLISH_FAILED"
+        assert result["error_type"] == "SLOT_ALLOCATION_FAILED"
 
         db.refresh(clip)
-        assert clip.status == ClipStatus.FAILED_NEEDS_REVIEW
+        # Atomic rollback verification: clip status must be completely untouched
+        assert clip.status == ClipStatus.WAITING_APPROVAL
+        assert clip.scheduled_publish_at is None
 
 
 # ── 4. Bulk Approve: 20 Clips Without Synchronous Inline Publishing ──────────
@@ -231,9 +269,11 @@ def test_bulk_approve_allocates_slots_and_enqueues_background_jobs(test_env):
     mock_slot.id = "slot-bulk-test"
     mock_slot.slot_start = datetime.utcnow() + timedelta(hours=4)
 
+    mock_job = MagicMock()
+    mock_job.id = "job-bulk-test"
+
     with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot) as mock_alloc, \
-         patch("shorts_engine.services.publishing.actions.publish_slot_service.publish_slot_now") as mock_inline_pub, \
-         patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue") as mock_enqueue, \
+         patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue", return_value=mock_job) as mock_enqueue, \
          patch("shorts_engine.services.publishing.actions.emit_platform_event"):
 
         res = bulk_approve_clips(clip_ids, db=db, actor="bulk_operator")
@@ -243,15 +283,13 @@ def test_bulk_approve_allocates_slots_and_enqueues_background_jobs(test_env):
         assert res["failed"] == 0
         assert len(res["results"]) == 20
 
-        # CRITICAL: Bulk approval must NEVER publish inline!
-        assert mock_inline_pub.call_count == 0
-
         # Must allocate slots and enqueue 20 durable queue background jobs
         assert mock_alloc.call_count == 20
         assert mock_enqueue.call_count == 20
         for item in res["results"]:
             assert item["ok"] is True
             assert item["slot_start"] is not None
+            assert item["enqueued"] is True
 
 
 # ── 5. Bulk Approve: Partial Failure Resilience ──────────────────────────────
@@ -446,3 +484,188 @@ def test_queue_bulk_action_route_json(test_env):
         assert data["total"] == 2
         assert data["succeeded"] == 2
         assert len(data["results"]) == 2
+
+
+# ── 11. W3-2 A1: Claim Predicate Filters next_run_at <= now() ─────────────────
+
+def test_durable_queue_claim_predicate_next_run_at(test_env):
+    """
+    W3-2 A1 Load-Bearing Assumption Verification:
+    Asserts that durable_queue.claim_next_job strictly filters:
+    or_(next_run_at.is_(None), next_run_at <= now()).
+    - A job with next_run_at 1 hour in the future is NOT claimed.
+    - A job with next_run_at in the past IS claimed.
+    """
+    _, db, _, TestSession = test_env
+    channel, video = _seed_channel_and_video(db, "vid_claim_pred")
+    clip_fut = _seed_clip(db, video, "clip_fut_pred")
+    clip_past = _seed_clip(db, video, "clip_past_pred")
+
+    # Enqueue a future publish job (+1 hour)
+    fut_time = datetime.utcnow() + timedelta(hours=1)
+    job_fut = durable_job_queue.enqueue(
+        job_type="publish",
+        entity_id=clip_fut.id,
+        stage="publish",
+        next_run_at=fut_time,
+        payload={"clip_id": clip_fut.id},
+        db=db,
+    )
+
+    # durable_job_queue.claim_next_job must NOT claim future job
+    claimed_fut = durable_job_queue.claim_next_job(
+        worker_id="test_worker_1",
+        allowed_stages=["publish"],
+        db=db,
+    )
+    assert claimed_fut is None, "Future job was claimed before its next_run_at!"
+
+    # Enqueue a past publish job (-5 minutes)
+    past_time = datetime.utcnow() - timedelta(minutes=5)
+    job_past = durable_job_queue.enqueue(
+        job_type="publish",
+        entity_id=clip_past.id,
+        stage="publish",
+        next_run_at=past_time,
+        payload={"clip_id": clip_past.id},
+        db=db,
+    )
+
+    # claim_next_job must claim the past job
+    claimed_past = durable_job_queue.claim_next_job(
+        worker_id="test_worker_2",
+        allowed_stages=["publish"],
+        db=db,
+    )
+    assert claimed_past is not None
+    assert claimed_past.id == job_past.id
+
+
+# ── 12. W3-2 A3: Atomic Approval Enqueue Failure Rollback ─────────────────────
+
+def test_approve_clip_enqueue_failure_atomically_rolls_back(test_env):
+    """
+    W3-2 A3 Transaction Atomicity:
+    Clip status mutation, slot allocation, and queue job enqueuing are committed
+    in a single atomic transaction. If enqueue raises an error, all three operations
+    roll back: clip remains WAITING_APPROVAL, 0 slots created, 0 jobs created.
+    """
+    _, db, _, _ = test_env
+    channel, video = _seed_channel_and_video(db, "vid_atom_rollback")
+    clip = _seed_clip(db, video, "clip_atom_rollback", status=ClipStatus.WAITING_APPROVAL)
+
+    with patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue", side_effect=RuntimeError("Disk queue failure")):
+        res = approve_clip_for_publishing(clip.id, db=db, actor="reviewer_atom")
+
+    assert res["ok"] is False
+    assert res["error_type"] == "SLOT_ALLOCATION_FAILED"
+
+    db.refresh(clip)
+    assert clip.status == ClipStatus.WAITING_APPROVAL
+    assert clip.scheduled_publish_at is None
+
+    # Verify zero committed slots and zero committed pipeline jobs
+    slot_count = db.query(PublishSlot).filter_by(clip_id=clip.id).count()
+    assert slot_count == 0
+    job_count = db.query(PipelineJob).filter_by(entity_id=clip.id).count()
+    assert job_count == 0
+
+
+# ── 13. W3-2 A5: Full Leg Approval -> Enqueue -> Claim -> Dry-Run Publish ──────
+
+def test_e2e_approval_to_worker_claim_publish_leg(test_env):
+    """
+    W3-2 A5 Integration Test:
+    Full pipeline leg from operator approval -> atomic slot & job enqueue ->
+    WorkerDaemon claim & dry_run publish -> DONE + PublishLog + Events.
+    """
+    _, db, tmp_path, TestSession = test_env
+    channel, video = _seed_channel_and_video(db, "vid_e2e_full_leg")
+    clip = _seed_clip(db, video, "clip_e2e_full_leg", status=ClipStatus.WAITING_APPROVAL)
+
+    # Seed physical rendered file on disk (required by publish worker)
+    rendered_file = tmp_path / "rendered_clip_leg.mp4"
+    rendered_file.write_bytes(b"\x00" * 2048)
+    clip.rendered_path = str(rendered_file)
+    db.commit()
+
+    # Step 1: Operator approves clip (enqueue-only, no upload in-request)
+    res = approve_clip_for_publishing(clip.id, db=db, actor="test_operator")
+    assert res["ok"] is True
+    assert res["enqueued"] is True
+    assert res["slot_id"] is not None
+
+    db.refresh(clip)
+    assert clip.status == ClipStatus.APPROVED
+    assert clip.scheduled_publish_at is not None
+
+    # Step 2: Retrieve enqueued publish job and make next_run_at eligible for claim
+    job = db.query(PipelineJob).filter_by(entity_id=clip.id, stage="publish").first()
+    assert job is not None
+    assert job.status == PipelineJobStatus.PENDING
+
+    # Fast-forward next_run_at to simulate arrival of the scheduled publish slot
+    job.next_run_at = datetime.utcnow() - timedelta(seconds=1)
+    db.commit()
+
+    # Step 3: Worker daemon claims and processes the job in dry_run mode
+    with patch.object(settings, "DRY_RUN_PUBLISHING", True):
+        daemon = WorkerDaemon(session_factory=TestSession, pinned_groups=["publish"])
+        claimed_job = daemon.run_once()
+
+    assert claimed_job is not None
+    assert claimed_job.id == job.id
+
+    # Step 4: Verify post-execution states: job DONE, clip PUBLISHED, PublishLog, events
+    db.refresh(job)
+    assert job.status == PipelineJobStatus.DONE
+
+    db.refresh(clip)
+    assert clip.status == ClipStatus.PUBLISHED
+
+    p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
+    assert p_log is not None
+    assert p_log.status == "DRY_RUN"
+    assert p_log.youtube_video_id.startswith("dry_run_")
+
+    events = db.query(EventLog).filter(EventLog.entity_id == clip.id).all()
+    event_names = [e.event_name for e in events]
+    assert "clip.approved" in event_names
+    assert "clip.published" in event_names
+
+
+# ── 14. W3-2 A2: Worker Handles Past Slot & Emits job.late_publish Event ───────
+
+def test_worker_execute_publish_past_slot_emits_late_publish_event(test_env):
+    """
+    W3-2 A2 Scheduling Semantics:
+    When worker execution starts later than slot_start, the worker publishes
+    immediately without error and emits a job.late_publish event for observability.
+    """
+    _, db, tmp_path, _ = test_env
+    channel, video = _seed_channel_and_video(db, "vid_late_pub_event")
+    clip = _seed_clip(db, video, "clip_late_pub_event", status=ClipStatus.APPROVED)
+
+    rendered_file = tmp_path / "rendered_late.mp4"
+    rendered_file.write_bytes(b"\x00" * 1024)
+    clip.rendered_path = str(rendered_file)
+    db.commit()
+
+    past_time = datetime.utcnow() - timedelta(minutes=15)
+    worker = YouTubePublishWorker(dry_run=True)
+
+    result = worker.execute_publish_intent(
+        clip_id=clip.id,
+        payload={"scheduled_at": past_time.isoformat(), "dry_run": True},
+        db=db,
+    )
+
+    assert result["success"] is True
+    assert result["status"] == "PUBLISHED"
+
+    # Verify job.late_publish event emitted
+    late_ev = db.query(EventLog).filter_by(entity_id=clip.id, event_name="job.late_publish").first()
+    assert late_ev is not None
+    payload = late_ev.payload
+    assert "Publish execution started later than slot_start" in payload.get("message", "")
+    assert payload.get("delay_seconds", 0) > 0

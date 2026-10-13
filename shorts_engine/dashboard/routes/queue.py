@@ -686,7 +686,6 @@ def approve_clip(
         clip_id=clip_id,
         db=db,
         actor=current_user.username,
-        publish_inline=True,
     )
 
     if not res.get("ok"):
@@ -696,13 +695,12 @@ def approve_clip(
         if err_type == "CONFLICT":
             raise HTTPException(status_code=409, detail=res.get("error"))
         
-        # In-line publish error (moved to FAILED_NEEDS_REVIEW)
-        toast_msg = f"Upload error: {res.get('error')}. Clip moved to Needs Review."
+        toast_msg = f"Approval error: {res.get('error')}."
         msg_type = "danger"
     else:
         slot_iso = res.get("slot_start", "")
-        yt_id = res.get("youtube_video_id") or "scheduled"
-        toast_msg = f"Clip {clip_id[:8]} scheduled for {slot_iso[:16].replace('T', ' ')} UTC (YouTube ID: {yt_id})."
+        job_id = res.get("job_id") or "queued"
+        toast_msg = f"Clip {clip_id[:8]} approved and queued for publish at {slot_iso[:16].replace('T', ' ')} UTC (Job ID: {job_id})."
         msg_type = "success"
 
     if request.headers.get("hx-request") == "true":
@@ -732,7 +730,9 @@ def approve_clip(
         "clip_id": clip_id,
         "new_status": res.get("status", "APPROVED"),
         "slot_start": res.get("slot_start"),
-        "pub_result": res.get("pub_result"),
+        "slot_id": res.get("slot_id"),
+        "job_id": res.get("job_id"),
+        "enqueued": res.get("enqueued", True),
     }
 
 
@@ -1989,10 +1989,22 @@ def api_clip_action(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     if action == "approve":
-        res = approve_clip_for_publishing(clip_id, db=db, actor=current_user.username, publish_inline=True)
+        res = approve_clip_for_publishing(clip_id, db=db, actor=current_user.username)
         if not res.get("ok"):
+            err_type = res.get("error_type")
+            if err_type == "CONFLICT":
+                raise HTTPException(status_code=409, detail=res.get("error"))
             raise HTTPException(status_code=400, detail=res.get("error"))
-        return {"status": "success", "clip_id": clip_id, "action": action, "new_status": res.get("status", "APPROVED"), "res": res}
+        return {
+            "status": "accepted",
+            "clip_id": clip_id,
+            "action": action,
+            "new_status": res.get("status", "APPROVED"),
+            "job_id": res.get("job_id"),
+            "slot_id": res.get("slot_id"),
+            "slot_start": res.get("slot_start"),
+            "res": res,
+        }
     elif action == "reject":
         res = reject_clip_action(clip_id, db=db, actor=current_user.username)
         if not res.get("ok"):

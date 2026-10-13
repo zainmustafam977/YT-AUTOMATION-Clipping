@@ -60,6 +60,16 @@ class StageContext:
     attempt_count: int = 1
     heartbeat_callback: Optional[Callable[[], None]] = None
 
+    @property
+    def db(self) -> Session:
+        """Alias for db_session."""
+        return self.db_session
+
+    @property
+    def entity_id(self) -> Optional[str]:
+        """Resolves target entity ID from clip_id or video_id."""
+        return self.clip_id or self.video_id
+
     def heartbeat(self) -> None:
         """Invokes worker heartbeat to update locked_at / heartbeat_at."""
         if self.heartbeat_callback:

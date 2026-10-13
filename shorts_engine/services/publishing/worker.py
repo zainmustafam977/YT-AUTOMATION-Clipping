@@ -15,6 +15,15 @@ Enforces:
 - Ambiguous failure handling: embeds [c:<clip_id>] tag, checks channel recent uploads before retry.
 - Explicit selfDeclaredMadeForKids from configuration.
 - Dry-run simulation mode without quota consumption.
+
+W3-2 SCHEDULING SEMANTICS DECISION:
+This module consumes publish intents dispatched from the durable queue at slot time.
+Approval is enqueue-only (upload-at-slot-time) rather than in-request upload.
+Rationale:
+1. Quota Pacing: Daily YouTube API quotas are preserved and paced across days.
+2. Slot Distribution: Approval queues jobs with `next_run_at=slot_start`.
+3. If slot_start is already in the past at worker execution time, the worker publishes
+   immediately without error and emits a `job.late_publish` event for observability.
 """
 
 import os
@@ -690,6 +699,48 @@ class YouTubePublishWorker:
         privacy_status = payload.get("privacy_status") or clip.draft_privacy_status or "unlisted"
         category_id = str(payload.get("category_id") or clip.draft_category_id or "22")
 
+        # Resolve and validate scheduled slot time (supports ISO string and datetime)
+        sched_dt: Optional[datetime] = None
+        raw_sched = payload.get("scheduled_at") or clip.scheduled_publish_at
+        if isinstance(raw_sched, str):
+            try:
+                sched_dt = datetime.fromisoformat(raw_sched)
+            except Exception:
+                sched_dt = None
+        elif isinstance(raw_sched, datetime):
+            sched_dt = raw_sched
+
+        # If slot_start is already in the past at execution time, publish immediately
+        # without error and emit job.late_publish event for observability (W3-2 A2).
+        if sched_dt:
+            sched_naive = sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt
+            now_utc = datetime.utcnow()
+            if sched_naive <= now_utc:
+                logger.info(
+                    "Execution start for clip %s is later than scheduled slot (%s <= %s). Publishing immediately.",
+                    clip.id, sched_naive.isoformat(), now_utc.isoformat(),
+                )
+                try:
+                    from shorts_engine.services.events.taxonomy import emit_platform_event, JOB_LATE_PUBLISH
+                    emit_platform_event(
+                        event_name=JOB_LATE_PUBLISH,
+                        payload={
+                            "clip_id": clip.id,
+                            "scheduled_at": sched_naive.isoformat(),
+                            "executed_at": now_utc.isoformat(),
+                            "delay_seconds": (now_utc - sched_naive).total_seconds(),
+                            "message": f"Publish execution started later than slot_start ({sched_naive.isoformat()}). Publishing immediately.",
+                        },
+                        entity_id=clip.id,
+                        entity_type="clip",
+                        level="WARNING",
+                        title="Late Publish Execution",
+                        message=f"Publish execution started later than slot_start ({sched_naive.isoformat()}). Publishing immediately.",
+                        db=db,
+                    )
+                except Exception as telem_err:
+                    logger.warning("Failed to emit JOB_LATE_PUBLISH event for clip %s: %s", clip.id, telem_err)
+
         # Handle DRY-RUN mode
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
@@ -816,13 +867,14 @@ class YouTubePublishWorker:
         }
 
         # Native scheduled release support
-        scheduled_at = payload.get("scheduled_at") or clip.scheduled_publish_at
-        if scheduled_at and scheduled_at > datetime.utcnow():
-            body["status"]["privacyStatus"] = "private"
-            dt_sched = scheduled_at
-            if dt_sched.tzinfo is None:
-                dt_sched = dt_sched.replace(tzinfo=timezone.utc)
-            body["status"]["publishAt"] = dt_sched.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if sched_dt:
+            sched_naive = sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt
+            if sched_naive > datetime.utcnow():
+                body["status"]["privacyStatus"] = "private"
+                dt_sched = sched_dt
+                if dt_sched.tzinfo is None:
+                    dt_sched = dt_sched.replace(tzinfo=timezone.utc)
+                body["status"]["publishAt"] = dt_sched.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Resumable protocol setup
         media = googleapiclient.http.MediaFileUpload(

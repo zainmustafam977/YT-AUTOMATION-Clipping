@@ -166,10 +166,12 @@ class PublishSlotService:
         db: Session,
         platform: str = "youtube",
         preferred_time: Optional[datetime] = None,
+        commit: bool = True,
     ) -> PublishSlot:
         """
         Atomically allocates the next collision-free publish slot for a clip.
         Handles race conditions gracefully via SQLite / Postgres savepoints and retry loop.
+        Supports commit=False for enclosing callers managing multi-operation atomic transactions.
         """
         channel = db.query(Channel).filter_by(id=channel_id).first()
         if not channel:
@@ -216,8 +218,12 @@ class PublishSlotService:
                     status=PublishSlotStatus.RESERVED.value,
                 )
                 db.add(slot)
-                db.commit()
-                db.refresh(slot)
+                if commit:
+                    db.commit()
+                    db.refresh(slot)
+                else:
+                    db.flush()
+                    db.refresh(slot)
                 logger.info(
                     "Allocated slot %s UTC for clip %s on channel %s (%s)",
                     slot_utc.isoformat(), clip_id, channel.name, platform,
@@ -246,10 +252,9 @@ class PublishSlotService:
         db: Session,
     ) -> Dict[str, Any]:
         """
-        Executes immediate publication workflow according to platform capabilities.
-        For YouTube: Uploads immediately as PRIVATE with native publishAt=<slot_start>.
-        For other platforms: Enqueues a deferred queue job with next_run_at=<slot_start>.
-        Surfaces all auth, quota, and upload errors directly.
+        DEPRECATED (W3-2): Synchronous in-request publishing is retired.
+        Production approvals schedule and enqueue publish jobs for WorkerDaemon
+        execution at slot time. This method is retained for legacy unit tests only.
         """
         channel = db.query(Channel).filter_by(id=slot.channel_id).first()
         if not channel:
