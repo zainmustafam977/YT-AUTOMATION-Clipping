@@ -474,7 +474,9 @@ def test_graceful_shutdown_finishes_active_job(test_env):
     t = threading.Thread(target=run_worker)
     t.start()
 
-    time.sleep(0.05)  # wait until worker claims job and begins execution
+    deadline = time.time() + 3.0
+    while time.time() < deadline and worker._active_job_id != job.id:
+        time.sleep(0.01)
     assert worker._active_job_id == job.id
 
     # Send shutdown signal while job is running
