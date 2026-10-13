@@ -332,12 +332,13 @@ def crop_plan_stage(ctx: StageContext) -> Dict[str, Any]:
     try:
         reframer = VideoReframer()
         plan = reframer.compute_crop_plan(Path(video_path), start_ms=start_ms, end_ms=end_ms)
+        plan_dict = plan.to_dict() if hasattr(plan, "to_dict") else plan
         if ctx.clip_id:
             crops_dir = Path(settings.STORAGE_DIR) / "crops"
             crops_dir.mkdir(parents=True, exist_ok=True)
             plan_file = crops_dir / f"{ctx.clip_id}_crop_plan.json"
-            plan_file.write_text(json.dumps(plan))
-        return {"crop_plan": plan, "clip_id": ctx.clip_id}
+            plan_file.write_text(json.dumps(plan_dict))
+        return {"crop_plan": plan_dict, "clip_id": ctx.clip_id}
     except Exception as e:
         raise classify_exception(e)
 
@@ -346,6 +347,7 @@ def caption_stage(ctx: StageContext) -> Dict[str, Any]:
     """Stage 5: Subtitle & Kinetic Caption Generation."""
     from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
     from shorts_engine.services.storage.path_manager import PathManager
+    from shorts_engine.services.transcription.formatter import WordSegment
 
     ctx.heartbeat()
     clip = None
@@ -379,9 +381,12 @@ def caption_stage(ctx: StageContext) -> Dict[str, Any]:
     if not words:
         raise PermanentError("No words found in transcript for caption generation.")
 
+    # Normalize words: handles both live WordSegment objects and raw dictionaries from queue/DB
+    word_objs = [WordSegment.from_dict(w) if isinstance(w, dict) else w for w in words]
+
     try:
         generator = ASSSubtitleGenerator()
-        generator.generate_ass(words=words, segment_start_ms=start_ms, segment_end_ms=end_ms, output_path=sub_path)
+        generator.generate_ass(words=word_objs, segment_start_ms=start_ms, segment_end_ms=end_ms, output_path=sub_path)
         return {"subtitle_path": str(sub_path), "clip_id": ctx.clip_id}
     except Exception as e:
         raise classify_exception(e)
@@ -429,6 +434,13 @@ def render_stage(ctx: StageContext) -> Dict[str, Any]:
                     crop_plan = json.loads(plan_file.read_text())
                 except Exception:
                     pass
+
+        if crop_plan and isinstance(crop_plan, dict):
+            from shorts_engine.services.reframing.cropper import CropPlan
+            try:
+                crop_plan = CropPlan.from_dict(crop_plan)
+            except Exception as parse_err:
+                logger.warning("Failed reconstructing CropPlan from dict: %s", parse_err)
 
         sub_path = (
             ctx.artifacts.get("caption", {}).get("subtitle_path")

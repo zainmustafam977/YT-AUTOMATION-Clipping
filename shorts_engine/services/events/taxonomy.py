@@ -21,7 +21,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
-from shorts_engine.db.session import SessionLocal
+from shorts_engine.db.session import SessionLocal, engine
 from shorts_engine.db.models import EventLog
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent
@@ -118,7 +118,7 @@ def emit_platform_event(
             )
     else:
         try:
-            with SessionLocal() as session:
+            with Session(bind=engine) as session:
                 persisted_log = _persist(session)
         except Exception as e:
             logger.error("Failed to persist EventLog with scoped session: %s", e)

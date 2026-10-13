@@ -5,7 +5,7 @@ and computes optimal FFmpeg crop parameters with center/blurred background fallb
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import cv2
 from shorts_engine.config.settings import settings
 from shorts_engine.services.reframing.detector import SubjectDetector
@@ -61,6 +61,37 @@ class CropPlan:
                 f"[top_out][bot_out] vstack{div_clause},setsar=1"
             )
         return f"crop={self.crop_w}:{self.crop_h}:{self.crop_x}:{self.crop_y},scale={settings.TARGET_WIDTH}:{settings.TARGET_HEIGHT}:flags={algo}+accurate_rnd"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "crop_w": int(self.crop_w),
+            "crop_h": int(self.crop_h),
+            "crop_x": int(self.crop_x),
+            "crop_y": int(self.crop_y),
+            "mode": str(self.mode),
+            "is_multi_speaker": bool(self.is_multi_speaker),
+            "speaker_count": int(self.speaker_count),
+            "layout_mode": str(self.layout_mode),
+            "split_crops": [dict(c) for c in (self.split_crops or [])],
+            "divider_width": int(self.divider_width),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "CropPlan":
+        if isinstance(data, cls):
+            return data
+        return cls(
+            crop_w=int(data["crop_w"]),
+            crop_h=int(data["crop_h"]),
+            crop_x=int(data["crop_x"]),
+            crop_y=int(data["crop_y"]),
+            mode=str(data.get("mode", "tracking")),
+            is_multi_speaker=bool(data.get("is_multi_speaker", False)),
+            speaker_count=int(data.get("speaker_count", 1)),
+            layout_mode=str(data.get("layout_mode", "single")),
+            split_crops=[dict(c) for c in data.get("split_crops", [])],
+            divider_width=int(data.get("divider_width", 4)),
+        )
 
     def __repr__(self) -> str:
         return f"<CropPlan mode={self.mode} layout={self.layout_mode} w={self.crop_w} h={self.crop_h} x={self.crop_x} y={self.crop_y} multi={self.is_multi_speaker}>"

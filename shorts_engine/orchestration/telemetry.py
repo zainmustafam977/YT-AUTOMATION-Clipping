@@ -78,6 +78,7 @@ class StructuredLogEmitter(TelemetryEmitter):
         result: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
+        kwargs.pop("db", None)
         self._emit_json("job_finished", {
             "job_id": job_id,
             "stage": stage or "COMPLETED",
@@ -95,6 +96,7 @@ class StructuredLogEmitter(TelemetryEmitter):
         stage: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
+        kwargs.pop("db", None)
         self._emit_json("job_retried", {
             "job_id": job_id,
             "attempt_count": attempt_count,
@@ -112,6 +114,7 @@ class StructuredLogEmitter(TelemetryEmitter):
         attempt_count: int = 0,
         **kwargs: Any,
     ) -> None:
+        kwargs.pop("db", None)
         self._emit_json("job_quarantined", {
             "job_id": job_id,
             "last_error": str(last_error),
@@ -227,15 +230,15 @@ class CompositeEmitter(TelemetryEmitter):
 
     def emit_job_finished(self, job_id: str, stage: Optional[str] = None, result: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
         for em in self.emitters:
-            em.emit_job_finished(job_id, stage=stage, result=result, **kwargs)
+            em.emit_job_finished(job_id, stage=stage, result=result, **dict(kwargs))
 
     def emit_job_retried(self, job_id: str, attempt_count: int, next_run_at: datetime, error: str, stage: Optional[str] = None, **kwargs: Any) -> None:
         for em in self.emitters:
-            em.emit_job_retried(job_id, attempt_count=attempt_count, next_run_at=next_run_at, error=error, stage=stage, **kwargs)
+            em.emit_job_retried(job_id, attempt_count=attempt_count, next_run_at=next_run_at, error=error, stage=stage, **dict(kwargs))
 
     def emit_job_quarantined(self, job_id: str, last_error: str, stage: Optional[str] = None, attempt_count: int = 0, **kwargs: Any) -> None:
         for em in self.emitters:
-            em.emit_job_quarantined(job_id, last_error=last_error, stage=stage, attempt_count=attempt_count, **kwargs)
+            em.emit_job_quarantined(job_id, last_error=last_error, stage=stage, attempt_count=attempt_count, **dict(kwargs))
 
 
 # Global default active emitter: Structured JSON logging + EventBus & DB persistence

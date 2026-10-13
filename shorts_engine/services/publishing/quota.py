@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 import portalocker
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.session import SessionLocal
+from shorts_engine.db.session import SessionLocal, engine
 from shorts_engine.db.models import QuotaLedger
 from shorts_engine.utils.fs import atomic_write_json
 
@@ -149,7 +149,7 @@ class QuotaTracker:
         if db is not None:
             return _execute(db)
         elif not self.is_custom_state_file:
-            with SessionLocal() as session:
+            with Session(bind=engine) as session:
                 return _execute(session)
         else:
             return units
@@ -301,7 +301,7 @@ class QuotaTracker:
         if db is not None:
             return _calculate(db)
         else:
-            with SessionLocal() as session:
+            with Session(bind=engine) as session:
                 return _calculate(session)
 
     def get_uploads_today(self, db: Optional[Session] = None) -> int:
@@ -338,7 +338,7 @@ class QuotaTracker:
         if db is not None:
             return _calculate(db)
         else:
-            with SessionLocal() as session:
+            with Session(bind=engine) as session:
                 return _calculate(session)
 
     def can_publish(
@@ -447,7 +447,7 @@ class QuotaTracker:
         if db is not None:
             return _cal(db)
         else:
-            with SessionLocal() as session:
+            with Session(bind=engine) as session:
                 return _cal(session)
 
     def check_and_alert_quota(

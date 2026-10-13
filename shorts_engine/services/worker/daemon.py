@@ -236,7 +236,13 @@ class WorkerDaemon:
             heartbeat_callback=heartbeat_cb,
         )
 
-    def _on_job_completed(self, job: PipelineJob, result: Any, session: Session) -> None:
+    def _on_job_completed(
+        self,
+        job: PipelineJob,
+        result: Any,
+        session: Session,
+        stage_name: Optional[str] = None,
+    ) -> None:
         """
         Manages downstream transitions and fan-out dependency joins:
         - ingest -> transcribe
@@ -245,7 +251,7 @@ class WorkerDaemon:
         - reframe / captions -> checks if both are DONE; if so, enqueues (clip.id, 'render')
         - render -> marks clip WAITING_APPROVAL; if all clips rendered, marks video DONE
         """
-        stage_name = job.stage.lower()
+        stage_name = (stage_name or job.stage).lower()
 
         if stage_name in ("ingest", "download"):
             # Enqueue transcribe
@@ -350,19 +356,24 @@ class WorkerDaemon:
         """
         session = self.session_factory()
         self._active_job_id = job.id
+        stage_str = getattr(job, "stage", "unknown")
+        job_db = None
+        result = None
+        is_marked_done = False
         try:
             # Refresh job within session
             job_db = session.query(PipelineJob).filter_by(id=job.id).first()
             if not job_db:
                 return False
 
+            stage_str = job_db.stage
             ctx = self._build_stage_context(job_db, session)
             logger.info(
                 "Worker %s executing job %s (stage=%s, entity=%s, attempt=%d)",
-                self.worker_id, job_db.id, job_db.stage, job_db.entity_id, job_db.attempt_count + 1,
+                self.worker_id, job_db.id, stage_str, job_db.entity_id, job_db.attempt_count + 1,
             )
 
-            result = self.stage_executor.execute_stage(job_db.stage, ctx, job=job_db)
+            result = self.stage_executor.execute_stage(stage_str, ctx, job=job_db)
 
             # Mark job DONE
             job_db.status = PipelineJobStatus.DONE
@@ -375,27 +386,85 @@ class WorkerDaemon:
                 except Exception:
                     pass
             session.commit()
+            is_marked_done = True
 
             emit(
                 "job_finished",
                 job_id=job_db.id,
-                stage=job_db.stage,
+                stage=stage_str,
                 entity_id=job_db.entity_id,
+                db=session,
             )
 
             # Trigger downstream transitions
-            self._on_job_completed(job_db, result, session)
+            self._on_job_completed(job_db, result, session, stage_name=stage_str)
 
             clear_cuda_cache()
             return True
 
         except Exception as exc:
-            logger.warning(
-                "Worker %s encountered exception while executing job %s (%s): %s",
-                self.worker_id, job.id, job.stage, exc,
-            )
-            # StageExecutor already updated retry backoff or quarantined the job
-            return False
+            from shorts_engine.services.events.taxonomy import emit_platform_event, STAGE_FAILED
+
+            if is_marked_done:
+                logger.error(
+                    "Worker %s failed downstream transition for job %s (%s): %s. Attempting retry...",
+                    self.worker_id, job.id, stage_str, exc,
+                )
+                try:
+                    emit_platform_event(
+                        event_name=STAGE_FAILED,
+                        payload={
+                            "job_id": job.id,
+                            "stage": stage_str,
+                            "error": f"Downstream transition failure: {exc}",
+                            "transition_failure": True,
+                        },
+                        entity_id=job.id,
+                        entity_type="job",
+                        level="ERROR",
+                        title=f"Downstream Transition Failed: {stage_str}",
+                        message=f"Job {job.id[:8]} stage succeeded but downstream enqueue failed: {exc}",
+                        db=session,
+                    )
+                except Exception as emit_err:
+                    logger.debug("Failed emitting transition failure event: %s", emit_err)
+
+                # Attempt one retry of downstream transition
+                try:
+                    self._on_job_completed(job_db, result, session, stage_name=stage_str)
+                    logger.info("Successfully recovered downstream transition on retry for job %s", job.id)
+                    return True
+                except Exception as retry_exc:
+                    logger.error(
+                        "Downstream transition retry also failed for job %s: %s",
+                        job.id, retry_exc, exc_info=True,
+                    )
+                    return False
+            else:
+                logger.warning(
+                    "Worker %s encountered exception while executing job %s (%s): %s",
+                    self.worker_id, job.id, stage_str, exc,
+                )
+                try:
+                    emit_platform_event(
+                        event_name=STAGE_FAILED,
+                        payload={
+                            "job_id": job.id,
+                            "stage": stage_str,
+                            "error": str(exc),
+                        },
+                        entity_id=job.id,
+                        entity_type="job",
+                        level="WARNING",
+                        title=f"Stage Failed: {stage_str}",
+                        message=f"Job {job.id[:8]} failed during stage execution: {exc}",
+                        db=session,
+                    )
+                except Exception as emit_err:
+                    logger.debug("Failed emitting stage.failed event: %s", emit_err)
+
+                # StageExecutor already updated retry backoff or quarantined the job
+                return False
         finally:
             self._active_job_id = None
             session.close()

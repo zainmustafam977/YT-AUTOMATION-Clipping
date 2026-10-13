@@ -25,7 +25,8 @@ from typing import List, Optional, Any
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.session import SessionLocal
+from sqlalchemy.orm import Session
+from shorts_engine.db.session import SessionLocal, engine
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog, AnalyticsMetric
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
 from shorts_engine.services.queue.durable_queue import durable_job_queue
@@ -321,7 +322,7 @@ class ABWinnerPromotionDaemon:
     async def _run_loop(self):
         while self._running:
             try:
-                with SessionLocal() as db:
+                with Session(bind=engine) as db:
                     check_and_promote_ab_winners(db)
             except Exception as e:
                 logger.error("Error in ABWinnerPromotionDaemon poll loop: %s", e)

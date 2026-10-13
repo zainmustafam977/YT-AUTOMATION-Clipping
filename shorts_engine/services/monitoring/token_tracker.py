@@ -245,12 +245,13 @@ class AITokenCostTracker:
         # 5. Persist to SQL database table LLMUsageLog
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
 
             try:
@@ -352,13 +353,14 @@ class AITokenCostTracker:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
             from sqlalchemy import func
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
             try:
                 total_cost = (
@@ -400,13 +402,14 @@ class AITokenCostTracker:
         db_cost = 0.0
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
             from sqlalchemy import func
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
             try:
                 total_cost = (
@@ -461,13 +464,14 @@ class AITokenCostTracker:
 
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
             from sqlalchemy import func
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
             try:
                 rows = (
@@ -544,13 +548,14 @@ class AITokenCostTracker:
 
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
             from sqlalchemy import func
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
             try:
                 rows = (
@@ -618,13 +623,14 @@ class AITokenCostTracker:
         cutoff = datetime.utcnow() - timedelta(days=days)
         try:
             from shorts_engine.db.models import LLMUsageLog
-            from shorts_engine.db.session import SessionLocal
+            from shorts_engine.db.session import engine
+            from sqlalchemy.orm import Session
             from sqlalchemy import func
 
             own_session = False
             session = db
             if session is None:
-                session = SessionLocal()
+                session = Session(bind=engine)
                 own_session = True
             try:
                 rows = (
