@@ -278,7 +278,7 @@ class QuotaTracker:
                     db_pub_count = session.query(PublishLog).filter(
                         PublishLog.published_at >= start_utc,
                         PublishLog.published_at < end_utc,
-                        PublishLog.status.in_(["SUCCESS", "DRY_RUN", "PUBLISHED"]),
+                        PublishLog.status.in_(["SUCCESS", "PUBLISHED"]),
                     ).count()
                     db_units = int(db_pub_count or 0) * UPLOAD_COST_UNITS
                 except Exception:
@@ -327,7 +327,7 @@ class QuotaTracker:
                     db_pub_count = session.query(PublishLog).filter(
                         PublishLog.published_at >= start_utc,
                         PublishLog.published_at < end_utc,
-                        PublishLog.status.in_(["SUCCESS", "DRY_RUN", "PUBLISHED"]),
+                        PublishLog.status.in_(["SUCCESS", "PUBLISHED"]),
                     ).count()
                 except Exception:
                     pass

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import (
@@ -37,6 +38,7 @@ from shorts_engine.db.models import (
     PublishLog,
     PipelineJob,
     PipelineJobStatus,
+    AuditLog,
 )
 from shorts_engine.services.publishing.worker import YouTubePublishWorker
 from shorts_engine.services.publishing.quota import (
@@ -142,13 +144,12 @@ class PublishSlotService:
                 # Convert to UTC naive datetime for DB comparison
                 slot_utc = slot_local.astimezone(timezone.utc).replace(tzinfo=None)
 
-                # Check if slot is occupied
+                # Check if slot is occupied (any existing row occupies this unique constraint interval)
                 existing = (
                     db.query(PublishSlot)
                     .filter(
                         PublishSlot.channel_id == channel.id,
                         PublishSlot.slot_start == slot_utc,
-                        PublishSlot.status != PublishSlotStatus.CANCELLED.value,
                     )
                     .first()
                 )
@@ -340,6 +341,7 @@ class PublishSlotService:
         # 3. Execute immediate video upload with native publishAt
         try:
             payload = {
+                "slot_id": slot.id,
                 "scheduled_at": slot.slot_start,
                 "dry_run": settings.DRY_RUN_PUBLISHING,
             }
@@ -424,13 +426,71 @@ class PublishSlotService:
     def unapprove_clip(self, clip_id: str, db: Session) -> Dict[str, Any]:
         """
         Un-approves a clip:
-        If already uploaded to YouTube, calls videos().delete (50 units).
-        Releases or cancels the publish_slot and resets clip to WAITING_APPROVAL.
+        Cancels pending publish PipelineJob via atomic CAS, releases/cancels PublishSlot
+        (preserving ownership history), and resets clip to WAITING_APPROVAL.
+        Rejects cancellation of actively RUNNING or retrying attempted uploads with 409 Conflict.
         """
         clip = db.query(Clip).filter_by(id=clip_id).first()
         if not clip:
             raise ValueError(f"Clip {clip_id} not found")
 
+        # 1. Inspect any active publish PipelineJob
+        job = (
+            db.query(PipelineJob)
+            .filter(
+                PipelineJob.entity_id == clip.id,
+                PipelineJob.stage == "publish",
+            )
+            .first()
+        )
+
+        if job:
+            # Reject cancellation of unresolved attempted uploads (I3)
+            has_session = False
+            if job.payload_json:
+                try:
+                    payload_dict = json.loads(job.payload_json)
+                    has_session = bool(payload_dict.get("upload_session_uri"))
+                except Exception:
+                    pass
+            if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot cancel or unapprove clip with an active or retrying upload attempt. Await completion or trigger explicit reconciliation.",
+                )
+
+            if job.status == PipelineJobStatus.RUNNING:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Publication is currently RUNNING and cannot be cancelled.",
+                )
+
+            if job.status == PipelineJobStatus.PENDING:
+                # Atomic CAS update: ensure status was still PENDING at moment of cancel
+                rows_updated = (
+                    db.query(PipelineJob)
+                    .filter(
+                        PipelineJob.id == job.id,
+                        PipelineJob.status == PipelineJobStatus.PENDING,
+                    )
+                    .update(
+                        {
+                            PipelineJob.status: PipelineJobStatus.CANCELLED,
+                            PipelineJob.completed_at: datetime.utcnow(),
+                            PipelineJob.locked_by: None,
+                            PipelineJob.locked_at: None,
+                        },
+                        synchronize_session=False,
+                    )
+                )
+                if rows_updated == 0:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Publication was concurrently claimed by worker and is currently RUNNING; cannot cancel.",
+                    )
+
+        # 2. Cancel bound PublishSlot while preserving ownership history (I8)
         slot = (
             db.query(PublishSlot)
             .filter(
@@ -443,38 +503,38 @@ class PublishSlotService:
             .first()
         )
 
-        deleted_on_youtube = False
-        yt_id = slot.youtube_video_id if slot else None
-
-        if yt_id:
-            logger.info("Un-approving clip %s: deleting video %s on YouTube...", clip_id, yt_id)
-            del_res = self.worker.execute_delete_intent(
-                youtube_video_id=yt_id,
-                channel_id=slot.channel_id if slot else None,
-                db=db,
-            )
-            deleted_on_youtube = del_res.get("success", False)
-
         if slot:
             slot.status = PublishSlotStatus.CANCELLED.value
-            slot.clip_id = None
+            # slot.clip_id retained for historical audit trail
 
         clip.status = ClipStatus.WAITING_APPROVAL
         clip.scheduled_publish_at = None
 
-        # Clean up any pending PublishLog
+        # Clean up any pending PublishLog if present (mark CANCELLED), write 0 new rows
         p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
-        if p_log:
+        if p_log and p_log.status != "SUCCESS":
             p_log.status = "CANCELLED"
 
+        audit = AuditLog(
+            actor="operator",
+            event="clip.unapproved",
+            channel_id=slot.channel_id if slot else None,
+            job_id=job.id if job else None,
+            details=json.dumps({
+                "clip_id": clip.id,
+                "slot_id": slot.id if slot else None,
+            }),
+        )
+        db.add(audit)
+
         db.commit()
-        logger.info("Successfully un-approved clip %s (deleted_on_youtube=%s)", clip_id, deleted_on_youtube)
+        logger.info("Successfully un-approved clip %s (slot cancelled, job cancelled)", clip_id)
         return {
             "success": True,
             "clip_id": clip_id,
             "status": ClipStatus.WAITING_APPROVAL.value,
-            "deleted_on_youtube": deleted_on_youtube,
-            "youtube_video_id": yt_id,
+            "deleted_on_youtube": False,
+            "youtube_video_id": slot.youtube_video_id if slot else None,
         }
 
     def reschedule_clip(
@@ -484,9 +544,9 @@ class PublishSlotService:
         db: Session,
     ) -> Dict[str, Any]:
         """
-        Reschedules an approved/scheduled clip:
-        If already uploaded to YouTube, calls videos().update with new publishAt (50 units).
-        Updates publish_slot and clip timestamp with zero re-upload.
+        Reschedules an approved/scheduled clip atomically:
+        Updates publish_slot, clip scheduled timestamp, PipelineJob next_run_at, and payload binding.
+        Rejects rescheduling of actively RUNNING or retrying attempted uploads with 409 Conflict.
         """
         clip = db.query(Clip).filter_by(id=clip_id).first()
         if not clip:
@@ -501,6 +561,71 @@ class PublishSlotService:
             dt_utc = dt_utc.astimezone(timezone.utc).replace(tzinfo=None)
         dt_utc = dt_utc.replace(microsecond=0)
 
+        # 1. Inspect any active publish PipelineJob
+        job = (
+            db.query(PipelineJob)
+            .filter(
+                PipelineJob.entity_id == clip.id,
+                PipelineJob.stage == "publish",
+            )
+            .first()
+        )
+
+        if job:
+            # Reject rescheduling of unresolved attempted uploads (I3)
+            has_session = False
+            if job.payload_json:
+                try:
+                    payload_dict = json.loads(job.payload_json)
+                    has_session = bool(payload_dict.get("upload_session_uri"))
+                except Exception:
+                    pass
+            if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot reschedule clip with an active or retrying upload attempt. Await completion or trigger explicit reconciliation.",
+                )
+
+            if job.status == PipelineJobStatus.RUNNING:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Publication is currently RUNNING and cannot be rescheduled.",
+                )
+
+            if job.status == PipelineJobStatus.PENDING:
+                # Prepare updated payload binding
+                payload_dict = {}
+                if job.payload_json:
+                    try:
+                        payload_dict = json.loads(job.payload_json)
+                    except Exception:
+                        payload_dict = {}
+                payload_dict["scheduled_at"] = dt_utc.isoformat()
+                updated_payload = json.dumps(payload_dict)
+
+                # Atomic CAS update: status must still be PENDING
+                rows_updated = (
+                    db.query(PipelineJob)
+                    .filter(
+                        PipelineJob.id == job.id,
+                        PipelineJob.status == PipelineJobStatus.PENDING,
+                    )
+                    .update(
+                        {
+                            PipelineJob.next_run_at: dt_utc,
+                            PipelineJob.payload_json: updated_payload,
+                        },
+                        synchronize_session=False,
+                    )
+                )
+                if rows_updated == 0:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Publication was concurrently claimed by worker and is currently RUNNING; cannot reschedule.",
+                    )
+
+        # 2. Find and update bound slot
         slot = (
             db.query(PublishSlot)
             .filter(
@@ -513,49 +638,75 @@ class PublishSlotService:
             .first()
         )
 
-        updated_on_youtube = False
-        yt_id = slot.youtube_video_id if slot else None
+        # Check for collision with another slot for this channel at dt_utc
+        channel_id = slot.channel_id if slot else None
+        if not channel_id:
+            cand = clip.candidate
+            channel = cand.source_video.channel if (cand and cand.source_video) else db.query(Channel).first()
+            channel_id = channel.id if channel else None
 
-        if yt_id:
-            logger.info(
-                "Rescheduling clip %s (YouTube ID: %s) to %s UTC without re-upload...",
-                clip_id, yt_id, dt_utc.isoformat(),
+        if channel_id:
+            collision = (
+                db.query(PublishSlot)
+                .filter(
+                    PublishSlot.channel_id == channel_id,
+                    PublishSlot.slot_start == dt_utc,
+                    PublishSlot.id != (slot.id if slot else ""),
+                )
+                .first()
             )
-            upd_res = self.worker.execute_reschedule_intent(
-                youtube_video_id=yt_id,
-                new_slot_time=dt_utc,
-                channel_id=slot.channel_id if slot else None,
-                db=db,
-            )
-            updated_on_youtube = upd_res.get("success", False)
+            if collision:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Slot at {dt_utc.isoformat()} is already occupied for channel {channel_id}.",
+                )
 
         if slot:
             slot.slot_start = dt_utc
         else:
-            # Create a slot if not already exists
-            cand = clip.candidate
-            channel = cand.source_video.channel if (cand and cand.source_video) else db.query(Channel).first()
-            if channel:
+            if channel_id:
                 slot = PublishSlot(
-                    channel_id=channel.id,
+                    channel_id=channel_id,
                     clip_id=clip.id,
                     slot_start=dt_utc,
                     platform="youtube",
-                    status=PublishSlotStatus.SCHEDULED.value if yt_id else PublishSlotStatus.RESERVED.value,
-                    youtube_video_id=yt_id,
+                    status=PublishSlotStatus.RESERVED.value,
                 )
                 db.add(slot)
 
         clip.scheduled_publish_at = dt_utc
-        db.commit()
 
-        logger.info("Successfully rescheduled clip %s to %s UTC", clip_id, dt_utc.isoformat())
+        audit = AuditLog(
+            actor="operator",
+            event="clip.rescheduled",
+            channel_id=channel_id,
+            job_id=job.id if job else None,
+            details=json.dumps({
+                "clip_id": clip.id,
+                "slot_id": slot.id if slot else None,
+                "scheduled_publish_at": dt_utc.isoformat(),
+            }),
+        )
+        db.add(audit)
+
+        try:
+            db.commit()
+        except IntegrityError as ie:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"Slot collision at {dt_utc.isoformat()}: {ie}",
+            )
+
+        logger.info("Successfully rescheduled clip %s to %s UTC (slot, clip, and job synced)", clip_id, dt_utc.isoformat())
         return {
             "success": True,
             "clip_id": clip_id,
             "scheduled_publish_at": dt_utc.isoformat(),
-            "updated_on_youtube": updated_on_youtube,
-            "youtube_video_id": yt_id,
+            "slot_id": slot.id if slot else None,
+            "slot_start": dt_utc.isoformat(),
+            "job_id": job.id if job else None,
         }
 
     def update_clip_metadata(
@@ -667,7 +818,15 @@ class PublishSlotService:
                     db=db,
                     preferred_time=target_slot_time,
                 )
-                service.publish_slot_now(slot=slot, clip=clip, db=db)
+                from shorts_engine.services.queue.durable_queue import durable_job_queue
+                durable_job_queue.enqueue(
+                    "publish",
+                    clip.id,
+                    stage="publish",
+                    payload={"slot_id": slot.id, "scheduled_at": slot.slot_start.isoformat()},
+                    next_run_at=slot.slot_start,
+                    db=db,
+                )
                 migrated_count += 1
                 logger.info("Migrated legacy scheduled clip %s to slot %s", clip.id, slot.slot_start)
             except Exception as mig_err:

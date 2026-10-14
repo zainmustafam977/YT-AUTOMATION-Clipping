@@ -97,8 +97,8 @@ class AnalyticsPoller:
         elif clip.analytics and clip.analytics.get("youtube_video_id"):
             yt_id = clip.analytics.get("youtube_video_id")
 
-        if not yt_id:
-            logger.debug("Clip %s has no YouTube video ID; skipping analytics poll.", clip.id)
+        if not yt_id or yt_id.startswith("dry_run_") or (clip.publish_log and clip.publish_log.status == "DRY_RUN"):
+            logger.debug("Clip %s has no real YouTube video ID (dry-run preview: %s); skipping analytics poll.", clip.id, yt_id)
             return []
 
         # Obtain channel credentials
@@ -238,11 +238,13 @@ class AnalyticsPoller:
         """
         Polls analytics for all published clips across all channels and upserts rows.
         """
+        from shorts_engine.db.models import PublishLog
         published_clips = (
             db.query(Clip)
+            .outerjoin(PublishLog, Clip.id == PublishLog.clip_id)
             .filter(
-                (Clip.status == ClipStatus.PUBLISHED)
-                | (Clip.publish_log != None)  # noqa: E711
+                (Clip.status == ClipStatus.PUBLISHED) | (PublishLog.id != None),  # noqa: E711
+                (PublishLog.status == None) | (PublishLog.status != "DRY_RUN"),  # noqa: E711
             )
             .all()
         )

@@ -82,16 +82,29 @@ class DailyBudgetExceededError(PipelineError):
     pass
 
 
+class JobCancelledError(PipelineError):
+    """
+    Raised when execution detects the job or intent was cancelled by an operator.
+    Preserves CANCELLED state and prevents marking DONE or QUARANTINED.
+    """
+    pass
+
+
 def classify_exception(exc: Exception) -> PipelineError:
     """
     Classifies an arbitrary exception according to the pipeline failure taxonomy.
     If already a PipelineError, returns it as-is.
     Unknown/unexpected exceptions are treated as TransientError by default.
     """
+    if isinstance(exc, JobCancelledError):
+        return exc
     if isinstance(exc, PipelineError):
         return exc
 
     msg = str(exc) or exc.__class__.__name__
+    if "jobcancellederror" in msg.lower():
+        return JobCancelledError(msg)
+
 
     # Check for known permanent indicators in standard exceptions
     permanent_signatures = [

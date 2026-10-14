@@ -256,6 +256,7 @@ class DurableJobQueue:
                     .filter(
                         PipelineJob.id == candidate.id,
                         PipelineJob.status == PipelineJobStatus.PENDING,
+                        or_(PipelineJob.next_run_at.is_(None), PipelineJob.next_run_at <= now),
                     )
                     .update(
                         {

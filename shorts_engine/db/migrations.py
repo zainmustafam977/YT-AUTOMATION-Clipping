@@ -100,7 +100,25 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds rejection_reason_code, rejection_note, rejected_at, and queued_at to clips table",
         upgrade_fn=lambda conn: None,  # Handled by ensure_schema_upgrades
     ),
+    Migration(
+        version="011_pipeline_jobs_cancelled_status",
+        description="Adds CANCELLED status to pipelinejobstatus enum for graceful job cancellation",
+        upgrade_fn=lambda conn: _upgrade_011_cancelled_status(conn),
+    ),
 ]
+
+
+def _upgrade_011_cancelled_status(conn) -> None:
+    """Safely adds CANCELLED value to pipelinejobstatus PostgreSQL enum if on Postgres."""
+    try:
+        from shorts_engine.db.session import is_postgres
+        if is_postgres(conn):
+            conn.commit()
+            conn.execute(text("ALTER TYPE pipelinejobstatus ADD VALUE IF NOT EXISTS 'CANCELLED'"))
+            conn.commit()
+    except Exception as e:
+        logger.debug("Postgres CANCELLED enum migration note: %s", e)
+
 
 
 def run_schema_migrations(target_engine: Optional[Engine] = None) -> List[str]:

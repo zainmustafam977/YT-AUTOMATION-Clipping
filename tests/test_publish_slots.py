@@ -39,6 +39,7 @@ from shorts_engine.db.models import (
     PipelineJobStatus,
 )
 from shorts_engine.services.publishing.slots import PublishSlotService
+from shorts_engine.services.publishing.actions import approve_clip_for_publishing
 from shorts_engine.services.publishing.quota import QuotaTracker
 from shorts_engine.services.publishing.worker import YouTubePublishWorker
 
@@ -243,34 +244,33 @@ def test_state_survives_process_restart(test_db, tmp_path):
 
 def test_immediate_upload_with_native_publish_at(test_db, tmp_path):
     """
-    Verifies that on approval, the clip is uploaded immediately as PRIVATE
-    with YouTube's native publishAt timestamp set to the slot time.
-    Stores youtube_video_id on the slot.
+    Verifies that on approval, synchronous inline upload is retired (W3-2).
+    Approval allocates a slot atomically and enqueues a durable publish job
+    with slot_id binding, returning immediately with status 202.
     """
     ch, sv = _seed_channel_and_video(test_db, channel_id="ch-upload")
     video_file = tmp_path / "rendered_short.mp4"
     video_file.write_bytes(b"MP4 CONTENT")
     clip = _seed_clip(test_db, sv, clip_id="c-upload", rendered_path=str(video_file))
 
-    service = PublishSlotService()
-    slot = service.allocate_slot(channel_id=ch.id, clip_id=clip.id, db=test_db)
+    app_res = approve_clip_for_publishing(clip.id, db=test_db)
+    assert app_res["ok"] is True
+    assert app_res["status"] == "APPROVED"
+    assert app_res["enqueued"] is True
+    assert "job_id" in app_res
 
-    # In dry-run mode (default), worker simulates upload and assigns youtube_video_id
-    pub_res = service.publish_slot_now(slot=slot, clip=clip, db=test_db)
+    # Assert slot is allocated and RESERVED, not published
+    slot = test_db.query(PublishSlot).filter_by(clip_id=clip.id).first()
+    assert slot is not None
+    assert slot.status == PublishSlotStatus.RESERVED.value
+    assert slot.youtube_video_id is None
 
-    assert pub_res["success"] is True
-    assert pub_res["status"] == "SCHEDULED"
-    yt_id = pub_res["youtube_video_id"]
-    assert yt_id is not None
-    assert yt_id.startswith("dry_run_")
-
-    test_db.refresh(slot)
-    assert slot.youtube_video_id == yt_id
-    assert slot.status == PublishSlotStatus.SCHEDULED.value
-
-    test_db.refresh(clip)
-    assert clip.scheduled_publish_at == slot.slot_start
-    assert clip.status == ClipStatus.SCHEDULED
+    # Assert publish job is enqueued with slot binding
+    job = test_db.query(PipelineJob).filter_by(id=app_res["job_id"]).first()
+    assert job is not None
+    assert job.status == PipelineJobStatus.PENDING
+    payload = json.loads(job.payload_json)
+    assert payload["slot_id"] == slot.id
 
 
 def test_dec_2025_quota_config_values(test_db):
@@ -295,26 +295,26 @@ def test_dec_2025_quota_config_values(test_db):
 
 def test_unapprove_deletes_video_on_youtube(test_db, tmp_path):
     """
-    Verifies Amendment 3: Un-approve calls videos().delete on YouTube
-    and cancels the slot, reverting clip to WAITING_APPROVAL.
+    Verifies un-approve semantics under W3-2 asynchronous publishing:
+    Cancels the pending publish job, cancels the slot (preserving clip_id),
+    reverts clip to WAITING_APPROVAL, and does not attempt remote YouTube deletion
+    if no upload was performed yet.
     """
     ch, sv = _seed_channel_and_video(test_db, channel_id="ch-unapp")
     video_file = tmp_path / "v_unapp.mp4"
     video_file.write_bytes(b"CONTENT")
     clip = _seed_clip(test_db, sv, clip_id="c-unapp", rendered_path=str(video_file))
 
+    app_res = approve_clip_for_publishing(clip.id, db=test_db)
+    assert app_res["ok"] is True
+
     service = PublishSlotService()
-    slot = service.allocate_slot(channel_id=ch.id, clip_id=clip.id, db=test_db)
-    service.publish_slot_now(slot=slot, clip=clip, db=test_db)
+    slot = test_db.query(PublishSlot).filter_by(clip_id=clip.id).first()
+    job = test_db.query(PipelineJob).filter_by(id=app_res["job_id"]).first()
 
-    test_db.refresh(slot)
-    assert slot.youtube_video_id is not None
-    yt_id = slot.youtube_video_id
-
-    # Now un-approve
+    # Now un-approve before any upload occurs
     unapp_res = service.unapprove_clip(clip_id=clip.id, db=test_db)
     assert unapp_res["success"] is True
-    assert unapp_res["deleted_on_youtube"] is True
 
     test_db.refresh(clip)
     assert clip.status == ClipStatus.WAITING_APPROVAL
@@ -322,56 +322,68 @@ def test_unapprove_deletes_video_on_youtube(test_db, tmp_path):
 
     test_db.refresh(slot)
     assert slot.status == PublishSlotStatus.CANCELLED.value
+    assert slot.clip_id == clip.id  # I3: slot preserves clip_id
+
+    test_db.refresh(job)
+    assert job.status == PipelineJobStatus.CANCELLED
 
 
 def test_reschedule_updates_publish_at_without_reupload(test_db, tmp_path):
     """
-    Verifies Amendment 3: Reschedule after upload updates publishAt
-    via videos().update (50 units) without re-uploading the video file.
+    Verifies reschedule semantics under W3-2 asynchronous publishing:
+    Updates slot time, clip scheduled_publish_at, and the pending PipelineJob's
+    next_run_at and payload binding atomically without re-uploading.
     """
     ch, sv = _seed_channel_and_video(test_db, channel_id="ch-resched")
     video_file = tmp_path / "v_resched.mp4"
     video_file.write_bytes(b"CONTENT")
     clip = _seed_clip(test_db, sv, clip_id="c-resched", rendered_path=str(video_file))
 
-    service = PublishSlotService()
-    slot = service.allocate_slot(channel_id=ch.id, clip_id=clip.id, db=test_db)
-    service.publish_slot_now(slot=slot, clip=clip, db=test_db)
+    app_res = approve_clip_for_publishing(clip.id, db=test_db)
+    assert app_res["ok"] is True
 
-    new_time = datetime.utcnow() + timedelta(days=3)
+    service = PublishSlotService()
+    slot = test_db.query(PublishSlot).filter_by(clip_id=clip.id).first()
+    job = test_db.query(PipelineJob).filter_by(id=app_res["job_id"]).first()
+
+    new_time = (datetime.utcnow() + timedelta(days=3)).replace(microsecond=0)
     res_res = service.reschedule_clip(clip_id=clip.id, new_slot_time=new_time, db=test_db)
 
     assert res_res["success"] is True
-    assert res_res["updated_on_youtube"] is True
 
     test_db.refresh(slot)
-    assert slot.slot_start == new_time.replace(microsecond=0)
+    assert slot.slot_start == new_time
 
     test_db.refresh(clip)
-    assert clip.scheduled_publish_at == new_time.replace(microsecond=0)
+    assert clip.scheduled_publish_at == new_time
+
+    test_db.refresh(job)
+    assert job.next_run_at == new_time
+    job_payload = json.loads(job.payload_json)
+    assert job_payload["scheduled_at"] == new_time.isoformat()
 
 
 def test_metadata_edit_updates_youtube_without_reupload(test_db, tmp_path):
     """
-    Verifies Amendment 3: Editing metadata after upload updates YouTube snippet
-    without re-uploading the video file.
+    Verifies metadata edit semantics: updates local draft metadata.
+    If video has not been uploaded yet (asynchronous publish queue),
+    it updates locally without attempting network calls to YouTube.
     """
     ch, sv = _seed_channel_and_video(test_db, channel_id="ch-meta")
     video_file = tmp_path / "v_meta.mp4"
     video_file.write_bytes(b"CONTENT")
     clip = _seed_clip(test_db, sv, clip_id="c-meta", rendered_path=str(video_file))
 
-    service = PublishSlotService()
-    slot = service.allocate_slot(channel_id=ch.id, clip_id=clip.id, db=test_db)
-    service.publish_slot_now(slot=slot, clip=clip, db=test_db)
+    app_res = approve_clip_for_publishing(clip.id, db=test_db)
+    assert app_res["ok"] is True
 
+    service = PublishSlotService()
     meta_res = service.update_clip_metadata(
         clip_id=clip.id,
         db=test_db,
         title="Updated Title Winner #Shorts",
     )
     assert meta_res["success"] is True
-    assert meta_res["updated_on_youtube"] is True
 
     test_db.refresh(clip)
     assert clip.generated_title == "Updated Title Winner #Shorts"
@@ -455,7 +467,12 @@ def test_legacy_drip_feed_clips_migration(test_db, tmp_path):
     slot = test_db.query(PublishSlot).filter_by(clip_id=legacy_clip.id).first()
     assert slot is not None
     assert slot.channel_id == ch.id
-    assert slot.status == PublishSlotStatus.SCHEDULED.value
+    assert slot.status == PublishSlotStatus.RESERVED.value
+
+    # Verify publish job was enqueued
+    job = test_db.query(PipelineJob).filter_by(entity_id=legacy_clip.id, stage="publish").first()
+    assert job is not None
+    assert job.status == PipelineJobStatus.PENDING
 
 
 def test_platform_agnostic_deferred_job_interface(test_db, tmp_path):

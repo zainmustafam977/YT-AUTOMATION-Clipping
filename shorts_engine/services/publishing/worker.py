@@ -58,6 +58,8 @@ from shorts_engine.db.models import (
     AuditLog,
     PipelineJob,
     PipelineJobStatus,
+    PublishSlot,
+    PublishSlotStatus,
 )
 from shorts_engine.db.security import decrypt_secret, encrypt_secret
 from shorts_engine.services.publishing.quota import (
@@ -470,6 +472,9 @@ def check_channel_recent_uploads_for_clip(
 # YouTube Publish Worker Engine
 # ==============================================================================
 
+from shorts_engine.orchestration.exceptions import PermanentError, JobCancelledError
+
+
 class YouTubePublishWorker:
     """
     Enterprise publish worker process executing all video uploads and metadata mutations.
@@ -641,7 +646,7 @@ class YouTubePublishWorker:
         """
         clip = db.query(Clip).filter_by(id=clip_id).first()
         if not clip:
-            raise ValueError(f"Target Clip not found: {clip_id}")
+            raise PermanentError(f"Target Clip not found: {clip_id}")
 
         cand = clip.candidate
         video = cand.source_video if cand else None
@@ -652,7 +657,40 @@ class YouTubePublishWorker:
             channel = db.query(Channel).first()
 
         if not channel:
-            raise ValueError("No YouTube Channel configured for publishing.")
+            raise PermanentError("No YouTube Channel configured for publishing.")
+
+        # Mandatory slot binding validation (I2)
+        slot_id = payload.get("slot_id")
+        if not slot_id:
+            raise PermanentError(f"Missing mandatory slot_id binding in publish payload for clip {clip_id}")
+
+        slot = db.query(PublishSlot).filter_by(id=slot_id).first()
+        if not slot:
+            raise PermanentError(f"Corrupt slot binding: slot {slot_id} not found in database for clip {clip_id}")
+
+        if slot.channel_id != channel.id:
+            raise PermanentError(f"Slot channel mismatch: slot {slot_id} channel {slot.channel_id} does not match clip channel {channel.id}")
+
+        # If slot was CANCELLED or clip status was reverted / rejected: fail fast with JobCancelledError
+        if slot.status == PublishSlotStatus.CANCELLED.value or clip.status in (
+            ClipStatus.WAITING_APPROVAL,
+            ClipStatus.REJECTED,
+        ):
+            logger.info(
+                "Publish intent cancelled: slot %s is %s, clip %s is %s. Failing fast.",
+                slot_id, slot.status, clip.id, clip.status.value,
+            )
+            if job_entity and hasattr(job_entity, "status"):
+                job_entity.status = PipelineJobStatus.CANCELLED
+                job_entity.completed_at = datetime.utcnow()
+                job_entity.locked_by = None
+                job_entity.locked_at = None
+                db.commit()
+            raise JobCancelledError(f"Publish cancelled: slot {slot_id} status {slot.status}, clip {clip_id} status {clip.status.value}")
+
+        eligible_statuses = [ClipStatus.APPROVED, ClipStatus.SCHEDULED, ClipStatus.PUBLISHING]
+        if clip.status not in eligible_statuses:
+            raise PermanentError(f"Clip {clip_id} in ineligible status {clip.status.value} for publishing")
 
         # Check channel authorization status
         cred = db.query(ChannelCredential).filter_by(channel_id=channel.id).first()
@@ -741,18 +779,30 @@ class YouTubePublishWorker:
                 except Exception as telem_err:
                     logger.warning("Failed to emit JOB_LATE_PUBLISH event for clip %s: %s", clip.id, telem_err)
 
-        # Handle DRY-RUN mode
+        # Handle DRY-RUN mode (I5: sandbox-only preview execution)
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
+            allow_preview_flag = os.environ.get("ALLOW_IN_PROCESS_PREVIEW", "").lower() in ("1", "true", "yes")
+            bind_url = str(db.get_bind().url).lower()
+            is_non_prod_db = (
+                ":memory:" in bind_url
+                or "tmp" in bind_url
+                or "test" in bind_url
+                or "pytest" in bind_url
+            )
+            if not (allow_preview_flag and is_non_prod_db):
+                raise PermanentError(
+                    "Dry-run simulation mode is only permitted when ALLOW_IN_PROCESS_PREVIEW=1 is set "
+                    "and execution is connected to an isolated test/in-memory database."
+                )
+
             logger.info(
                 "[DRY-RUN] Simulating YouTube publish for clip %s (Title: '%s', MadeForKids: %s, Privacy: %s)",
                 clip.id, clean_title, made_for_kids_config, privacy_status,
             )
             simulated_id = f"dry_run_{clip.id[:8]}"
-            clip.status = ClipStatus.PUBLISHED
-            db.commit()
-
-            # Create PublishLog for audit
+            # Preview mode: NEVER mark clip status PUBLISHED, NEVER change slot status, NEVER emit CLIP_PUBLISHED
+            # Create PublishLog with status="DRY_RUN" ONLY in test DB
             p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
             if not p_log:
                 p_log = PublishLog(
@@ -764,7 +814,10 @@ class YouTubePublishWorker:
                     status="DRY_RUN",
                 )
                 db.add(p_log)
-                db.commit()
+            else:
+                p_log.youtube_video_id = simulated_id
+                p_log.status = "DRY_RUN"
+            db.commit()
 
             try:
                 from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_PUBLISHED
@@ -782,7 +835,7 @@ class YouTubePublishWorker:
                     entity_type="clip",
                     level="SUCCESS",
                     title="Clip Published (Dry Run)",
-                    message=f"[DRY-RUN] Clip '{clean_title}' published as {simulated_id}.",
+                    message=f"[DRY-RUN] Clip '{clean_title}' simulated as {simulated_id}.",
                     db=db,
                 )
             except Exception:
@@ -790,7 +843,7 @@ class YouTubePublishWorker:
 
             return {
                 "success": True,
-                "status": "PUBLISHED",
+                "status": "DRY_RUN",
                 "youtube_video_id": simulated_id,
                 "dry_run": True,
             }
@@ -804,7 +857,7 @@ class YouTubePublishWorker:
         client_config = self._resolve_client_config()
         client = build_youtube_client(refresh_token, client_config=client_config)
 
-        # Requirement 4: Ambiguous-failure handling — check recent uploads for idempotency tag before uploading
+        # Requirement 4 & I6: Ambiguous-failure handling — check recent uploads for idempotency tag before uploading
         existing_video_id = check_channel_recent_uploads_for_clip(
             client=client,
             channel_youtube_id=channel.youtube_channel_id,
@@ -814,8 +867,35 @@ class YouTubePublishWorker:
         )
         if existing_video_id:
             logger.info("Found existing video %s with tag %s. Reclaiming without re-upload.", existing_video_id, tag)
-            clip.status = ClipStatus.PUBLISHED
+            is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.utcnow())
+            if is_future_schedule:
+                clip.status = ClipStatus.SCHEDULED
+                slot.status = PublishSlotStatus.SCHEDULED.value
+            else:
+                clip.status = ClipStatus.PUBLISHED
+                slot.status = PublishSlotStatus.PUBLISHED.value
+
+            slot.youtube_video_id = existing_video_id
+            clip.youtube_video_id = existing_video_id
+
+            p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
+            if not p_log:
+                p_log = PublishLog(
+                    clip_id=clip.id,
+                    youtube_video_id=existing_video_id,
+                    published_at=datetime.utcnow(),
+                    title=clean_title,
+                    description=description,
+                    status="SUCCESS",
+                )
+                db.add(p_log)
+            else:
+                p_log.youtube_video_id = existing_video_id
+                p_log.published_at = datetime.utcnow()
+                p_log.status = "SUCCESS"
+
             db.commit()
+
             try:
                 from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_PUBLISHED
                 emit_platform_event(
@@ -839,7 +919,7 @@ class YouTubePublishWorker:
                 pass
             return {
                 "success": True,
-                "status": "PUBLISHED",
+                "status": clip.status.value,
                 "youtube_video_id": existing_video_id,
                 "reclaimed": True,
             }
@@ -966,9 +1046,17 @@ class YouTubePublishWorker:
         if not youtube_video_id:
             raise RuntimeError(f"YouTube upload finished with no video ID. Response: {response}")
 
-        # Success state transitions
-        clip.status = ClipStatus.PUBLISHED
-        db.commit()
+        # Success state transitions (I6)
+        is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.utcnow())
+        if is_future_schedule:
+            clip.status = ClipStatus.SCHEDULED
+            slot.status = PublishSlotStatus.SCHEDULED.value
+        else:
+            clip.status = ClipStatus.PUBLISHED
+            slot.status = PublishSlotStatus.PUBLISHED.value
+
+        slot.youtube_video_id = youtube_video_id
+        clip.youtube_video_id = youtube_video_id
 
         # Record quota consumption (1,600 units)
         self.quota_tracker.record_publish(

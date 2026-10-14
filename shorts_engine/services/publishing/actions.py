@@ -16,6 +16,10 @@ from shorts_engine.db.models import (
     Channel,
     PublishSlot,
     PublishSlotStatus,
+    PipelineJob,
+    PipelineJobStatus,
+    PublishLog,
+    AuditLog,
 )
 from shorts_engine.services.publishing.slots import publish_slot_service
 from shorts_engine.services.queue.durable_queue import durable_job_queue
@@ -157,8 +161,10 @@ def reject_clip_action(
     note: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Atomically rejects a clip and persists reason code, note, and rejected_at timestamp.
-    Dual-writes to quality_check_result JSON for backward compatibility.
+    Atomically rejects a clip, cancelling any pending publish job via atomic CAS,
+    releasing/cancelling the bound publish slot (preserving ownership history), and
+    persisting rejection metadata and AuditLog (I3).
+    Rejects rejection of actively running or retrying upload attempts with CONFLICT.
     """
     clip = db.query(Clip).filter_by(id=clip_id).first()
     if not clip:
@@ -169,17 +175,100 @@ def reject_clip_action(
             "error_type": "NOT_FOUND",
         }
 
-    if clip.status != ClipStatus.WAITING_APPROVAL:
+    if clip.status in (ClipStatus.PUBLISHING, ClipStatus.PUBLISHED):
         return {
             "clip_id": clip_id,
             "ok": False,
             "status": clip.status.value,
-            "error": f"Clip is in status {clip.status.value}, not WAITING_APPROVAL",
+            "error": f"Clip is in status {clip.status.value}, cannot reject an in-flight or published clip",
             "error_type": "CONFLICT",
         }
 
+    # 1. Inspect any active publish PipelineJob
+    job = (
+        db.query(PipelineJob)
+        .filter(
+            PipelineJob.entity_id == clip.id,
+            PipelineJob.stage == "publish",
+        )
+        .first()
+    )
+
+    if job:
+        # Reject cancellation of unresolved attempted uploads (I3)
+        has_session = False
+        if job.payload_json:
+            try:
+                payload_dict = json.loads(job.payload_json)
+                has_session = bool(payload_dict.get("upload_session_uri"))
+            except Exception:
+                pass
+        if has_session or job.attempt_count > 0:
+            return {
+                "clip_id": clip_id,
+                "ok": False,
+                "status": clip.status.value,
+                "error": "Cannot reject clip with an active or retrying upload attempt. Await completion or trigger explicit reconciliation.",
+                "error_type": "CONFLICT",
+            }
+
+        if job.status == PipelineJobStatus.RUNNING:
+            return {
+                "clip_id": clip_id,
+                "ok": False,
+                "status": clip.status.value,
+                "error": "Publication is currently RUNNING and cannot be rejected.",
+                "error_type": "CONFLICT",
+            }
+
+        if job.status == PipelineJobStatus.PENDING:
+            # Atomic CAS update: ensure status was still PENDING at moment of reject
+            rows_updated = (
+                db.query(PipelineJob)
+                .filter(
+                    PipelineJob.id == job.id,
+                    PipelineJob.status == PipelineJobStatus.PENDING,
+                )
+                .update(
+                    {
+                        PipelineJob.status: PipelineJobStatus.CANCELLED,
+                        PipelineJob.completed_at: datetime.utcnow(),
+                        PipelineJob.locked_by: None,
+                        PipelineJob.locked_at: None,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if rows_updated == 0:
+                db.rollback()
+                return {
+                    "clip_id": clip_id,
+                    "ok": False,
+                    "status": clip.status.value,
+                    "error": "Publication was concurrently claimed by worker and is currently RUNNING; cannot reject.",
+                    "error_type": "CONFLICT",
+                }
+
+    # 2. Cancel bound PublishSlot while preserving ownership history (I8)
+    slot = (
+        db.query(PublishSlot)
+        .filter(
+            PublishSlot.clip_id == clip.id,
+            PublishSlot.status.in_([
+                PublishSlotStatus.RESERVED.value,
+                PublishSlotStatus.SCHEDULED.value,
+            ]),
+        )
+        .first()
+    )
+
+    if slot:
+        slot.status = PublishSlotStatus.CANCELLED.value
+        # slot.clip_id retained for historical audit trail
+
     code = reason_code or "MANUAL_REJECTION"
     clip.status = ClipStatus.REJECTED
+    clip.scheduled_publish_at = None
     clip.rejection_reason_code = code
     clip.rejection_note = note
     clip.rejected_at = datetime.utcnow()
@@ -194,6 +283,25 @@ def reject_clip_action(
     existing["rejection_note"] = note
     clip.quality_check_result = json.dumps(existing)
 
+    # Clean up any non-SUCCESS PublishLog (mark CANCELLED), write 0 new rows
+    p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
+    if p_log and p_log.status != "SUCCESS":
+        p_log.status = "CANCELLED"
+
+    audit = AuditLog(
+        actor=actor,
+        event="clip.rejected",
+        channel_id=slot.channel_id if slot else None,
+        job_id=job.id if job else None,
+        details=json.dumps({
+            "clip_id": clip.id,
+            "reason_code": code,
+            "note": note,
+            "slot_id": slot.id if slot else None,
+        }),
+    )
+    db.add(audit)
+
     db.commit()
     logger.info("Actor '%s' rejected clip %s (code: %s, note: %s)", actor, clip_id, code, note)
     return {
@@ -202,6 +310,153 @@ def reject_clip_action(
         "status": ClipStatus.REJECTED.value,
         "reason_code": code,
         "note": note,
+    }
+
+
+def recover_publish_job(
+    job_id: str,
+    db: Session,
+    reason: str = "Operator manual recovery",
+    actor: str = "operator",
+) -> Dict[str, Any]:
+    """
+    Explicitly recovers a failed, quarantined, dead-lettered, or cancelled publish job (I4).
+    
+    1. Verifies the target clip exists and has not already been published.
+    2. Verifies any bound slot is valid and RESERVED; allocates a new valid slot if
+       the prior slot expired or was cancelled.
+    3. Preserves prior attempt history in AuditLog while resetting attempt_count to 0
+       so the job gets a fresh budget.
+    4. Preserves any existing upload_session_uri or idempotency evidence in payload_json.
+    5. Transitions job back to PENDING and returns success payload.
+    """
+    job = (
+        db.query(PipelineJob)
+        .filter(PipelineJob.id == job_id, PipelineJob.stage == "publish")
+        .first()
+    )
+    if not job:
+        return {
+            "ok": False,
+            "error": f"Publish job {job_id} not found",
+            "error_type": "NOT_FOUND",
+        }
+
+    clip = db.query(Clip).filter_by(id=job.entity_id).first()
+    if not clip:
+        return {
+            "ok": False,
+            "error": f"Target clip {job.entity_id} not found",
+            "error_type": "NOT_FOUND",
+        }
+
+    # Verify clip has not already been successfully published
+    if clip.status == ClipStatus.PUBLISHED or getattr(clip, "youtube_video_id", None):
+        return {
+            "ok": False,
+            "error": f"Clip {clip.id} has already been published",
+            "error_type": "ALREADY_PUBLISHED",
+        }
+
+    p_log = db.query(PublishLog).filter(PublishLog.clip_id == clip.id, PublishLog.status == "SUCCESS").first()
+    if p_log:
+        return {
+            "ok": False,
+            "error": f"Clip {clip.id} already has a successful PublishLog ({p_log.youtube_video_id})",
+            "error_type": "ALREADY_PUBLISHED",
+        }
+
+    if job.status == PipelineJobStatus.RUNNING:
+        return {
+            "ok": False,
+            "error": f"Job {job_id} is currently RUNNING; cannot recover in-flight job",
+            "error_type": "CONFLICT",
+        }
+
+    # Parse and preserve existing payload (including upload_session_uri)
+    try:
+        payload = json.loads(job.payload_json or "{}")
+    except Exception:
+        payload = {}
+
+    # Validate or re-allocate PublishSlot
+    slot = None
+    slot_id = payload.get("slot_id")
+    if slot_id:
+        slot = db.query(PublishSlot).filter_by(id=slot_id).first()
+
+    now = datetime.utcnow()
+    slot_is_valid = (
+        slot is not None
+        and slot.status == PublishSlotStatus.RESERVED.value
+        and slot.slot_start > now
+    )
+
+    if not slot_is_valid:
+        # Prior slot expired or was cancelled: allocate a new slot
+        cand = clip.candidate
+        channel = (
+            cand.source_video.channel
+            if (cand and cand.source_video and cand.source_video.channel)
+            else db.query(Channel).first()
+        )
+        if not channel:
+            return {
+                "ok": False,
+                "error": "No YouTube channel configured for slot allocation.",
+                "error_type": "NO_CHANNEL",
+            }
+
+        slot = publish_slot_service.allocate_slot(
+            channel_id=channel.id,
+            clip_id=clip.id,
+            db=db,
+            commit=False,
+        )
+        payload["slot_id"] = slot.id
+        payload["scheduled_at"] = slot.slot_start.isoformat()
+
+    slot.status = PublishSlotStatus.RESERVED.value
+    clip.status = ClipStatus.APPROVED
+    clip.scheduled_publish_at = slot.slot_start
+
+    # Record prior attempt history in AuditLog
+    prior_status = job.status.value if hasattr(job.status, "value") else str(job.status)
+    audit = AuditLog(
+        actor=actor,
+        event="job.recovered",
+        channel_id=slot.channel_id if slot else None,
+        job_id=job.id,
+        details=json.dumps({
+            "reason": reason,
+            "previous_status": prior_status,
+            "previous_attempt_count": job.attempt_count,
+            "slot_id": slot.id,
+            "has_upload_session": bool(payload.get("upload_session_uri")),
+        }),
+    )
+    db.add(audit)
+
+    # Reset job fields to PENDING with attempt_count = 0
+    job.attempt_count = 0
+    job.status = PipelineJobStatus.PENDING
+    job.next_run_at = slot.slot_start
+    job.error_message = None
+    job.completed_at = None
+    job.locked_by = None
+    job.locked_at = None
+    job.payload_json = json.dumps(payload)
+
+    db.commit()
+    logger.info("Recovered publish job %s for clip %s (slot %s, scheduled %s)", job.id, clip.id, slot.id, slot.slot_start)
+
+    return {
+        "ok": True,
+        "job_id": job.id,
+        "clip_id": clip.id,
+        "slot_id": slot.id,
+        "slot_start": slot.slot_start.isoformat(),
+        "status": "PENDING",
     }
 
 

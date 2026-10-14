@@ -69,6 +69,7 @@ class PipelineJobStatus(str, Enum):
     FAILED = "FAILED"
     DEAD_LETTER = "DEAD_LETTER"
     QUARANTINED = "QUARANTINED"
+    CANCELLED = "CANCELLED"
 
     def __eq__(self, other):
         if isinstance(other, str):

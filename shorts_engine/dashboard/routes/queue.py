@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 from collections import OrderedDict
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File, Query, status
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from sqlalchemy import or_
 from shorts_engine.config.settings import settings
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, PublishJob
+from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, PublishJob, PipelineJob, PipelineJobStatus
 from shorts_engine.services.clip_selection.selector import parse_ai_provenance
 from shorts_engine.services.analytics.predictor import viral_predictor
 from shorts_engine.services.captioning.templates import list_caption_templates
@@ -27,6 +27,7 @@ from shorts_engine.services.publishing.actions import (
     reject_clip_action,
     bulk_approve_clips,
     bulk_reject_clips,
+    recover_publish_job,
 )
 
 logger = logging.getLogger(__name__)
@@ -726,14 +727,17 @@ def approve_clip(
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error"))
 
-    return {
-        "clip_id": clip_id,
-        "new_status": res.get("status", "APPROVED"),
-        "slot_start": res.get("slot_start"),
-        "slot_id": res.get("slot_id"),
-        "job_id": res.get("job_id"),
-        "enqueued": res.get("enqueued", True),
-    }
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "clip_id": clip_id,
+            "new_status": res.get("status", "APPROVED"),
+            "slot_start": res.get("slot_start"),
+            "slot_id": res.get("slot_id"),
+            "job_id": res.get("job_id"),
+            "enqueued": res.get("enqueued", True),
+        },
+    )
 
 
 @router.post("/queue/{clip_id}/undo", summary="Undo an approval or rejection")
@@ -1995,22 +1999,50 @@ def api_clip_action(
             if err_type == "CONFLICT":
                 raise HTTPException(status_code=409, detail=res.get("error"))
             raise HTTPException(status_code=400, detail=res.get("error"))
-        return {
-            "status": "accepted",
-            "clip_id": clip_id,
-            "action": action,
-            "new_status": res.get("status", "APPROVED"),
-            "job_id": res.get("job_id"),
-            "slot_id": res.get("slot_id"),
-            "slot_start": res.get("slot_start"),
-            "res": res,
-        }
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "status": "accepted",
+                "clip_id": clip_id,
+                "action": action,
+                "new_status": res.get("status", "APPROVED"),
+                "job_id": res.get("job_id"),
+                "slot_id": res.get("slot_id"),
+                "slot_start": res.get("slot_start"),
+                "res": res,
+            },
+        )
     elif action == "reject":
         res = reject_clip_action(clip_id, db=db, actor=current_user.username)
         if not res.get("ok"):
+            err_type = res.get("error_type")
+            if err_type == "CONFLICT":
+                raise HTTPException(status_code=409, detail=res.get("error"))
             raise HTTPException(status_code=400, detail=res.get("error"))
         return {"status": "success", "clip_id": clip_id, "action": action, "new_status": ClipStatus.REJECTED.value}
-    elif action in ("restore", "recover"):
+    elif action in ("recover", "republish"):
+        job = (
+            db.query(PipelineJob)
+            .filter(
+                PipelineJob.entity_id == clip.id,
+                PipelineJob.stage == "publish",
+            )
+            .first()
+        )
+        if job:
+            res = recover_publish_job(job_id=job.id, db=db, reason="Operator recover action", actor=current_user.username)
+            if not res.get("ok"):
+                err_type = res.get("error_type")
+                if err_type in ("CONFLICT", "ALREADY_PUBLISHED"):
+                    raise HTTPException(status_code=409, detail=res.get("error"))
+                raise HTTPException(status_code=400, detail=res.get("error"))
+            return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=res)
+        else:
+            clip.status = ClipStatus.WAITING_APPROVAL
+            clip.queued_at = datetime.utcnow()
+            db.commit()
+            return {"status": "success", "clip_id": clip_id, "action": action, "new_status": clip.status.value}
+    elif action == "restore":
         clip.status = ClipStatus.WAITING_APPROVAL
         clip.queued_at = datetime.utcnow()
         db.commit()
@@ -2024,6 +2056,25 @@ def api_clip_action(
 
     db.commit()
     return {"status": "success", "clip_id": clip_id, "action": action, "new_status": clip.status.value}
+
+
+@router.post("/api/pipeline/jobs/{job_id}/recover", summary="Explicitly recover a failed or quarantined publish job")
+def api_recover_publish_job(
+    job_id: str,
+    reason: str = Form(default="Operator manual recovery"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_operator),
+):
+    """Explicitly recovers a failed, quarantined, or dead-lettered publish job (I4)."""
+    res = recover_publish_job(job_id=job_id, db=db, reason=reason, actor=current_user.username)
+    if not res.get("ok"):
+        err_type = res.get("error_type")
+        if err_type == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail=res.get("error"))
+        if err_type in ("CONFLICT", "ALREADY_PUBLISHED"):
+            raise HTTPException(status_code=409, detail=res.get("error"))
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=res)
 
 
 @router.post("/api/queue/ingest", summary="Ingest external video file into Review Queue")

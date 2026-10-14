@@ -608,20 +608,20 @@ def test_e2e_approval_to_worker_claim_publish_leg(test_env):
     job.next_run_at = datetime.utcnow() - timedelta(seconds=1)
     db.commit()
 
-    # Step 3: Worker daemon claims and processes the job in dry_run mode
-    with patch.object(settings, "DRY_RUN_PUBLISHING", True):
+    # Step 3: Worker daemon claims and processes the job in dry_run mode (ALLOW_IN_PROCESS_PREVIEW)
+    with patch.dict("os.environ", {"ALLOW_IN_PROCESS_PREVIEW": "1"}), patch.object(settings, "DRY_RUN_PUBLISHING", True):
         daemon = WorkerDaemon(session_factory=TestSession, pinned_groups=["publish"])
         claimed_job = daemon.run_once()
 
     assert claimed_job is not None
     assert claimed_job.id == job.id
 
-    # Step 4: Verify post-execution states: job DONE, clip PUBLISHED, PublishLog, events
+    # Step 4: Verify post-execution states: job DONE, clip remains APPROVED in preview, PublishLog, events
     db.refresh(job)
     assert job.status == PipelineJobStatus.DONE
 
     db.refresh(clip)
-    assert clip.status == ClipStatus.PUBLISHED
+    assert clip.status == ClipStatus.APPROVED  # I5: never set PUBLISHED in preview mode
 
     p_log = db.query(PublishLog).filter_by(clip_id=clip.id).first()
     assert p_log is not None
@@ -642,6 +642,8 @@ def test_worker_execute_publish_past_slot_emits_late_publish_event(test_env):
     When worker execution starts later than slot_start, the worker publishes
     immediately without error and emits a job.late_publish event for observability.
     """
+    from shorts_engine.services.publishing.slots import publish_slot_service
+
     _, db, tmp_path, _ = test_env
     channel, video = _seed_channel_and_video(db, "vid_late_pub_event")
     clip = _seed_clip(db, video, "clip_late_pub_event", status=ClipStatus.APPROVED)
@@ -649,19 +651,21 @@ def test_worker_execute_publish_past_slot_emits_late_publish_event(test_env):
     rendered_file = tmp_path / "rendered_late.mp4"
     rendered_file.write_bytes(b"\x00" * 1024)
     clip.rendered_path = str(rendered_file)
+    slot = publish_slot_service.allocate_slot(channel_id=channel.id, clip_id=clip.id, db=db)
     db.commit()
 
     past_time = datetime.utcnow() - timedelta(minutes=15)
     worker = YouTubePublishWorker(dry_run=True)
 
-    result = worker.execute_publish_intent(
-        clip_id=clip.id,
-        payload={"scheduled_at": past_time.isoformat(), "dry_run": True},
-        db=db,
-    )
+    with patch.dict("os.environ", {"ALLOW_IN_PROCESS_PREVIEW": "1"}):
+        result = worker.execute_publish_intent(
+            clip_id=clip.id,
+            payload={"scheduled_at": past_time.isoformat(), "dry_run": True, "slot_id": slot.id},
+            db=db,
+        )
 
     assert result["success"] is True
-    assert result["status"] == "PUBLISHED"
+    assert result["status"] == "DRY_RUN"
 
     # Verify job.late_publish event emitted
     late_ev = db.query(EventLog).filter_by(entity_id=clip.id, event_name="job.late_publish").first()

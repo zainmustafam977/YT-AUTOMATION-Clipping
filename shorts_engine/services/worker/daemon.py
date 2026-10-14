@@ -43,6 +43,7 @@ from shorts_engine.orchestration.stage_registry import (
     StageExecutor,
     PIPELINE,
 )
+from shorts_engine.orchestration.exceptions import JobCancelledError
 from shorts_engine.orchestration.telemetry import emit
 from shorts_engine.services.queue.durable_queue import durable_job_queue, DurableJobQueue
 from shorts_engine.services.worker.runner import (
@@ -366,6 +367,10 @@ class WorkerDaemon:
             if not job_db:
                 return False
 
+            if job_db.status == PipelineJobStatus.CANCELLED:
+                logger.info("Worker %s skipping job %s because it was CANCELLED", self.worker_id, job_db.id)
+                return False
+
             stage_str = job_db.stage
             ctx = self._build_stage_context(job_db, session)
             logger.info(
@@ -375,18 +380,19 @@ class WorkerDaemon:
 
             result = self.stage_executor.execute_stage(stage_str, ctx, job=job_db)
 
-            # Mark job DONE
-            job_db.status = PipelineJobStatus.DONE
-            job_db.completed_at = datetime.utcnow()
-            job_db.locked_by = None
-            job_db.locked_at = None
-            if result and isinstance(result, dict):
-                try:
-                    job_db.result_json = json.dumps(result)
-                except Exception:
-                    pass
-            session.commit()
-            is_marked_done = True
+            # Mark job DONE only if not cancelled
+            if job_db.status != PipelineJobStatus.CANCELLED:
+                job_db.status = PipelineJobStatus.DONE
+                job_db.completed_at = datetime.utcnow()
+                job_db.locked_by = None
+                job_db.locked_at = None
+                if result and isinstance(result, dict):
+                    try:
+                        job_db.result_json = json.dumps(result)
+                    except Exception:
+                        pass
+                session.commit()
+                is_marked_done = True
 
             emit(
                 "job_finished",
@@ -400,7 +406,10 @@ class WorkerDaemon:
             self._on_job_completed(job_db, result, session, stage_name=stage_str)
 
             clear_cuda_cache()
-            return True
+        except JobCancelledError:
+            logger.info("Worker %s: job %s was cancelled during execution; preserving CANCELLED state.", self.worker_id, job.id)
+            clear_cuda_cache()
+            return False
 
         except Exception as exc:
             from shorts_engine.services.events.taxonomy import emit_platform_event, STAGE_FAILED

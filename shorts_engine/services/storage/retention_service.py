@@ -226,6 +226,10 @@ class RetentionPolicyService:
             if clip.id in protected_ids:
                 continue
 
+            # Exclude dry-run previews from intermediate asset pruning
+            if clip.publish_log and clip.publish_log.status == "DRY_RUN":
+                continue
+
             # Check publish timestamp
             pub_time = None
             if clip.publish_log and clip.publish_log.published_at:

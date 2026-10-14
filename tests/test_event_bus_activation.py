@@ -488,7 +488,7 @@ def test_review_approval_emits_clip_approved(tmp_path, api_client, db_session, m
         data={"auto_publish": "false"},
         follow_redirects=False,
     )
-    assert response.status_code in (200, 303)
+    assert response.status_code in (200, 202, 303)
 
     # Verify clip.approved was persisted to event_logs
     event = db_session.query(EventLog).filter_by(
@@ -501,12 +501,15 @@ def test_review_approval_emits_clip_approved(tmp_path, api_client, db_session, m
     assert event.payload.get("title") == "Test Clip Generated Title"
 
 
-def test_publish_worker_emits_clip_published_and_channel_health(tmp_path, db_session):
+def test_publish_worker_emits_clip_published_and_channel_health(tmp_path, db_session, monkeypatch):
     """
     Acceptance Criterion:
     Publish worker emits clip.published and channel.health with full payload.
     """
     from shorts_engine.services.publishing.worker import YouTubePublishWorker
+    from shorts_engine.services.publishing.slots import publish_slot_service
+
+    monkeypatch.setenv("ALLOW_IN_PROCESS_PREVIEW", "1")
 
     chan, vid, cand, clip = _create_test_clip_hierarchy(
         db=db_session,
@@ -516,6 +519,7 @@ def test_publish_worker_emits_clip_published_and_channel_health(tmp_path, db_ses
     dummy_video.write_bytes(b"\x00" * 1024)
     clip.rendered_path = str(dummy_video)
     clip.status = ClipStatus.APPROVED
+    slot = publish_slot_service.allocate_slot(channel_id=chan.id, clip_id=clip.id, db=db_session)
     db_session.commit()
 
     worker = YouTubePublishWorker(dry_run=True)
@@ -523,7 +527,7 @@ def test_publish_worker_emits_clip_published_and_channel_health(tmp_path, db_ses
     # 1. Execute Publish Intent (dry run)
     result = worker.execute_publish_intent(
         clip_id=clip.id,
-        payload={"dry_run": True},
+        payload={"dry_run": True, "slot_id": slot.id},
         db=db_session,
     )
     assert result.get("success") is True

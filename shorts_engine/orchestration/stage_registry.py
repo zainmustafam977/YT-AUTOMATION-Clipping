@@ -35,6 +35,7 @@ from shorts_engine.orchestration.exceptions import (
     TransientError,
     PermanentError,
     DailyBudgetExceededError,
+    JobCancelledError,
     classify_exception,
 )
 from shorts_engine.orchestration.telemetry import emit, get_telemetry_emitter
@@ -498,11 +499,15 @@ def publish_stage(ctx: StageContext) -> Dict[str, Any]:
 
     ctx.heartbeat()
     worker = YouTubePublishWorker()
+    job_entity = None
+    if ctx.job_id:
+        job_entity = ctx.db.query(PipelineJob).filter_by(id=ctx.job_id).first()
     try:
         return worker.execute_publish_intent(
             clip_id=ctx.entity_id or ctx.video_id,
             payload=ctx.payload,
             db=ctx.db,
+            job_entity=job_entity,
         )
     except Exception as e:
         raise classify_exception(e)
@@ -789,6 +794,25 @@ class StageExecutor:
                 stage=stage.name,
             )
             raise budget_err
+
+        except JobCancelledError as cancel_err:
+            error_msg = str(cancel_err)
+            logger.info("Job %s was cancelled during stage '%s': %s", job.id if job else (ctx.job_id or "job"), stage.name, error_msg)
+            if job:
+                job.status = PipelineJobStatus.CANCELLED
+                job.last_error = error_msg
+                job.completed_at = datetime.utcnow()
+                job.locked_by = None
+                job.locked_at = None
+                ctx.db_session.commit()
+            emit(
+                "job_cancelled",
+                job_id=job.id if job else (ctx.job_id or "job"),
+                last_error=error_msg,
+                stage=stage.name,
+                attempt_count=job.attempt_count if job else ctx.attempt_count,
+            )
+            raise cancel_err
 
         except PermanentError as perm_err:
             error_msg = str(perm_err)
