@@ -11,7 +11,5 @@ Counts in this file are generated from the ledger.
 | Status | Count |
 |--------|-------|
 | CONFIRMED | 1 |
-| DONE-VERIFIED | 128 |
-| IN-PROGRESS | 1 |
-| PARTIAL | 10 |
+| DONE-VERIFIED | 139 |
 | UNKNOWN | 15 |

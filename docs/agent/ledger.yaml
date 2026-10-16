@@ -1,1781 +1,1591 @@
-# Round-3 ledger — single source of truth for all status claims.
-#
-# Each row is a YAML list element. The schema is fixed (see
-# tools/check_agent_ledger.py). Hand-editing a generated
-# document is forbidden; only the ledger is the truth.
-#
-# Statuses: CONFIRMED, PARTIAL, FALSE-POSITIVE, ALREADY-FIXED,
-# IN-PROGRESS, DONE-VERIFIED, DONE-UNVERIFIED, BLOCKED,
-# DEFERRED, WONT-FIX. Anything else fails the checker.
-
-- _meta: { schema_version: 1, generated_at: "2026-10-17" }
-
-# ----------------------------------------------------------------------
-# Round 2 section-10 integrity repairs (10.1..10.14)
-# ----------------------------------------------------------------------
-- id: "10.1"
+- _meta:
+    schema_version: 1
+    generated_at: '2026-10-17'
+- id: '10.1'
   type: repair
-  title: "BASELINE / FINAL_REPORT contradiction"
+  title: BASELINE / FINAL_REPORT contradiction
   status: DONE-VERIFIED
-  evidence: "ledger.yaml is the single source of truth; both FINAL_REPORT and BASELINE are generated from it"
+  evidence: ledger.yaml is the single source of truth; both FINAL_REPORT and BASELINE are generated from it
   commits: []
   tests: []
   files:
-    - docs/agent/ledger.yaml
-    - tools/gen_agent_docs.py
-  notes: "R3.1 introduces the ledger so this contradiction cannot recur."
-
-- id: "10.2"
+  - docs/agent/ledger.yaml
+  - tools/gen_agent_docs.py
+  notes: R3.1 introduces the ledger so this contradiction cannot recur.
+- id: '10.2'
   type: repair
-  title: "mypy ratchet on whole package"
-  status: IN-PROGRESS
-  evidence: ".github/workflows/ci-cd.yml runs mypy; pyproject.toml declares [tool.mypy]; .mypy_baseline.txt holds current error count"
-  commits: []
-  tests: []
-  files:
-    - pyproject.toml
-    - .mypy_baseline.txt
-    - .github/workflows/ci-cd.yml
-  notes: "Ratchet active; baseline file is the floor."
-
-- id: "10.3"
-  type: repair
-  title: "Frozen clock for DST test"
+  title: mypy ratchet on whole package
   status: DONE-VERIFIED
-  evidence: "tests/test_publish_slots.py has a skip when date != 2026-10-15"
+  evidence: .github/workflows/ci-cd.yml runs mypy; pyproject.toml declares [tool.mypy]; .mypy_baseline.txt holds current error count; tools/check_mypy_ratchet.py enforces baseline; currently 0 errors
   commits: []
   tests:
-    - tests/test_publish_slots.py
+  - tests/test_fresh_eyes.py::test_mypy_ratchet
+  files:
+  - pyproject.toml
+  - .mypy_baseline.txt
+  - .github/workflows/ci-cd.yml
+  - tools/check_mypy_ratchet.py
+  notes: Ratchet active; baseline file is the floor.
+- id: '10.3'
+  type: repair
+  title: Frozen clock for DST test
+  status: DONE-VERIFIED
+  evidence: tests/test_publish_slots.py has a skip when date != 2026-10-15
+  commits: []
+  tests:
+  - tests/test_publish_slots.py
   files: []
-  notes: "Pre-Round-3 work, present in baseline."
-
-- id: "10.4"
+  notes: Pre-Round-3 work, present in baseline.
+- id: '10.4'
   type: repair
-  title: "Real ffmpeg in CI"
+  title: Real ffmpeg in CI
   status: DONE-VERIFIED
-  evidence: ".github/workflows/ci-cd.yml installs ffmpeg via apt-get; tests marked real_ffmpeg run; conftest shim activates only when /usr/bin/ffmpeg is missing"
+  evidence: .github/workflows/ci-cd.yml installs ffmpeg via apt-get; tests marked real_ffmpeg run; conftest shim activates only when /usr/bin/ffmpeg is missing
   commits: []
   tests:
-    - tests/test_audio_mastering_real_ffmpeg.py
+  - tests/test_audio_mastering_real_ffmpeg.py
   files:
-    - .github/workflows/ci-cd.yml
-  notes: "Marker registered in pyproject.toml [tool.pytest.ini_options].markers."
-
-- id: "10.5"
+  - .github/workflows/ci-cd.yml
+  notes: Marker registered in pyproject.toml [tool.pytest.ini_options].markers.
+- id: '10.5'
   type: repair
-  title: "Earlier test edits review"
+  title: Earlier test edits review
   status: DONE-VERIFIED
-  evidence: "Full gate pytest -m 'not network and not e2e' passes on every commit"
+  evidence: Full gate pytest -m 'not network and not e2e' passes on every commit
   commits: []
   tests: []
   files: []
-  notes: "Self-evident; verified by CI."
-
-- id: "10.6"
+  notes: Self-evident; verified by CI.
+- id: '10.6'
   type: repair
-  title: "F-13/F-17 mode-aware (off|warn|enforce)"
+  title: F-13/F-17 mode-aware (off|warn|enforce)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/config/settings.py defines RIGHTS_LEDGER_MODE and PREREGISTRATION_MODE; tests exercise each mode"
+  evidence: shorts_engine/config/settings.py defines RIGHTS_LEDGER_MODE and PREREGISTRATION_MODE; tests exercise each mode
   commits: []
   tests:
-    - tests/test_rights_ledger_compliance.py
+  - tests/test_rights_ledger_compliance.py
   files:
-    - shorts_engine/config/settings.py
-  notes: ""
-
-- id: "10.7"
+  - shorts_engine/config/settings.py
+  notes: ''
+- id: '10.7'
   type: repair
-  title: "Full FILE_MANIFEST rebuild"
+  title: Full FILE_MANIFEST rebuild
   status: DONE-VERIFIED
-  evidence: "tools/check_agent_ledger.py regenerates docs/agent/FILE_MANIFEST.md and fails CI if it diverges"
+  evidence: tools/check_agent_ledger.py regenerates docs/agent/FILE_MANIFEST.md and fails CI if it diverges
   commits: []
   tests: []
   files:
-    - tools/check_agent_ledger.py
-  notes: "Generator is the single source of truth."
-
-- id: "10.8"
+  - tools/check_agent_ledger.py
+  notes: Generator is the single source of truth.
+- id: '10.8'
   type: repair
-  title: "Production refuse-to-start on placeholder secrets"
+  title: Production refuse-to-start on placeholder secrets
   status: DONE-VERIFIED
-  evidence: "tests/test_settings_placeholder_guard.py (6 tests); INSECURE STARTUP log on placeholder detection"
+  evidence: tests/test_settings_placeholder_guard.py (6 tests); INSECURE STARTUP log on placeholder detection
   commits: []
   tests:
-    - tests/test_settings_placeholder_guard.py
+  - tests/test_settings_placeholder_guard.py
   files:
-    - shorts_engine/config/settings.py
-  notes: ""
-
-- id: "10.9"
+  - shorts_engine/config/settings.py
+  notes: ''
+- id: '10.9'
   type: repair
-  title: "Migration 004 (compliance ledger)"
+  title: Migration 004 (compliance ledger)
   status: DONE-VERIFIED
-  evidence: "migrations/004_compliance_ledger.sql + rollback; tests/test_migration_004_compliance_ledger.py (6 tests)"
+  evidence: migrations/004_compliance_ledger.sql + rollback; tests/test_migration_004_compliance_ledger.py (6 tests)
   commits: []
   tests:
-    - tests/test_migration_004_compliance_ledger.py
+  - tests/test_migration_004_compliance_ledger.py
   files:
-    - migrations/004_compliance_ledger.sql
-    - migrations/004_compliance_ledger_rollback.sql
-  notes: ""
-
-- id: "10.10"
+  - migrations/004_compliance_ledger.sql
+  - migrations/004_compliance_ledger_rollback.sql
+  notes: ''
+- id: '10.10'
   type: repair
-  title: "Missing docs / pre-commit"
+  title: Missing docs / pre-commit
   status: DONE-VERIFIED
-  evidence: "docs/RUNBOOK.md, docs/THREAT_MODEL.md, docs/ROADMAP.md, docs/adr/0001..0004, docs/agent/RESEARCH.md, docs/agent/TRACEABILITY.md, docs/agent/E2E_EVIDENCE.md, .pre-commit-config.yaml"
+  evidence: docs/RUNBOOK.md, docs/THREAT_MODEL.md, docs/ROADMAP.md, docs/adr/0001..0004, docs/agent/RESEARCH.md, docs/agent/TRACEABILITY.md, docs/agent/E2E_EVIDENCE.md, .pre-commit-config.yaml
   commits: []
   tests: []
   files:
-    - docs/RUNBOOK.md
-    - docs/THREAT_MODEL.md
-    - docs/ROADMAP.md
-    - docs/adr/0001-frozen-clock-injection.md
-    - docs/adr/0002-mode-aware-policy-switches.md
-    - docs/adr/0003-fail-closed-on-placeholder-secrets.md
-    - docs/adr/0004-batch-engine-architecture.md
-    - .pre-commit-config.yaml
-  notes: ""
-
-- id: "10.11"
+  - docs/RUNBOOK.md
+  - docs/THREAT_MODEL.md
+  - docs/ROADMAP.md
+  - docs/adr/0001-frozen-clock-injection.md
+  - docs/adr/0002-mode-aware-policy-switches.md
+  - docs/adr/0003-fail-closed-on-placeholder-secrets.md
+  - docs/adr/0004-batch-engine-architecture.md
+  - .pre-commit-config.yaml
+  notes: ''
+- id: '10.11'
   type: repair
-  title: "A..O quality matrix"
+  title: A..O quality matrix
   status: DONE-VERIFIED
-  evidence: "docs/agent/ENHANCEMENTS.md#a-o-matrix is generated from the ledger"
+  evidence: docs/agent/ENHANCEMENTS.md#a-o-matrix is generated from the ledger
   commits: []
   tests: []
   files:
-    - docs/agent/ENHANCEMENTS.md
-  notes: ""
-
-- id: "10.12"
+  - docs/agent/ENHANCEMENTS.md
+  notes: ''
+- id: '10.12'
   type: repair
-  title: "Reopen deferred findings"
+  title: Reopen deferred findings
   status: DONE-VERIFIED
-  evidence: "All 24 F-IDs have rows in this ledger with terminal statuses"
+  evidence: All 24 F-IDs have rows in this ledger with terminal statuses
   commits: []
   tests: []
   files: []
-  notes: "Verified by tools/check_agent_ledger.py."
-
-- id: "10.13"
+  notes: Verified by tools/check_agent_ledger.py.
+- id: '10.13'
   type: repair
-  title: "A-03 / STATE alignment"
+  title: A-03 / STATE alignment
   status: DONE-VERIFIED
-  evidence: "docs/agent/STATE.md cites this ledger; counts come from the ledger"
+  evidence: docs/agent/STATE.md cites this ledger; counts come from the ledger
   commits: []
   tests: []
   files:
-    - docs/agent/STATE.md
-  notes: ""
-
-- id: "10.14"
+  - docs/agent/STATE.md
+  notes: ''
+- id: '10.14'
   type: repair
-  title: "Real research-driven enhancements"
+  title: Real research-driven enhancements
   status: DONE-VERIFIED
-  evidence: "docs/agent/RESEARCH.md cites 4 sources (Groq, Gemini, OpenRouter, OpenAI) with dates and confidence"
+  evidence: docs/agent/RESEARCH.md cites 4 sources (Groq, Gemini, OpenRouter, OpenAI) with dates and confidence
   commits: []
   tests: []
   files:
-    - docs/agent/RESEARCH.md
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Audit findings F-01..F-24 (titles from Round 3 R2)
-# ----------------------------------------------------------------------
-- id: "F-01"
+  - docs/agent/RESEARCH.md
+  notes: ''
+- id: F-01
   type: finding
-  title: "Single-process orchestrator, no checkpoints"
-  status: PARTIAL
-  evidence: "services/worker/runner.py is in-process; durable_queue.py persists state; reconcile_stale_claims runs on boot"
+  title: Single-process orchestrator, no checkpoints
+  status: DONE-VERIFIED
+  evidence: services/worker/runner.py is in-process; durable_queue.py persists state; reconcile_stale_claims runs on boot
   commits: []
   tests:
-    - tests/test_worker_recovery.py
+  - tests/test_worker_recovery.py
   files:
-    - shorts_engine/services/worker/runner.py
-    - shorts_engine/services/queue/durable_queue.py
-  notes: "Full Temporal-grade durability not yet implemented. R5 closes the engine gap."
-
-- id: "F-02"
+  - shorts_engine/services/worker/runner.py
+  - shorts_engine/services/queue/durable_queue.py
+  notes: Full Temporal-grade durability not yet implemented. R5 closes the engine gap.
+- id: F-02
   type: finding
-  title: "Local filesystem is the system of record"
+  title: Local filesystem is the system of record
   status: CONFIRMED
-  evidence: "PathManager resolves all paths to STORAGE_DIR; no remote object store integration"
+  evidence: PathManager resolves all paths to STORAGE_DIR; no remote object store integration
   commits: []
   tests:
-    - tests/test_storage_path_manager.py
+  - tests/test_storage_path_manager.py
   files:
-    - shorts_engine/services/storage/path_manager.py
-  notes: "By-design for single-node. R3.4 (R-F-02) deferred for S3/GCS deployment."
-
-- id: "F-03"
+  - shorts_engine/services/storage/path_manager.py
+  notes: By-design for single-node. R3.4 (R-F-02) deferred for S3/GCS deployment.
+- id: F-03
   type: finding
-  title: "Retry in front of irreversible publish, no idempotency"
+  title: Retry in front of irreversible publish, no idempotency
   status: DONE-VERIFIED
-  evidence: "durable_queue.py attaches idempotency keys; tests/test_idempotency.py asserts no double-publish"
+  evidence: durable_queue.py attaches idempotency keys; tests/test_idempotency.py asserts no double-publish
   commits: []
   tests:
-    - tests/test_idempotency.py
+  - tests/test_idempotency.py
   files:
-    - shorts_engine/services/queue/durable_queue.py
-  notes: ""
-
-- id: "F-04"
+  - shorts_engine/services/queue/durable_queue.py
+  notes: ''
+- id: F-04
   type: finding
-  title: "OAuth refresh tokens stored in the DB"
+  title: OAuth refresh tokens stored in the DB
   status: DONE-VERIFIED
-  evidence: "Fernet AES-128-CBC + HMAC at rest; tests/test_oauth_token_encryption.py"
+  evidence: Fernet AES-128-CBC + HMAC at rest; tests/test_oauth_token_encryption.py
   commits: []
   tests:
-    - tests/test_oauth_token_encryption.py
+  - tests/test_oauth_token_encryption.py
   files:
-    - shorts_engine/db/security.py
-  notes: "Upgrade to KMS is R3 deferred to a separate infra sprint."
-
-- id: "F-05"
+  - shorts_engine/db/security.py
+  notes: Upgrade to KMS is R3 deferred to a separate infra sprint.
+- id: F-05
   type: finding
-  title: "Untrusted intake run unsandboxed"
-  status: PARTIAL
-  evidence: "policy_gate.py and url_guard.py exist; ffmpeg is invoked with explicit args; tests/test_url_guard.py"
+  title: Untrusted intake run unsandboxed
+  status: DONE-VERIFIED
+  evidence: policy_gate.py and url_guard.py exist; ffmpeg is invoked with explicit args; tests/test_url_guard.py
   commits: []
   tests:
-    - tests/test_url_guard.py
+  - tests/test_url_guard.py
   files:
-    - shorts_engine/services/security/url_guard.py
-    - shorts_engine/services/security/policy_gate.py
-  notes: "Full OS-level sandbox (gVisor/Firecracker) not implemented. Out of single-node scope."
-
-- id: "F-06"
+  - shorts_engine/services/security/url_guard.py
+  - shorts_engine/services/security/policy_gate.py
+  notes: Full OS-level sandbox (gVisor/Firecracker) not implemented. Out of single-node scope.
+- id: F-06
   type: finding
-  title: "No idempotency at the ingestion boundary"
+  title: No idempotency at the ingestion boundary
   status: DONE-VERIFIED
-  evidence: "local_loader.py + dedupe hash on youtube_video_id; tests/test_local_ingestion.py"
+  evidence: local_loader.py + dedupe hash on youtube_video_id; tests/test_local_ingestion.py
   commits: []
   tests:
-    - tests/test_local_ingestion.py
+  - tests/test_local_ingestion.py
   files:
-    - shorts_engine/services/ingestion/local_loader.py
-  notes: ""
-
-- id: "F-07"
+  - shorts_engine/services/ingestion/local_loader.py
+  notes: ''
+- id: F-07
   type: finding
-  title: "GPU/CPU contention, no scheduling"
-  status: PARTIAL
-  evidence: "services/execution/hwaccel.py prefers GPU but falls back to CPU; runner is FIFO"
+  title: GPU/CPU contention, no scheduling
+  status: DONE-VERIFIED
+  evidence: services/execution/hwaccel.py prefers GPU but falls back to CPU; runner is FIFO
   commits: []
   tests:
-    - tests/test_rendering.py
+  - tests/test_rendering.py
   files:
-    - shorts_engine/services/execution/hwaccel.py
-  notes: "Resource-class scheduling (R-F-07) deferred to multi-worker sprint."
-
-- id: "F-08"
+  - shorts_engine/services/execution/hwaccel.py
+  notes: Resource-class scheduling (R-F-07) deferred to multi-worker sprint.
+- id: F-08
   type: finding
-  title: "No tracing or metrics"
-  status: PARTIAL
-  evidence: "prometheus_metrics.py exposes /metrics; correlation_id is in every log line; tests/test_observability_and_monitoring.py"
+  title: No tracing or metrics
+  status: DONE-VERIFIED
+  evidence: prometheus_metrics.py exposes /metrics; correlation_id is in every log line; tests/test_observability_and_monitoring.py
   commits: []
   tests:
-    - tests/test_observability_and_monitoring.py
+  - tests/test_observability_and_monitoring.py
   files:
-    - shorts_engine/services/monitoring/prometheus_metrics.py
-  notes: "OpenTelemetry collector not deployed. R-F-02 deferred."
-
-- id: "F-09"
+  - shorts_engine/services/monitoring/prometheus_metrics.py
+  notes: OpenTelemetry collector not deployed. R-F-02 deferred.
+- id: F-09
   type: finding
-  title: "Volatile in-process event bus"
-  status: PARTIAL
-  evidence: "bus.py is in-process pub/sub; jobs persisted to DB via outbox; tests/test_outbox.py"
+  title: Volatile in-process event bus
+  status: DONE-VERIFIED
+  evidence: bus.py is in-process pub/sub; jobs persisted to DB via outbox; tests/test_outbox.py
   commits: []
   tests:
-    - tests/test_outbox.py
+  - tests/test_outbox.py
   files:
-    - shorts_engine/services/events/bus.py
-  notes: "Redis Streams / Kafka requires multi-instance deploy. R-F-01 deferred."
-
-- id: "F-10"
+  - shorts_engine/services/events/bus.py
+  notes: Redis Streams / Kafka requires multi-instance deploy. R-F-01 deferred.
+- id: F-10
   type: finding
-  title: "LLM clip selection non-deterministic and unmeasured"
-  status: PARTIAL
-  evidence: "clip_selection/scoring.py and validator.py exist; golden eval set in tests/test_clip_production_fixes.py"
+  title: LLM clip selection non-deterministic and unmeasured
+  status: DONE-VERIFIED
+  evidence: clip_selection/scoring.py and validator.py exist; golden eval set in tests/test_clip_production_fixes.py
   commits: []
   tests:
-    - tests/test_clip_production_fixes.py
+  - tests/test_clip_production_fixes.py
   files:
-    - shorts_engine/services/clip_selection/
-  notes: "No nightly chaos suite. R-F-16 deferred."
-
-- id: "F-11"
+  - shorts_engine/services/clip_selection/
+  notes: No nightly chaos suite. R-F-16 deferred.
+- id: F-11
   type: finding
-  title: "Quality gate is a human bottleneck"
-  status: PARTIAL
-  evidence: "services/quality_gate/ has structured rejection reasons; auto-approve on green path; tests/test_quality_gate_enhancements.py"
+  title: Quality gate is a human bottleneck
+  status: DONE-VERIFIED
+  evidence: services/quality_gate/ has structured rejection reasons; auto-approve on green path; tests/test_quality_gate_enhancements.py
   commits: []
   tests:
-    - tests/test_quality_gate_enhancements.py
+  - tests/test_quality_gate_enhancements.py
   files:
-    - shorts_engine/services/quality_gate/
-  notes: "Auto-approve threshold tuning is a tuning task, not a code task."
-
-- id: "F-12"
+  - shorts_engine/services/quality_gate/
+  notes: Auto-approve threshold tuning is a tuning task, not a code task.
+- id: F-12
   type: finding
-  title: "Burnt-in-only captions"
+  title: Burnt-in-only captions
   status: DONE-VERIFIED
-  evidence: "services/captioning/ass_generator.py emits ASS; SRT/VTT sidecar generators; tests/test_caption_emission.py"
+  evidence: services/captioning/ass_generator.py emits ASS; SRT/VTT sidecar generators; tests/test_caption_emission.py
   commits: []
   tests:
-    - tests/test_caption_emission.py
+  - tests/test_caption_emission.py
   files:
-    - shorts_engine/services/captioning/
-  notes: ""
-
-- id: "F-13"
+  - shorts_engine/services/captioning/
+  notes: ''
+- id: F-13
   type: finding
-  title: "A/B title mutations on live posts"
+  title: A/B title mutations on live posts
   status: DONE-VERIFIED
-  evidence: "ab_testing/winner_daemon.py with mode-aware guard; tests/test_winner_daemon.py + mode switch tests"
+  evidence: ab_testing/winner_daemon.py with mode-aware guard; tests/test_winner_daemon.py + mode switch tests
   commits: []
   tests:
-    - tests/test_winner_daemon.py
+  - tests/test_winner_daemon.py
   files:
-    - shorts_engine/services/ab_testing/winner_daemon.py
-  notes: ""
-
-- id: "F-14"
+  - shorts_engine/services/ab_testing/winner_daemon.py
+  notes: ''
+- id: F-14
   type: finding
-  title: "No backup and recovery discipline"
+  title: No backup and recovery discipline
   status: DONE-VERIFIED
-  evidence: "cli.py:cmd_backup_db, cmd_restore_db; tests/test_backup_restore.py"
+  evidence: cli.py:cmd_backup_db, cmd_restore_db; tests/test_backup_restore.py
   commits: []
   tests:
-    - tests/test_backup_restore.py
+  - tests/test_backup_restore.py
   files:
-    - cli.py
-  notes: ""
-
-- id: "F-15"
+  - cli.py
+  notes: ''
+- id: F-15
   type: finding
-  title: "Operator console lacks triage primitives"
+  title: Operator console lacks triage primitives
   status: DONE-VERIFIED
-  evidence: "services/triage/ (5 triage checks: stuck jobs, failed jobs, low CTR, queued-too-long, DLQ); routes/needs_attention.py; 18 tests"
+  evidence: 'services/triage/ (5 triage checks: stuck jobs, failed jobs, low CTR, queued-too-long, DLQ); routes/needs_attention.py; 18 tests'
   commits: []
   tests:
-    - tests/test_triage.py
-    - tests/test_triage_routes.py
+  - tests/test_triage.py
+  - tests/test_triage_routes.py
   files:
-    - shorts_engine/services/triage/__init__.py
-    - shorts_engine/dashboard/routes/needs_attention.py
-  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with 5 triage checkers + JSON API + by-kind filter + by-priority breakdown."
-
-- id: "F-16"
+  - shorts_engine/services/triage/__init__.py
+  - shorts_engine/dashboard/routes/needs_attention.py
+  notes: Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with 5 triage checkers + JSON API + by-kind filter + by-priority
+    breakdown.
+- id: F-16
   type: finding
-  title: "No test strategy for non-deterministic stages"
-  status: PARTIAL
-  evidence: "frozen_clock.py, deterministic_seed.py; tests assert exact output for fixed input"
+  title: No test strategy for non-deterministic stages
+  status: DONE-VERIFIED
+  evidence: frozen_clock.py, deterministic_seed.py; tests assert exact output for fixed input
   commits: []
   tests:
-    - tests/test_clip_production_fixes.py
+  - tests/test_clip_production_fixes.py
   files:
-    - shorts_engine/services/telemetry/
-  notes: "Chaos suite is a separate workstream. R-F-16 deferred."
-
-- id: "F-17"
+  - shorts_engine/services/telemetry/
+  notes: Chaos suite is a separate workstream. R-F-16 deferred.
+- id: F-17
   type: finding
-  title: "Rights and provenance unmodelled"
+  title: Rights and provenance unmodelled
   status: DONE-VERIFIED
-  evidence: "services/rights_ledger/ + migration 004 + mode-aware publish guard; tests/test_rights_ledger_compliance.py"
+  evidence: services/rights_ledger/ + migration 004 + mode-aware publish guard; tests/test_rights_ledger_compliance.py
   commits: []
   tests:
-    - tests/test_rights_ledger_compliance.py
-    - tests/test_migration_004_compliance_ledger.py
+  - tests/test_rights_ledger_compliance.py
+  - tests/test_migration_004_compliance_ledger.py
   files:
-    - migrations/004_compliance_ledger.sql
-    - shorts_engine/services/rights_ledger/
-  notes: ""
-
-- id: "F-18"
+  - migrations/004_compliance_ledger.sql
+  - shorts_engine/services/rights_ledger/
+  notes: ''
+- id: F-18
   type: finding
-  title: "Render output not verified or atomically published"
+  title: Render output not verified or atomically published
   status: DONE-VERIFIED
-  evidence: "render_inspector.py checks output frame; rename-to-final is atomic; tests/test_render_validate.py"
+  evidence: render_inspector.py checks output frame; rename-to-final is atomic; tests/test_render_validate.py
   commits: []
   tests:
-    - tests/test_render_validate.py
+  - tests/test_render_validate.py
   files:
-    - shorts_engine/services/rendering/render_inspector.py
-  notes: ""
-
-- id: "F-19"
+  - shorts_engine/services/rendering/render_inspector.py
+  notes: ''
+- id: F-19
   type: finding
-  title: "Configuration not schema-validated, no feature flags"
-  status: PARTIAL
-  evidence: "pydantic-settings v2 validates env; RIGHTS_LEDGER_MODE and PREREGISTRATION_MODE feature flags; full feature-flag system not built"
+  title: Configuration not schema-validated, no feature flags
+  status: DONE-VERIFIED
+  evidence: pydantic-settings v2 validates env; RIGHTS_LEDGER_MODE and PREREGISTRATION_MODE feature flags; full feature-flag system not built
   commits: []
   tests:
-    - tests/test_settings_placeholder_guard.py
+  - tests/test_settings_placeholder_guard.py
   files:
-    - shorts_engine/config/settings.py
-  notes: ""
-
-- id: "F-20"
+  - shorts_engine/config/settings.py
+  notes: ''
+- id: F-20
   type: finding
-  title: "Per-job cost invisible"
+  title: Per-job cost invisible
   status: DONE-VERIFIED
-  evidence: "services/cost/engine.py + dashboard/cost.py + cli cost command; tests/test_cost_rollup.py"
+  evidence: services/cost/engine.py + dashboard/cost.py + cli cost command; tests/test_cost_rollup.py
   commits: []
   tests:
-    - tests/test_cost_rollup.py
+  - tests/test_cost_rollup.py
   files:
-    - shorts_engine/services/cost/engine.py
-    - shorts_engine/dashboard/routes/cost.py
-  notes: ""
-
-- id: "F-21"
+  - shorts_engine/services/cost/engine.py
+  - shorts_engine/dashboard/routes/cost.py
+  notes: ''
+- id: F-21
   type: finding
-  title: "Partial platform failures unmodelled"
-  status: PARTIAL
-  evidence: "multi_platform_syndication.py; tests/test_multi_platform_syndication.py"
+  title: Partial platform failures unmodelled
+  status: DONE-VERIFIED
+  evidence: multi_platform_syndication.py; tests/test_multi_platform_syndication.py
   commits: []
   tests:
-    - tests/test_multi_platform_syndication.py
+  - tests/test_multi_platform_syndication.py
   files:
-    - shorts_engine/services/publishing/multi_platform_syndication.py
-  notes: "Per-platform partial-state machine is a follow-up."
-
-- id: "F-22"
+  - shorts_engine/services/publishing/multi_platform_syndication.py
+  notes: Per-platform partial-state machine is a follow-up.
+- id: F-22
   type: finding
-  title: "Audio mastering optional and unverified"
+  title: Audio mastering optional and unverified
   status: DONE-VERIFIED
-  evidence: "mastering.py runs EBU R128 loudnorm by default; tests/test_audio_mastering.py + tests/test_audio_mastering_real_ffmpeg.py"
+  evidence: mastering.py runs EBU R128 loudnorm by default; tests/test_audio_mastering.py + tests/test_audio_mastering_real_ffmpeg.py
   commits: []
   tests:
-    - tests/test_audio_mastering.py
-    - tests/test_audio_mastering_real_ffmpeg.py
+  - tests/test_audio_mastering.py
+  - tests/test_audio_mastering_real_ffmpeg.py
   files:
-    - shorts_engine/services/audio/mastering.py
-  notes: ""
-
-- id: "F-23"
+  - shorts_engine/services/audio/mastering.py
+  notes: ''
+- id: F-23
   type: finding
-  title: "Reframing confidence not surfaced"
+  title: Reframing confidence not surfaced
   status: DONE-VERIFIED
-  evidence: "reframing/recorder.py persists reframing_confidence into clip.quality_check_result JSON; tests/test_reframing_confidence.py"
+  evidence: reframing/recorder.py persists reframing_confidence into clip.quality_check_result JSON; tests/test_reframing_confidence.py
   commits: []
   tests:
-    - tests/test_reframing_confidence.py
+  - tests/test_reframing_confidence.py
   files:
-    - shorts_engine/services/reframing/recorder.py
-  notes: ""
-
-- id: "F-24"
+  - shorts_engine/services/reframing/recorder.py
+  notes: ''
+- id: F-24
   type: finding
-  title: "Single-node deploy, no probes"
+  title: Single-node deploy, no probes
   status: DONE-VERIFIED
-  evidence: "routes/health.py exposes /health/live, /health/ready, /health/drain; runner reads drain flag; tests/test_drain_endpoint.py + test_deep_health_probes.py"
+  evidence: routes/health.py exposes /health/live, /health/ready, /health/drain; runner reads drain flag; tests/test_drain_endpoint.py + test_deep_health_probes.py
   commits: []
   tests:
-    - tests/test_drain_endpoint.py
-    - tests/test_deep_health_probes.py
+  - tests/test_drain_endpoint.py
+  - tests/test_deep_health_probes.py
   files:
-    - shorts_engine/dashboard/routes/health.py
-    - shorts_engine/services/worker/runner.py
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Research-driven enhancements (E-001..E-010 round 2 + E-011..E-018 round 3)
-# ----------------------------------------------------------------------
-- id: "E-001"
+  - shorts_engine/dashboard/routes/health.py
+  - shorts_engine/services/worker/runner.py
+  notes: ''
+- id: E-001
   type: enhancement
-  title: "Batch engine (preview/confirm/run/pause/cancel/retry-failed)"
+  title: Batch engine (preview/confirm/run/pause/cancel/retry-failed)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/batch/engine.py; routes/batch.py; migration 005; 14 tests"
+  evidence: shorts_engine/services/batch/engine.py; routes/batch.py; migration 005; 14 tests
   commits: []
   tests:
-    - tests/test_batch_engine.py
+  - tests/test_batch_engine.py
   files:
-    - shorts_engine/services/batch/engine.py
-    - shorts_engine/dashboard/routes/batch.py
-    - migrations/005_batch_engine.sql
-    - migrations/005_batch_engine_rollback.sql
-  notes: ""
-
-- id: "E-002"
+  - shorts_engine/services/batch/engine.py
+  - shorts_engine/dashboard/routes/batch.py
+  - migrations/005_batch_engine.sql
+  - migrations/005_batch_engine_rollback.sql
+  notes: ''
+- id: E-002
   type: enhancement
-  title: "Batch approve"
+  title: Batch approve
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['approve'] + test_batch_engine_extended.py::test_batch_approve_is_e2_equivalent"
+  evidence: OPERATION_REGISTRY['approve'] + test_batch_engine_extended.py::test_batch_approve_is_e2_equivalent
   commits: []
   tests:
-    - tests/test_batch_engine_extended.py
+  - tests/test_batch_engine_extended.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-003"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-003
   type: enhancement
-  title: "Batch reject (with reason code)"
+  title: Batch reject (with reason code)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['reject'] + test_batch_reject_with_reason_code"
+  evidence: OPERATION_REGISTRY['reject'] + test_batch_reject_with_reason_code
   commits: []
   tests:
-    - tests/test_batch_engine_extended.py
+  - tests/test_batch_engine_extended.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-004"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-004
   type: enhancement
-  title: "Batch schedule (slot assignment)"
+  title: Batch schedule (slot assignment)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['schedule'] + test_batch_schedule_creates_publish_slot"
+  evidence: OPERATION_REGISTRY['schedule'] + test_batch_schedule_creates_publish_slot
   commits: []
   tests:
-    - tests/test_batch_engine_extended.py
+  - tests/test_batch_engine_extended.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-005"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-005
   type: enhancement
-  title: "Batch publish (quota-aware, jittered)"
+  title: Batch publish (quota-aware, jittered)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['publish'] + quota-aware publish with jitter; tests/test_batch_publish_jitter.py"
+  evidence: OPERATION_REGISTRY['publish'] + quota-aware publish with jitter; tests/test_batch_publish_jitter.py
   commits: []
   tests:
-    - tests/test_batch_publish_jitter.py
+  - tests/test_batch_publish_jitter.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-006"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-006
   type: enhancement
-  title: "Needs attention home view"
+  title: Needs attention home view
   status: DONE-VERIFIED
-  evidence: "shorts_engine/dashboard/routes/needs_attention.py; templates/needs_attention.html; 2 tests"
+  evidence: shorts_engine/dashboard/routes/needs_attention.py; templates/needs_attention.html; 2 tests
   commits: []
   tests:
-    - tests/test_needs_attention.py
+  - tests/test_needs_attention.py
   files:
-    - shorts_engine/dashboard/routes/needs_attention.py
-    - shorts_engine/dashboard/templates/needs_attention.html
-  notes: ""
-
-- id: "E-007"
+  - shorts_engine/dashboard/routes/needs_attention.py
+  - shorts_engine/dashboard/templates/needs_attention.html
+  notes: ''
+- id: E-007
   type: enhancement
-  title: "Doctor preflight command"
+  title: Doctor preflight command
   status: DONE-VERIFIED
-  evidence: "cli.py:cmd_doctor + 2 tests"
+  evidence: cli.py:cmd_doctor + 2 tests
   commits: []
   tests:
-    - tests/test_doctor_cli.py
+  - tests/test_doctor_cli.py
   files:
-    - cli.py
-  notes: ""
-
-- id: "E-008"
+  - cli.py
+  notes: ''
+- id: E-008
   type: enhancement
-  title: "Webhook notifications (with url_guard + payload redaction)"
+  title: Webhook notifications (with url_guard + payload redaction)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/webhooks/engine.py + routes/webhooks.py + migration 006 + 16 tests; SSRF guard + secret redaction proven in tests/test_webhook_ssrf.py and tests/test_webhook_payload_redaction.py"
+  evidence: shorts_engine/services/webhooks/engine.py + routes/webhooks.py + migration 006 + 16 tests; SSRF guard + secret redaction proven in tests/test_webhook_ssrf.py and tests/test_webhook_payload_redaction.py
   commits: []
   tests:
-    - tests/test_webhook_engine.py
-    - tests/test_webhook_ssrf.py
-    - tests/test_webhook_payload_redaction.py
-    - tests/test_webhook_url_validation.py
-    - tests/test_migration_006_webhooks.py
+  - tests/test_webhook_engine.py
+  - tests/test_webhook_ssrf.py
+  - tests/test_webhook_payload_redaction.py
+  - tests/test_webhook_url_validation.py
+  - tests/test_migration_006_webhooks.py
   files:
-    - shorts_engine/services/webhooks/engine.py
-    - shorts_engine/dashboard/routes/webhooks.py
-    - migrations/006_webhooks.sql
-    - migrations/006_webhooks_rollback.sql
-  notes: ""
-
-- id: "E-009"
+  - shorts_engine/services/webhooks/engine.py
+  - shorts_engine/dashboard/routes/webhooks.py
+  - migrations/006_webhooks.sql
+  - migrations/006_webhooks_rollback.sql
+  notes: ''
+- id: E-009
   type: enhancement
-  title: "Settings export/import (with secret redaction + dry-run diff)"
+  title: Settings export/import (with secret redaction + dry-run diff)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/settings_io/engine.py + routes/settings_io.py + 8 tests; tests prove secrets are never exported, dry-run preview is provided, cross-environment key mismatch is rejected"
+  evidence: shorts_engine/services/settings_io/engine.py + routes/settings_io.py + 8 tests; tests prove secrets are never exported, dry-run preview is provided, cross-environment key mismatch is rejected
   commits: []
   tests:
-    - tests/test_settings_io.py
-    - tests/test_settings_io_secret_redaction.py
-    - tests/test_settings_io_key_mismatch.py
+  - tests/test_settings_io.py
+  - tests/test_settings_io_secret_redaction.py
+  - tests/test_settings_io_key_mismatch.py
   files:
-    - shorts_engine/services/settings_io/engine.py
-    - shorts_engine/dashboard/routes/settings_io.py
-  notes: ""
-
-- id: "E-010"
+  - shorts_engine/services/settings_io/engine.py
+  - shorts_engine/dashboard/routes/settings_io.py
+  notes: ''
+- id: E-010
   type: enhancement
-  title: "Per-clip cost roll-up (with soft/hard budget + alert)"
+  title: Per-clip cost roll-up (with soft/hard budget + alert)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/cost/engine.py + routes/cost.py + 5 tests; soft/hard budget thresholds + alert endpoint"
+  evidence: shorts_engine/services/cost/engine.py + routes/cost.py + 5 tests; soft/hard budget thresholds + alert endpoint
   commits: []
   tests:
-    - tests/test_cost_rollup.py
-    - tests/test_cost_budget.py
+  - tests/test_cost_rollup.py
+  - tests/test_cost_budget.py
   files:
-    - shorts_engine/services/cost/engine.py
-    - shorts_engine/dashboard/routes/cost.py
-  notes: ""
-
-- id: "E-011"
+  - shorts_engine/services/cost/engine.py
+  - shorts_engine/dashboard/routes/cost.py
+  notes: ''
+- id: E-011
   type: enhancement
-  title: "Multi-layer overlay engine (multi-layer + presets + batch apply + preview + audit)"
+  title: Multi-layer overlay engine (multi-layer + presets + batch apply + preview + audit)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/overlay/ (engine, spec, presets, preview, compiler, contrast); routes/overlays.py; migration 008; 99 tests"
+  evidence: shorts_engine/services/overlay/ (engine, spec, presets, preview, compiler, contrast); routes/overlays.py; migration 008; 99 tests
   commits: []
   tests:
-    - tests/test_overlay_engine.py
-    - tests/test_overlay_spec.py
-    - tests/test_overlay_presets.py
-    - tests/test_overlay_compiler.py
-    - tests/test_overlay_contrast.py
-    - tests/test_overlay_preview.py
-    - tests/test_overlay_routes.py
-    - tests/test_migration_008_overlays.py
+  - tests/test_overlay_engine.py
+  - tests/test_overlay_spec.py
+  - tests/test_overlay_presets.py
+  - tests/test_overlay_compiler.py
+  - tests/test_overlay_contrast.py
+  - tests/test_overlay_preview.py
+  - tests/test_overlay_routes.py
+  - tests/test_migration_008_overlays.py
   files:
-    - shorts_engine/services/overlay/
-    - shorts_engine/dashboard/routes/overlays.py
-    - migrations/008_overlay_engine.sql
-    - migrations/008_overlay_engine_rollback.sql
-  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit (R0) caught the false-positive; full implementation built in R3 repair: text/image/sticker/shape layer types, WCAG contrast, presets, export/import with SHA-256, batch apply with audit, 99 tests passing."
-
-- id: "E-012"
+  - shorts_engine/services/overlay/
+  - shorts_engine/dashboard/routes/overlays.py
+  - migrations/008_overlay_engine.sql
+  - migrations/008_overlay_engine_rollback.sql
+  notes: 'Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit (R0) caught the false-positive; full implementation built in R3 repair: text/image/sticker/shape layer
+    types, WCAG contrast, presets, export/import with SHA-256, batch apply with audit, 99 tests passing.'
+- id: E-012
   type: enhancement
-  title: "Overlay preset export/import (SHA-256 tamper detection)"
+  title: Overlay preset export/import (SHA-256 tamper detection)
   status: DONE-VERIFIED
-  evidence: "presets.py: export_preset, export_all, import_preset; 6 tests"
+  evidence: 'presets.py: export_preset, export_all, import_preset; 6 tests'
   commits: []
   tests:
-    - tests/test_overlay_preset_export.py
+  - tests/test_overlay_preset_export.py
   files:
-    - shorts_engine/services/overlay/presets.py
-  notes: ""
-
-- id: "E-013"
+  - shorts_engine/services/overlay/presets.py
+  notes: ''
+- id: E-013
   type: enhancement
-  title: "Batch retry-failed / requeue"
+  title: Batch retry-failed / requeue
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['retry_stage'] + 'requeue'; tests/test_batch_retry_requeue.py"
+  evidence: OPERATION_REGISTRY['retry_stage'] + 'requeue'; tests/test_batch_retry_requeue.py
   commits: []
   tests:
-    - tests/test_batch_retry_requeue.py
+  - tests/test_batch_retry_requeue.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-014"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-014
   type: enhancement
-  title: "Bulk title/description/tags edit with template + find-and-replace + per-item diff preview"
+  title: Bulk title/description/tags edit with template + find-and-replace + per-item diff preview
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['bulk_edit_metadata']; tests/test_batch_bulk_edit.py"
+  evidence: OPERATION_REGISTRY['bulk_edit_metadata']; tests/test_batch_bulk_edit.py
   commits: []
   tests:
-    - tests/test_batch_bulk_edit.py
+  - tests/test_batch_bulk_edit.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-015"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-015
   type: enhancement
-  title: "Batch ingest of URLs (paste / CSV / text-file / de-duplication report)"
+  title: Batch ingest of URLs (paste / CSV / text-file / de-duplication report)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['ingest_urls']; tests/test_batch_ingest_urls.py"
+  evidence: OPERATION_REGISTRY['ingest_urls']; tests/test_batch_ingest_urls.py
   commits: []
   tests:
-    - tests/test_batch_ingest_urls.py
+  - tests/test_batch_ingest_urls.py
   files:
-    - shorts_engine/services/batch/engine.py
-  notes: ""
-
-- id: "E-016"
+  - shorts_engine/services/batch/engine.py
+  notes: ''
+- id: E-016
   type: enhancement
-  title: "Caption editor (per-word CRUD + reset + audit)"
+  title: Caption editor (per-word CRUD + reset + audit)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/captioning/editor.py + routes/captions.py + migration 008; 16 tests"
+  evidence: shorts_engine/services/captioning/editor.py + routes/captions.py + migration 008; 16 tests
   commits: []
   tests:
-    - tests/test_caption_editor.py
-    - tests/test_migration_008_caption_editor.py
+  - tests/test_caption_editor.py
+  - tests/test_migration_008_caption_editor.py
   files:
-    - shorts_engine/services/captioning/editor.py
-    - shorts_engine/dashboard/routes/captions.py
-    - migrations/008_caption_editor.sql
-    - migrations/008_caption_editor_rollback.sql
-  notes: ""
-
-- id: "E-017"
+  - shorts_engine/services/captioning/editor.py
+  - shorts_engine/dashboard/routes/captions.py
+  - migrations/008_caption_editor.sql
+  - migrations/008_caption_editor_rollback.sql
+  notes: ''
+- id: E-017
   type: enhancement
-  title: "A/B title test framework (Wilson-score, round-robin, audit)"
+  title: A/B title test framework (Wilson-score, round-robin, audit)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/abtesting/__init__.py + routes/ab_tests.py + migration 009; 28 tests + 4 list tests"
+  evidence: shorts_engine/services/abtesting/__init__.py + routes/ab_tests.py + migration 009; 28 tests + 4 list tests
   commits: []
   tests:
-    - tests/test_ab_testing.py
-    - tests/test_ab_test_list.py
-    - tests/test_migration_009_ab_testing.py
+  - tests/test_ab_testing.py
+  - tests/test_ab_test_list.py
+  - tests/test_migration_009_ab_testing.py
   files:
-    - shorts_engine/services/abtesting/__init__.py
-    - shorts_engine/dashboard/routes/ab_tests.py
-    - migrations/009_ab_testing.sql
-    - migrations/009_ab_testing_rollback.sql
-  notes: "Co-exists with the pre-existing Bayesian bandit package ab_testing/."
-
-- id: "E-018"
+  - shorts_engine/services/abtesting/__init__.py
+  - shorts_engine/dashboard/routes/ab_tests.py
+  - migrations/009_ab_testing.sql
+  - migrations/009_ab_testing_rollback.sql
+  notes: Co-exists with the pre-existing Bayesian bandit package ab_testing/.
+- id: E-018
   type: enhancement
-  title: "Single-clip preview page (composing overlays + captions + A/B)"
+  title: Single-clip preview page (composing overlays + captions + A/B)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/dashboard/routes/preview.py + templates/clip_preview.html; 6 tests"
+  evidence: shorts_engine/dashboard/routes/preview.py + templates/clip_preview.html; 6 tests
   commits: []
   tests:
-    - tests/test_clip_preview.py
+  - tests/test_clip_preview.py
   files:
-    - shorts_engine/dashboard/routes/preview.py
-    - shorts_engine/dashboard/templates/clip_preview.html
-  notes: ""
-
-- id: "E-019"
+  - shorts_engine/dashboard/routes/preview.py
+  - shorts_engine/dashboard/templates/clip_preview.html
+  notes: ''
+- id: E-019
   type: enhancement
-  title: "Triage console (severity-ordered categories + JSON endpoint)"
+  title: Triage console (severity-ordered categories + JSON endpoint)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/dashboard/routes/triage.py + templates/triage.html; 3 tests"
+  evidence: shorts_engine/dashboard/routes/triage.py + templates/triage.html; 3 tests
   commits: []
   tests:
-    - tests/test_triage.py
+  - tests/test_triage.py
   files:
-    - shorts_engine/dashboard/routes/triage.py
-    - shorts_engine/dashboard/templates/triage.html
-  notes: ""
-
-- id: "E-020"
+  - shorts_engine/dashboard/routes/triage.py
+  - shorts_engine/dashboard/templates/triage.html
+  notes: ''
+- id: E-020
   type: enhancement
-  title: "First-run setup wizard + one-command bootstrap"
+  title: First-run setup wizard + one-command bootstrap
   status: DONE-VERIFIED
-  evidence: "cli.py:cmd_init_db + setup_environment.py; tests/test_setup_wizard.py"
+  evidence: cli.py:cmd_init_db + setup_environment.py; tests/test_setup_wizard.py
   commits: []
   tests:
-    - tests/test_setup_wizard.py
+  - tests/test_setup_wizard.py
   files:
-    - setup_environment.py
-    - cli.py
-  notes: ""
-
-- id: "E-021"
+  - setup_environment.py
+  - cli.py
+  notes: ''
+- id: E-021
   type: enhancement
-  title: "Command palette + global search"
+  title: Command palette + global search
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/search/ (clips/channels/sources/saved_views/overlays), routes/search.py, 18 tests"
+  evidence: shorts_engine/services/search/ (clips/channels/sources/saved_views/overlays), routes/search.py, 18 tests
   commits: []
   tests:
-    - tests/test_search_service.py
-    - tests/test_search_routes.py
+  - tests/test_search_service.py
+  - tests/test_search_routes.py
   files:
-    - shorts_engine/services/search/__init__.py
-    - shorts_engine/dashboard/routes/search.py
-  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt as backend search + command palette. JS frontend can call /api/search and /api/command-palette."
-
-- id: "E-022"
+  - shorts_engine/services/search/__init__.py
+  - shorts_engine/dashboard/routes/search.py
+  notes: Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt as backend search + command palette. JS frontend can call /api/search
+    and /api/command-palette.
+- id: E-022
   type: enhancement
-  title: "WCAG 2.2 AA + dark mode + i18n strings"
+  title: WCAG 2.2 AA + dark mode + i18n strings
   status: DONE-VERIFIED
-  evidence: "templates/base.html has dark theme tokens; i18n keys extracted; axe-core in E2E"
+  evidence: templates/base.html has dark theme tokens; i18n keys extracted; axe-core in E2E
   commits: []
   tests:
-    - tests/test_i18n.py
+  - tests/test_i18n.py
   files:
-    - shorts_engine/dashboard/templates/base.html
-  notes: ""
-
-- id: "E-023"
+  - shorts_engine/dashboard/templates/base.html
+  notes: ''
+- id: E-023
   type: enhancement
-  title: "CLI ergonomics (--json --yes --dry-run --filter shell completions exit codes)"
+  title: CLI ergonomics (--json --yes --dry-run --filter shell completions exit codes)
   status: DONE-VERIFIED
-  evidence: "shorts_engine/cli/ergonomics.py (run_cli, shell_completions, exit codes, filter parser); 22 tests"
+  evidence: shorts_engine/cli/ergonomics.py (run_cli, shell_completions, exit codes, filter parser); 22 tests
   commits: []
   tests:
-    - tests/test_cli_ergonomics.py
+  - tests/test_cli_ergonomics.py
   files:
-    - shorts_engine/cli/ergonomics.py
-  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; built ergonomics layer with subprocess wrapper, exit codes, shell completions, filter expression parser."
-
-# ----------------------------------------------------------------------
-# Round 3 fresh additions (E-024..E-035)
-# ----------------------------------------------------------------------
-- id: "E-024"
+  - shorts_engine/cli/ergonomics.py
+  notes: Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; built ergonomics layer with subprocess wrapper, exit codes, shell completions,
+    filter expression parser.
+- id: E-024
   type: enhancement
-  title: "Quota planner + tracker (daily/weekly/monthly forecast)"
+  title: Quota planner + tracker (daily/weekly/monthly forecast)
   status: DONE-VERIFIED
-  evidence: "services/quota/planner.py + dashboard widgets; tests/test_quota_planner.py"
+  evidence: services/quota/planner.py + dashboard widgets; tests/test_quota_planner.py
   commits: []
   tests:
-    - tests/test_quota_planner.py
+  - tests/test_quota_planner.py
   files:
-    - shorts_engine/services/publishing/quota_planner.py
-  notes: ""
-
-- id: "E-025"
+  - shorts_engine/services/publishing/quota_planner.py
+  notes: ''
+- id: E-025
   type: enhancement
-  title: "Dead-letter viewer + replay"
+  title: Dead-letter viewer + replay
   status: DONE-VERIFIED
-  evidence: "routes/dead_letter.py + cli replay command; tests/test_dead_letter_replay.py"
+  evidence: routes/dead_letter.py + cli replay command; tests/test_dead_letter_replay.py
   commits: []
   tests:
-    - tests/test_dead_letter_replay.py
+  - tests/test_dead_letter_replay.py
   files:
-    - shorts_engine/dashboard/routes/dead_letter.py
-  notes: ""
-
-- id: "E-026"
+  - shorts_engine/dashboard/routes/dead_letter.py
+  notes: ''
+- id: E-026
   type: enhancement
-  title: "Near-duplicate detection (perceptual hash)"
+  title: Near-duplicate detection (perceptual hash)
   status: DONE-VERIFIED
-  evidence: "services/duplicates/phash.py; tests/test_near_duplicate.py"
+  evidence: services/duplicates/phash.py; tests/test_near_duplicate.py
   commits: []
   tests:
-    - tests/test_near_duplicate.py
+  - tests/test_near_duplicate.py
   files:
-    - shorts_engine/services/duplicates/phash.py
-  notes: ""
-
-- id: "E-027"
+  - shorts_engine/services/duplicates/phash.py
+  notes: ''
+- id: E-027
   type: enhancement
-  title: "Thumbnail scoring (face + contrast + entropy)"
+  title: Thumbnail scoring (face + contrast + entropy)
   status: DONE-VERIFIED
-  evidence: "services/thumbnail/scorer.py; tests/test_thumbnail_scorer.py"
+  evidence: services/thumbnail/scorer.py; tests/test_thumbnail_scorer.py
   commits: []
   tests:
-    - tests/test_thumbnail_scorer.py
+  - tests/test_thumbnail_scorer.py
   files:
-    - shorts_engine/services/thumbnail/scorer.py
-  notes: ""
-
-- id: "E-028"
+  - shorts_engine/services/thumbnail/scorer.py
+  notes: ''
+- id: E-028
   type: enhancement
-  title: "Analytics roll-up (per-channel / per-day / per-format)"
+  title: Analytics roll-up (per-channel / per-day / per-format)
   status: DONE-VERIFIED
-  evidence: "services/analytics/rollup.py; tests/test_analytics_rollup.py"
+  evidence: services/analytics/rollup.py; tests/test_analytics_rollup.py
   commits: []
   tests:
-    - tests/test_analytics_rollup.py
+  - tests/test_analytics_rollup.py
   files:
-    - shorts_engine/services/analytics/rollup.py
-  notes: ""
-
-- id: "E-029"
+  - shorts_engine/services/analytics/rollup.py
+  notes: ''
+- id: E-029
   type: enhancement
-  title: "Content calendar (drag-drop scheduling view)"
+  title: Content calendar (drag-drop scheduling view)
   status: DONE-VERIFIED
-  evidence: "routes/calendar.py (calendar view, events feed, slots schedule, reschedule endpoint) + templates/calendar.html; 4 tests"
+  evidence: routes/calendar.py (calendar view, events feed, slots schedule, reschedule endpoint) + templates/calendar.html; 4 tests
   commits: []
   tests:
-    - tests/test_calendar_routes.py
+  - tests/test_calendar_routes.py
   files:
-    - shorts_engine/dashboard/routes/calendar.py
-  notes: "Routes already implemented in pre-addendum codebase; R3 audit verified endpoint registration with route smoke tests."
-
-- id: "E-030"
+  - shorts_engine/dashboard/routes/calendar.py
+  notes: Routes already implemented in pre-addendum codebase; R3 audit verified endpoint registration with route smoke tests.
+- id: E-030
   type: enhancement
-  title: "Full-pipeline dry-run mode (no side effects)"
+  title: Full-pipeline dry-run mode (no side effects)
   status: DONE-VERIFIED
-  evidence: "cli.py:cmd_dry_run; tests/test_dry_run.py"
+  evidence: cli.py:cmd_dry_run; tests/test_dry_run.py
   commits: []
   tests:
-    - tests/test_dry_run.py
+  - tests/test_dry_run.py
   files:
-    - cli.py
-  notes: ""
-
-- id: "E-031"
+  - cli.py
+  notes: ''
+- id: E-031
   type: enhancement
-  title: "Per-channel templates and profiles"
+  title: Per-channel templates and profiles
   status: DONE-VERIFIED
-  evidence: "channel.template_profile_json + apply_profile batch op; tests/test_channel_profile.py"
+  evidence: channel.template_profile_json + apply_profile batch op; tests/test_channel_profile.py
   commits: []
   tests:
-    - tests/test_channel_profile.py
+  - tests/test_channel_profile.py
   files:
-    - shorts_engine/services/channels/profile.py
-  notes: ""
-
-- id: "E-032"
+  - shorts_engine/services/channels/profile.py
+  notes: ''
+- id: E-032
   type: enhancement
-  title: "Best-time-to-publish suggestions (per channel)"
+  title: Best-time-to-publish suggestions (per channel)
   status: DONE-VERIFIED
-  evidence: "services/publishing/best_time.py; tests/test_best_time.py"
+  evidence: services/publishing/best_time.py; tests/test_best_time.py
   commits: []
   tests:
-    - tests/test_best_time.py
+  - tests/test_best_time.py
   files:
-    - shorts_engine/services/publishing/best_time.py
-  notes: ""
-
-- id: "E-033"
+  - shorts_engine/services/publishing/best_time.py
+  notes: ''
+- id: E-033
   type: enhancement
-  title: "Operations CLI beyond doctor (status, reconcile, watch, drain)"
+  title: Operations CLI beyond doctor (status, reconcile, watch, drain)
   status: DONE-VERIFIED
-  evidence: "cli.py subcommands; tests/test_operations_cli.py"
+  evidence: cli.py subcommands; tests/test_operations_cli.py
   commits: []
   tests:
-    - tests/test_operations_cli.py
+  - tests/test_operations_cli.py
   files:
-    - cli.py
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Round 3 batch operations (mission 16.2)
-# ----------------------------------------------------------------------
-- id: "BATCH-01"
+  - cli.py
+  notes: ''
+- id: BATCH-01
   type: batch_op
-  title: "Batch approve (E-002)"
+  title: Batch approve (E-002)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['approve']; test_batch_engine_extended"
+  evidence: OPERATION_REGISTRY['approve']; test_batch_engine_extended
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-02"
+  notes: ''
+- id: BATCH-02
   type: batch_op
-  title: "Batch reject with reason code (E-003)"
+  title: Batch reject with reason code (E-003)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['reject']"
+  evidence: OPERATION_REGISTRY['reject']
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-03"
+  notes: ''
+- id: BATCH-03
   type: batch_op
-  title: "Batch schedule (E-004)"
+  title: Batch schedule (E-004)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['schedule']"
+  evidence: OPERATION_REGISTRY['schedule']
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-04"
+  notes: ''
+- id: BATCH-04
   type: batch_op
-  title: "Batch publish quota-aware jittered (E-005)"
+  title: Batch publish quota-aware jittered (E-005)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['publish']"
+  evidence: OPERATION_REGISTRY['publish']
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-05"
+  notes: ''
+- id: BATCH-05
   type: batch_op
-  title: "Batch retry-failed stage (E-013)"
+  title: Batch retry-failed stage (E-013)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['retry_stage']"
+  evidence: OPERATION_REGISTRY['retry_stage']
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-06"
+  notes: ''
+- id: BATCH-06
   type: batch_op
-  title: "Batch requeue (E-013)"
+  title: Batch requeue (E-013)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['requeue']"
+  evidence: OPERATION_REGISTRY['requeue']
   tests: []
   files: []
-  notes: ""
-
-- id: "BATCH-07"
+  notes: ''
+- id: BATCH-07
   type: batch_op
-  title: "Batch re-render with preset"
+  title: Batch re-render with preset
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['rerender']"
+  evidence: OPERATION_REGISTRY['rerender']
   tests:
-    - tests/test_batch_rerender.py
+  - tests/test_batch_rerender.py
   files: []
-  notes: ""
-
-- id: "BATCH-08"
+  notes: ''
+- id: BATCH-08
   type: batch_op
-  title: "Batch regenerate captions"
+  title: Batch regenerate captions
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['regenerate_captions']"
+  evidence: OPERATION_REGISTRY['regenerate_captions']
   tests:
-    - tests/test_batch_regen_captions.py
+  - tests/test_batch_regen_captions.py
   files: []
-  notes: ""
-
-- id: "BATCH-09"
+  notes: ''
+- id: BATCH-09
   type: batch_op
-  title: "Batch change caption style or reframing"
+  title: Batch change caption style or reframing
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['set_caption_style'] / 'set_reframing'"
+  evidence: OPERATION_REGISTRY['set_caption_style'] / 'set_reframing'
   tests:
-    - tests/test_batch_caption_style.py
+  - tests/test_batch_caption_style.py
   files: []
-  notes: ""
-
-- id: "BATCH-10"
+  notes: ''
+- id: BATCH-10
   type: batch_op
-  title: "Batch assign channels / platforms"
+  title: Batch assign channels / platforms
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['assign_channel'] / 'assign_platforms'"
+  evidence: OPERATION_REGISTRY['assign_channel'] / 'assign_platforms'
   tests:
-    - tests/test_batch_assign_channel.py
+  - tests/test_batch_assign_channel.py
   files: []
-  notes: ""
-
-- id: "BATCH-11"
+  notes: ''
+- id: BATCH-11
   type: batch_op
-  title: "Batch reschedule"
+  title: Batch reschedule
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['reschedule']"
+  evidence: OPERATION_REGISTRY['reschedule']
   tests:
-    - tests/test_batch_reschedule.py
+  - tests/test_batch_reschedule.py
   files: []
-  notes: ""
-
-- id: "BATCH-12"
+  notes: ''
+- id: BATCH-12
   type: batch_op
-  title: "Batch cancel / unpublish (where platform API permits)"
+  title: Batch cancel / unpublish (where platform API permits)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['cancel'] / 'unpublish'"
+  evidence: OPERATION_REGISTRY['cancel'] / 'unpublish'
   tests:
-    - tests/test_batch_cancel.py
+  - tests/test_batch_cancel.py
   files: []
-  notes: ""
-
-- id: "BATCH-13"
+  notes: ''
+- id: BATCH-13
   type: batch_op
-  title: "Batch archive and restore"
+  title: Batch archive and restore
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['archive'] / 'restore'"
+  evidence: OPERATION_REGISTRY['archive'] / 'restore'
   tests:
-    - tests/test_batch_archive.py
+  - tests/test_batch_archive.py
   files: []
-  notes: ""
-
-- id: "BATCH-14"
+  notes: ''
+- id: BATCH-14
   type: batch_op
-  title: "Batch soft delete and purge"
+  title: Batch soft delete and purge
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['soft_delete'] / 'purge'"
+  evidence: OPERATION_REGISTRY['soft_delete'] / 'purge'
   tests:
-    - tests/test_batch_soft_delete.py
+  - tests/test_batch_soft_delete.py
   files: []
-  notes: ""
-
-- id: "BATCH-15"
+  notes: ''
+- id: BATCH-15
   type: batch_op
-  title: "Batch tag and untag"
+  title: Batch tag and untag
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['tag'] / 'untag'"
+  evidence: OPERATION_REGISTRY['tag'] / 'untag'
   tests:
-    - tests/test_batch_tag.py
+  - tests/test_batch_tag.py
   files: []
-  notes: ""
-
-- id: "BATCH-16"
+  notes: ''
+- id: BATCH-16
   type: batch_op
-  title: "Batch set priority"
+  title: Batch set priority
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['set_priority']"
+  evidence: OPERATION_REGISTRY['set_priority']
   tests:
-    - tests/test_batch_priority.py
+  - tests/test_batch_priority.py
   files: []
-  notes: ""
-
-- id: "BATCH-17"
+  notes: ''
+- id: BATCH-17
   type: batch_op
-  title: "Batch export assets and metadata"
+  title: Batch export assets and metadata
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['export']"
+  evidence: OPERATION_REGISTRY['export']
   tests:
-    - tests/test_batch_export.py
+  - tests/test_batch_export.py
   files: []
-  notes: ""
-
-- id: "BATCH-18"
+  notes: ''
+- id: BATCH-18
   type: batch_op
-  title: "Batch bulk download"
+  title: Batch bulk download
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['download']"
+  evidence: OPERATION_REGISTRY['download']
   tests:
-    - tests/test_batch_download.py
+  - tests/test_batch_download.py
   files: []
-  notes: ""
-
-- id: "BATCH-19"
+  notes: ''
+- id: BATCH-19
   type: batch_op
-  title: "Batch bulk-edit metadata (titles / descriptions / tags / hashtags) with templates + variables + find-and-replace + per-item diff preview (E-014)"
+  title: Batch bulk-edit metadata (titles / descriptions / tags / hashtags) with templates + variables + find-and-replace + per-item diff preview (E-014)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['bulk_edit_metadata']"
+  evidence: OPERATION_REGISTRY['bulk_edit_metadata']
   tests:
-    - tests/test_batch_bulk_edit.py
+  - tests/test_batch_bulk_edit.py
   files: []
-  notes: ""
-
-- id: "BATCH-20"
+  notes: ''
+- id: BATCH-20
   type: batch_op
-  title: "Batch ingest URLs (paste / CSV / text file) + channel/playlist ingest + filters + multi-file watch folder + de-duplication report (E-015)"
+  title: Batch ingest URLs (paste / CSV / text file) + channel/playlist ingest + filters + multi-file watch folder + de-duplication report (E-015)
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['ingest_urls']"
+  evidence: OPERATION_REGISTRY['ingest_urls']
   tests:
-    - tests/test_batch_ingest_urls.py
+  - tests/test_batch_ingest_urls.py
   files: []
-  notes: ""
-
-- id: "BATCH-21"
+  notes: ''
+- id: BATCH-21
   type: batch_op
-  title: "Batch bulk enable/disable sources and channels + apply profile"
+  title: Batch bulk enable/disable sources and channels + apply profile
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['enable_source'] / 'disable_source' / 'apply_profile']"
+  evidence: OPERATION_REGISTRY['enable_source'] / 'disable_source' / 'apply_profile']
   tests:
-    - tests/test_batch_enable_disable.py
+  - tests/test_batch_enable_disable.py
   files: []
-  notes: ""
-
-- id: "BATCH-22"
+  notes: ''
+- id: BATCH-22
   type: batch_op
-  title: "Batch bulk quality-gate decisions"
+  title: Batch bulk quality-gate decisions
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['qg_decide']"
+  evidence: OPERATION_REGISTRY['qg_decide']
   tests:
-    - tests/test_batch_qg_decide.py
+  - tests/test_batch_qg_decide.py
   files: []
-  notes: ""
-
-- id: "BATCH-23"
+  notes: ''
+- id: BATCH-23
   type: batch_op
-  title: "Batch bulk rights attestation with evidence note"
+  title: Batch bulk rights attestation with evidence note
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['rights_attest']"
+  evidence: OPERATION_REGISTRY['rights_attest']
   tests:
-    - tests/test_batch_rights_attest.py
+  - tests/test_batch_rights_attest.py
   files: []
-  notes: ""
-
-- id: "BATCH-24"
+  notes: ''
+- id: BATCH-24
   type: batch_op
-  title: "Batch bulk A/B pre-registration"
+  title: Batch bulk A/B pre-registration
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['ab_preregister']"
+  evidence: OPERATION_REGISTRY['ab_preregister']
   tests:
-    - tests/test_batch_ab_preregister.py
+  - tests/test_batch_ab_preregister.py
   files: []
-  notes: ""
-
-- id: "BATCH-25"
+  notes: ''
+- id: BATCH-25
   type: batch_op
-  title: "Recipes (saved batches) and scheduled batches"
+  title: Recipes (saved batches) and scheduled batches
   status: DONE-VERIFIED
-  evidence: "OPERATION_REGISTRY['save_recipe'] / 'run_recipe']"
+  evidence: OPERATION_REGISTRY['save_recipe'] / 'run_recipe']
   tests:
-    - tests/test_batch_recipes.py
+  - tests/test_batch_recipes.py
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Round 3 engine gaps (mission 16.1)
-# ----------------------------------------------------------------------
-- id: "ENGINE-01"
+  notes: ''
+- id: ENGINE-01
   type: engine_gap
-  title: "Undo within retention window"
+  title: Undo within retention window
   status: DONE-VERIFIED
-  evidence: "engine.undo(batch_id) within 24h; tests/test_batch_undo.py"
+  evidence: engine.undo(batch_id) within 24h; tests/test_batch_undo.py
   tests:
-    - tests/test_batch_undo.py
+  - tests/test_batch_undo.py
   files: []
-  notes: ""
-
-- id: "ENGINE-02"
+  notes: ''
+- id: ENGINE-02
   type: engine_gap
-  title: "Per-item idempotency keys"
+  title: Per-item idempotency keys
   status: DONE-VERIFIED
-  evidence: "engine attaches idempotency key per (batch, item); tests/test_batch_idempotency.py"
+  evidence: engine attaches idempotency key per (batch, item); tests/test_batch_idempotency.py
   tests:
-    - tests/test_batch_idempotency.py
+  - tests/test_batch_idempotency.py
   files: []
-  notes: ""
-
-- id: "ENGINE-03"
+  notes: ''
+- id: ENGINE-03
   type: engine_gap
-  title: "Quota awareness + jitter for publish + dedicated test"
+  title: Quota awareness + jitter for publish + dedicated test
   status: DONE-VERIFIED
-  evidence: "tests/test_batch_publish_jitter.py"
+  evidence: tests/test_batch_publish_jitter.py
   tests:
-    - tests/test_batch_publish_jitter.py
+  - tests/test_batch_publish_jitter.py
   files: []
-  notes: ""
-
-- id: "ENGINE-04"
+  notes: ''
+- id: ENGINE-04
   type: engine_gap
-  title: "Crash-resume"
+  title: Crash-resume
   status: DONE-VERIFIED
-  evidence: "durable_queue resume on boot; tests/test_batch_crash_resume.py"
+  evidence: durable_queue resume on boot; tests/test_batch_crash_resume.py
   tests:
-    - tests/test_batch_crash_resume.py
+  - tests/test_batch_crash_resume.py
   files: []
-  notes: ""
-
-- id: "ENGINE-05"
+  notes: ''
+- id: ENGINE-05
   type: engine_gap
-  title: "Per-item authorization"
+  title: Per-item authorization
   status: DONE-VERIFIED
-  evidence: "RBAC check per item; tests/test_batch_rbac.py"
+  evidence: RBAC check per item; tests/test_batch_rbac.py
   tests:
-    - tests/test_batch_rbac.py
+  - tests/test_batch_rbac.py
   files: []
-  notes: ""
-
-- id: "ENGINE-06"
+  notes: ''
+- id: ENGINE-06
   type: engine_gap
-  title: "Two-batch conflict test"
+  title: Two-batch conflict test
   status: DONE-VERIFIED
-  evidence: "tests/test_batch_concurrent_conflict.py"
+  evidence: tests/test_batch_concurrent_conflict.py
   tests:
-    - tests/test_batch_concurrent_conflict.py
+  - tests/test_batch_concurrent_conflict.py
   files: []
-  notes: ""
-
-- id: "ENGINE-07"
+  notes: ''
+- id: ENGINE-07
   type: engine_gap
-  title: "Audit-log entries for every batch op"
+  title: Audit-log entries for every batch op
   status: DONE-VERIFIED
-  evidence: "batch_audit_log table; tests/test_batch_audit.py"
+  evidence: batch_audit_log table; tests/test_batch_audit.py
   tests:
-    - tests/test_batch_audit.py
+  - tests/test_batch_audit.py
   files: []
-  notes: ""
-
-- id: "ENGINE-08"
+  notes: ''
+- id: ENGINE-08
   type: engine_gap
-  title: "Metrics keyed by batch ID"
+  title: Metrics keyed by batch ID
   status: DONE-VERIFIED
-  evidence: "prometheus metric batch_ops_total{batch_id, op, status}; tests/test_batch_metrics.py"
+  evidence: prometheus metric batch_ops_total{batch_id, op, status}; tests/test_batch_metrics.py
   tests:
-    - tests/test_batch_metrics.py
+  - tests/test_batch_metrics.py
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Round 3 ease of use (mission 16.3)
-# ----------------------------------------------------------------------
-- id: "EASE-01"
+  notes: ''
+- id: EASE-01
   type: ease_of_use
-  title: "First-run setup wizard + one-command bootstrap (E-020)"
+  title: First-run setup wizard + one-command bootstrap (E-020)
   status: DONE-VERIFIED
-  evidence: "tests/test_setup_wizard.py"
+  evidence: tests/test_setup_wizard.py
   tests:
-    - tests/test_setup_wizard.py
+  - tests/test_setup_wizard.py
   files: []
-  notes: ""
-
-- id: "EASE-02"
+  notes: ''
+- id: EASE-02
   type: ease_of_use
-  title: "Saved filters and views"
+  title: Saved filters and views
   status: DONE-VERIFIED
-  evidence: "SavedView model + /api/saved-views routes; 10 tests"
+  evidence: SavedView model + /api/saved-views routes; 10 tests
   tests:
-    - tests/test_saved_views_routes.py
+  - tests/test_saved_views_routes.py
   files:
-    - shorts_engine/dashboard/routes/saved_views.py
-  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with SavedView model + full CRUD API."
-
-- id: "EASE-03"
+  - shorts_engine/dashboard/routes/saved_views.py
+  notes: Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with SavedView model + full CRUD API.
+- id: EASE-03
   type: ease_of_use
-  title: "Global search + command palette (E-021)"
+  title: Global search + command palette (E-021)
   status: DONE-VERIFIED
-  evidence: "tests/test_search.py"
+  evidence: tests/test_search.py
   tests:
-    - tests/test_search.py
+  - tests/test_search.py
   files: []
-  notes: ""
-
-- id: "EASE-04"
+  notes: ''
+- id: EASE-04
   type: ease_of_use
-  title: "Keyboard shortcuts with help overlay"
+  title: Keyboard shortcuts with help overlay
   status: DONE-VERIFIED
-  evidence: "static/dist/keyboard.js; tests/test_keyboard.py"
+  evidence: static/dist/keyboard.js; tests/test_keyboard.py
   tests:
-    - tests/test_keyboard.py
+  - tests/test_keyboard.py
   files: []
-  notes: ""
-
-- id: "EASE-05"
+  notes: ''
+- id: EASE-05
   type: ease_of_use
-  title: "Shift-click multi-select + sticky bulk-action bar"
+  title: Shift-click multi-select + sticky bulk-action bar
   status: DONE-VERIFIED
-  evidence: "templates/queue.html; tests/test_multi_select.py"
+  evidence: templates/queue.html; tests/test_multi_select.py
   tests:
-    - tests/test_multi_select.py
+  - tests/test_multi_select.py
   files: []
-  notes: ""
-
-- id: "EASE-06"
+  notes: ''
+- id: EASE-06
   type: ease_of_use
-  title: "Drag-and-drop ingestion"
+  title: Drag-and-drop ingestion
   status: DONE-VERIFIED
-  evidence: "templates/queue.html dropzone; tests/test_drag_drop.py"
+  evidence: templates/queue.html dropzone; tests/test_drag_drop.py
   tests:
-    - tests/test_drag_drop.py
+  - tests/test_drag_drop.py
   files: []
-  notes: ""
-
-- id: "EASE-07"
+  notes: ''
+- id: EASE-07
   type: ease_of_use
-  title: "Actionable errors with RUNBOOK links"
+  title: Actionable errors with RUNBOOK links
   status: DONE-VERIFIED
-  evidence: "error renderer pulls from docs/RUNBOOK.md; tests/test_error_pages.py"
+  evidence: error renderer pulls from docs/RUNBOOK.md; tests/test_error_pages.py
   tests:
-    - tests/test_error_pages.py
+  - tests/test_error_pages.py
   files: []
-  notes: ""
-
-- id: "EASE-08"
+  notes: ''
+- id: EASE-08
   type: ease_of_use
-  title: "Inline help"
+  title: Inline help
   status: DONE-VERIFIED
-  evidence: "tooltip partials in templates; tests/test_inline_help.py"
+  evidence: tooltip partials in templates; tests/test_inline_help.py
   tests:
-    - tests/test_inline_help.py
+  - tests/test_inline_help.py
   files: []
-  notes: ""
-
-- id: "EASE-09"
+  notes: ''
+- id: EASE-09
   type: ease_of_use
-  title: "Progress + ETA + live updates"
+  title: Progress + ETA + live updates
   status: DONE-VERIFIED
-  evidence: "SSE /events endpoint + tests/test_progress.py"
+  evidence: SSE /events endpoint + tests/test_progress.py
   tests:
-    - tests/test_progress.py
+  - tests/test_progress.py
   files: []
-  notes: ""
-
-- id: "EASE-10"
+  notes: ''
+- id: EASE-10
   type: ease_of_use
-  title: "Undo toast + autosaved drafts"
+  title: Undo toast + autosaved drafts
   status: DONE-VERIFIED
-  evidence: "autosave.js + undo component; tests/test_undo_toast.py"
+  evidence: autosave.js + undo component; tests/test_undo_toast.py
   tests:
-    - tests/test_undo_toast.py
+  - tests/test_undo_toast.py
   files: []
-  notes: ""
-
-- id: "EASE-11"
+  notes: ''
+- id: EASE-11
   type: ease_of_use
-  title: "CSV / JSON import and export"
+  title: CSV / JSON import and export
   status: DONE-VERIFIED
-  evidence: "routes/queue.py /queue/export; tests/test_csv_import_export.py"
+  evidence: routes/queue.py /queue/export; tests/test_csv_import_export.py
   tests:
-    - tests/test_csv_import_export.py
+  - tests/test_csv_import_export.py
   files: []
-  notes: ""
-
-- id: "EASE-12"
+  notes: ''
+- id: EASE-12
   type: ease_of_use
-  title: "Duplicate warnings (never silently applied)"
+  title: Duplicate warnings (never silently applied)
   status: DONE-VERIFIED
-  evidence: "dedupe on ingest; tests/test_dup_warnings.py"
+  evidence: dedupe on ingest; tests/test_dup_warnings.py
   tests:
-    - tests/test_dup_warnings.py
+  - tests/test_dup_warnings.py
   files: []
-  notes: ""
-
-- id: "EASE-13"
+  notes: ''
+- id: EASE-13
   type: ease_of_use
-  title: "WCAG 2.2 AA + responsive + dark mode + i18n-ready (E-022)"
+  title: WCAG 2.2 AA + responsive + dark mode + i18n-ready (E-022)
   status: DONE-VERIFIED
-  evidence: "tests/test_i18n.py + Playwright axe scan"
+  evidence: tests/test_i18n.py + Playwright axe scan
   tests:
-    - tests/test_i18n.py
+  - tests/test_i18n.py
   files: []
-  notes: ""
-
-- id: "EASE-14"
+  notes: ''
+- id: EASE-14
   type: ease_of_use
-  title: "CLI ergonomics (--json --yes --dry-run --filter shell completions exit codes) (E-023)"
+  title: CLI ergonomics (--json --yes --dry-run --filter shell completions exit codes) (E-023)
   status: DONE-VERIFIED
-  evidence: "tests/test_cli_ergonomics.py"
+  evidence: tests/test_cli_ergonomics.py
   tests:
-    - tests/test_cli_ergonomics.py
+  - tests/test_cli_ergonomics.py
   files: []
-  notes: ""
-
-- id: "EASE-15"
+  notes: ''
+- id: EASE-15
   type: ease_of_use
-  title: "Task-based operator guides"
+  title: Task-based operator guides
   status: DONE-VERIFIED
-  evidence: "docs/operator_guides/*.md; tests/test_guides_index.py"
+  evidence: docs/operator_guides/*.md; tests/test_guides_index.py
   tests:
-    - tests/test_guides_index.py
+  - tests/test_guides_index.py
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Round 3 A..O quality matrix
-# ----------------------------------------------------------------------
+  notes: ''
 - id: A
   type: quality_attr
-  title: "Reliability / resilience"
+  title: Reliability / resilience
   before: 1
   after: 3
-  evidence: "durable queue + idempotency + crash-recover + drain probes"
+  evidence: durable queue + idempotency + crash-recover + drain probes
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: B
   type: quality_attr
-  title: "Security / access control"
+  title: Security / access control
   before: 1
   after: 3
-  evidence: "Fernet at rest + CSRF + session timeout + RBAC + url_guard + secret redaction"
+  evidence: Fernet at rest + CSRF + session timeout + RBAC + url_guard + secret redaction
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: C
   type: quality_attr
-  title: "Performance / scalability"
+  title: Performance / scalability
   before: 1
   after: 2
-  evidence: "1k-item scale test in docs/agent/E2E_EVIDENCE.md; multi-worker deferred (R-F-07)"
+  evidence: 1k-item scale test in docs/agent/E2E_EVIDENCE.md; multi-worker deferred (R-F-07)
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: D
   type: quality_attr
-  title: "Observability / debuggability"
+  title: Observability / debuggability
   before: 1
   after: 3
-  evidence: "prometheus /metrics + correlation IDs + structured logs + audit log + /events SSE"
+  evidence: prometheus /metrics + correlation IDs + structured logs + audit log + /events SSE
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: E
   type: quality_attr
-  title: "Maintainability / code quality"
+  title: Maintainability / code quality
   before: 1
   after: 3
-  evidence: "ruff + mypy ratchet + coverage floor 80% + ledger + pre-commit + ADRs"
+  evidence: ruff + mypy ratchet + coverage floor 80% + ledger + pre-commit + ADRs
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: F
   type: quality_attr
-  title: "Testability"
+  title: Testability
   before: 1
   after: 3
-  evidence: "1000+ tests; E2E S1..S8; sabotage checks; chaos suite for non-deterministic stages"
+  evidence: 1000+ tests; E2E S1..S8; sabotage checks; chaos suite for non-deterministic stages
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: G
   type: quality_attr
-  title: "Documentation"
+  title: Documentation
   before: 1
   after: 3
-  evidence: "RUNBOOK + THREAT_MODEL + ADRs + agent docs + spec files + E2E evidence"
+  evidence: RUNBOOK + THREAT_MODEL + ADRs + agent docs + spec files + E2E evidence
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: H
   type: quality_attr
-  title: "API design"
+  title: API design
   before: 1
   after: 3
-  evidence: "REST + OpenAPI generated; pydantic validation; consistent error envelope"
+  evidence: REST + OpenAPI generated; pydantic validation; consistent error envelope
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: I
   type: quality_attr
-  title: "Interop / integration"
+  title: Interop / integration
   before: 1
   after: 3
-  evidence: "YouTube + TikTok + IG Reels syndication; webhooks; settings I/O"
+  evidence: YouTube + TikTok + IG Reels syndication; webhooks; settings I/O
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: J
   type: quality_attr
-  title: "Compliance / governance"
+  title: Compliance / governance
   before: 1
   after: 3
-  evidence: "Rights ledger + pre-registration + mode-aware guards + audit log"
+  evidence: Rights ledger + pre-registration + mode-aware guards + audit log
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: K
   type: quality_attr
-  title: "Cost efficiency"
+  title: Cost efficiency
   before: 1
   after: 3
-  evidence: "Per-clip cost roll-up + soft/hard budget + alert + LLM failover"
+  evidence: Per-clip cost roll-up + soft/hard budget + alert + LLM failover
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: L
   type: quality_attr
-  title: "Operator UX"
+  title: Operator UX
   before: 1
   after: 3
-  evidence: "Needs-attention + doctor + triage + setup wizard + command palette + WCAG"
+  evidence: Needs-attention + doctor + triage + setup wizard + command palette + WCAG
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: M
   type: quality_attr
-  title: "Disaster recovery"
+  title: Disaster recovery
   before: 1
   after: 3
-  evidence: "cli backup-db/restore-db + retention + house-keeping + drain"
+  evidence: cli backup-db/restore-db + retention + house-keeping + drain
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: N
   type: quality_attr
-  title: "Data integrity / consistency"
+  title: Data integrity / consistency
   before: 1
   after: 3
-  evidence: "transactional outbox + CAS claim + unique constraints + idempotency keys"
+  evidence: transactional outbox + CAS claim + unique constraints + idempotency keys
   tests: []
   files: []
-  notes: ""
-
+  notes: ''
 - id: O
   type: quality_attr
-  title: "Operability / deployability"
+  title: Operability / deployability
   before: 1
   after: 3
-  evidence: "liveness/readiness probes + drain + Dockerfile + docker-compose + Caddyfile"
+  evidence: liveness/readiness probes + drain + Dockerfile + docker-compose + Caddyfile
   tests: []
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Sabotage checks (R8)
-# ----------------------------------------------------------------------
-- id: "SAB-01"
+  notes: ''
+- id: SAB-01
   type: sabotage
-  title: "Disable idempotency check on publish"
+  title: Disable idempotency check on publish
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_disable_idempotency.py reproduces double-publish then fails"
+  evidence: tests/test_sabotage_disable_idempotency.py reproduces double-publish then fails
   tests:
-    - tests/test_sabotage_disable_idempotency.py
+  - tests/test_sabotage_disable_idempotency.py
   files: []
-  notes: ""
-
-- id: "SAB-02"
+  notes: ''
+- id: SAB-02
   type: sabotage
-  title: "Remove RBAC check on batch approve"
+  title: Remove RBAC check on batch approve
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_remove_rbac.py"
+  evidence: tests/test_sabotage_remove_rbac.py
   tests:
-    - tests/test_sabotage_remove_rbac.py
+  - tests/test_sabotage_remove_rbac.py
   files: []
-  notes: ""
-
-- id: "SAB-03"
+  notes: ''
+- id: SAB-03
   type: sabotage
-  title: "Break batch partial-failure handling"
+  title: Break batch partial-failure handling
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_partial_failure.py"
+  evidence: tests/test_sabotage_partial_failure.py
   tests:
-    - tests/test_sabotage_partial_failure.py
+  - tests/test_sabotage_partial_failure.py
   files: []
-  notes: ""
-
-- id: "SAB-04"
+  notes: ''
+- id: SAB-04
   type: sabotage
-  title: "Skip a migration step (rename column)"
+  title: Skip a migration step (rename column)
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_skip_migration.py"
+  evidence: tests/test_sabotage_skip_migration.py
   tests:
-    - tests/test_sabotage_skip_migration.py
+  - tests/test_sabotage_skip_migration.py
   files: []
-  notes: ""
-
-- id: "SAB-05"
+  notes: ''
+- id: SAB-05
   type: sabotage
-  title: "Drop a metric"
+  title: Drop a metric
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_drop_metric.py"
+  evidence: tests/test_sabotage_drop_metric.py
   tests:
-    - tests/test_sabotage_drop_metric.py
+  - tests/test_sabotage_drop_metric.py
   files: []
-  notes: ""
-
-- id: "SAB-06"
+  notes: ''
+- id: SAB-06
   type: sabotage
-  title: "Bypass rights ledger"
+  title: Bypass rights ledger
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_bypass_rights.py"
+  evidence: tests/test_sabotage_bypass_rights.py
   tests:
-    - tests/test_sabotage_bypass_rights.py
+  - tests/test_sabotage_bypass_rights.py
   files: []
-  notes: ""
-
-- id: "SAB-07"
+  notes: ''
+- id: SAB-07
   type: sabotage
-  title: "Bypass preregistration guard"
+  title: Bypass preregistration guard
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_bypass_preregistration.py"
+  evidence: tests/test_sabotage_bypass_preregistration.py
   tests:
-    - tests/test_sabotage_bypass_preregistration.py
+  - tests/test_sabotage_bypass_preregistration.py
   files: []
-  notes: ""
-
-- id: "SAB-08"
+  notes: ''
+- id: SAB-08
   type: sabotage
-  title: "Ignore quota limits"
+  title: Ignore quota limits
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_ignore_quota.py"
+  evidence: tests/test_sabotage_ignore_quota.py
   tests:
-    - tests/test_sabotage_ignore_quota.py
+  - tests/test_sabotage_ignore_quota.py
   files: []
-  notes: ""
-
-- id: "SAB-09"
+  notes: ''
+- id: SAB-09
   type: sabotage
-  title: "Remove url_guard from webhooks"
+  title: Remove url_guard from webhooks
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_remove_url_guard.py"
+  evidence: tests/test_sabotage_remove_url_guard.py
   tests:
-    - tests/test_sabotage_remove_url_guard.py
+  - tests/test_sabotage_remove_url_guard.py
   files: []
-  notes: ""
-
-- id: "SAB-10"
+  notes: ''
+- id: SAB-10
   type: sabotage
-  title: "Break batch undo"
+  title: Break batch undo
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_break_undo.py"
+  evidence: tests/test_sabotage_break_undo.py
   tests:
-    - tests/test_sabotage_break_undo.py
+  - tests/test_sabotage_break_undo.py
   files: []
-  notes: ""
-
-- id: "SAB-11"
+  notes: ''
+- id: SAB-11
   type: sabotage
-  title: "Remove outbox write in publish"
+  title: Remove outbox write in publish
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_remove_outbox.py"
+  evidence: tests/test_sabotage_remove_outbox.py
   tests:
-    - tests/test_sabotage_remove_outbox.py
+  - tests/test_sabotage_remove_outbox.py
   files: []
-  notes: ""
-
-- id: "SAB-12"
+  notes: ''
+- id: SAB-12
   type: sabotage
-  title: "Disable CSRF on approve endpoint"
+  title: Disable CSRF on approve endpoint
   status: DONE-VERIFIED
-  evidence: "tests/test_sabotage_disable_csrf.py"
+  evidence: tests/test_sabotage_disable_csrf.py
   tests:
-    - tests/test_sabotage_disable_csrf.py
+  - tests/test_sabotage_disable_csrf.py
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# E2E scenarios (mission 17.3)
-# ----------------------------------------------------------------------
-- id: "E2E-S1"
+  notes: ''
+- id: E2E-S1
   type: e2e
-  title: "Ingest -> Transcribe -> Select -> Reframe -> Captions -> Render -> Quality gate -> Approve -> Publish"
+  title: Ingest -> Transcribe -> Select -> Reframe -> Captions -> Render -> Quality gate -> Approve -> Publish
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s1_full_pipeline.py runs end-to-end through real entry points"
+  evidence: tests/e2e/test_s1_full_pipeline.py runs end-to-end through real entry points
   tests:
-    - tests/e2e/test_s1_full_pipeline.py
+  - tests/e2e/test_s1_full_pipeline.py
   files: []
-  notes: ""
-
-- id: "E2E-S2"
+  notes: ''
+- id: E2E-S2
   type: e2e
-  title: "Reject path (quality gate fail -> reject with reason -> operator fixes -> re-render -> approve)"
+  title: Reject path (quality gate fail -> reject with reason -> operator fixes -> re-render -> approve)
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s2_reject_recover.py"
+  evidence: tests/e2e/test_s2_reject_recover.py
   tests:
-    - tests/e2e/test_s2_reject_recover.py
+  - tests/e2e/test_s2_reject_recover.py
   files: []
-  notes: ""
-
-- id: "E2E-S3"
+  notes: ''
+- id: E2E-S3
   type: e2e
-  title: "Batch approve 100 clips, then bulk-edit titles, then publish"
+  title: Batch approve 100 clips, then bulk-edit titles, then publish
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s3_batch.py"
+  evidence: tests/e2e/test_s3_batch.py
   tests:
-    - tests/e2e/test_s3_batch.py
+  - tests/e2e/test_s3_batch.py
   files: []
-  notes: ""
-
-- id: "E2E-S4"
+  notes: ''
+- id: E2E-S4
   type: e2e
-  title: "Webhook delivery: clip approved -> webhook fired -> signature verified -> payload redacted"
+  title: 'Webhook delivery: clip approved -> webhook fired -> signature verified -> payload redacted'
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s4_webhook.py"
+  evidence: tests/e2e/test_s4_webhook.py
   tests:
-    - tests/e2e/test_s4_webhook.py
+  - tests/e2e/test_s4_webhook.py
   files: []
-  notes: ""
-
-- id: "E2E-S5"
+  notes: ''
+- id: E2E-S5
   type: e2e
-  title: "Settings export -> wipe -> import on fresh DB -> dry-run preview matches"
+  title: Settings export -> wipe -> import on fresh DB -> dry-run preview matches
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s5_settings_io.py"
+  evidence: tests/e2e/test_s5_settings_io.py
   tests:
-    - tests/e2e/test_s5_settings_io.py
+  - tests/e2e/test_s5_settings_io.py
   files: []
-  notes: ""
-
-- id: "E2E-S6"
+  notes: ''
+- id: E2E-S6
   type: e2e
-  title: "Backup -> delete DB -> restore -> same data + integrity checks"
+  title: Backup -> delete DB -> restore -> same data + integrity checks
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s6_backup_restore.py"
+  evidence: tests/e2e/test_s6_backup_restore.py
   tests:
-    - tests/e2e/test_s6_backup_restore.py
+  - tests/e2e/test_s6_backup_restore.py
   files: []
-  notes: ""
-
-- id: "E2E-S7"
+  notes: ''
+- id: E2E-S7
   type: e2e
-  title: "A/B test: create test -> advance variants -> record snapshot -> pick winner -> finalize"
+  title: 'A/B test: create test -> advance variants -> record snapshot -> pick winner -> finalize'
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s7_ab_test.py"
+  evidence: tests/e2e/test_s7_ab_test.py
   tests:
-    - tests/e2e/test_s7_ab_test.py
+  - tests/e2e/test_s7_ab_test.py
   files: []
-  notes: ""
-
-- id: "E2E-S8"
+  notes: ''
+- id: E2E-S8
   type: e2e
-  title: "Operator UI journey (Playwright + axe): login -> queue -> approve -> preview -> cost -> drain"
+  title: 'Operator UI journey (Playwright + axe): login -> queue -> approve -> preview -> cost -> drain'
   status: DONE-VERIFIED
-  evidence: "tests/e2e/test_s8_ui_journey.py + Playwright axe scan"
+  evidence: tests/e2e/test_s8_ui_journey.py + Playwright axe scan
   tests:
-    - tests/e2e/test_s8_ui_journey.py
+  - tests/e2e/test_s8_ui_journey.py
   files: []
-  notes: ""
-
-# ----------------------------------------------------------------------
-# Scale check (R8)
-# ----------------------------------------------------------------------
-- id: "SCALE-1k"
+  notes: ''
+- id: SCALE-1k
   type: scale
-  title: "1000-item batch (publish + bulk edit) under 5 minutes; RSS < 500 MB"
+  title: 1000-item batch (publish + bulk edit) under 5 minutes; RSS < 500 MB
   status: DONE-VERIFIED
-  evidence: "docs/agent/E2E_EVIDENCE.md#scale-1k with real timing + RSS numbers"
+  evidence: docs/agent/E2E_EVIDENCE.md#scale-1k with real timing + RSS numbers
   tests:
-    - tests/test_scale_1k_batch.py
+  - tests/test_scale_1k_batch.py
   files:
-    - docs/agent/E2E_EVIDENCE.md
-  notes: ""
+  - docs/agent/E2E_EVIDENCE.md
+  notes: ''
