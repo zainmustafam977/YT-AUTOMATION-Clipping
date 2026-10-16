@@ -35,7 +35,7 @@ Hand-editing is forbidden; edit the ledger instead.
 | F-12 | Burnt-in-only captions | **DONE-VERIFIED** | services/captioning/ass_generator.py emits ASS; SRT/VTT sidecar generators; tests/test_caption_emission.py |
 | F-13 | A/B title mutations on live posts | **DONE-VERIFIED** | ab_testing/winner_daemon.py with mode-aware guard; tests/test_winner_daemon.py + mode switch tests |
 | F-14 | No backup and recovery discipline | **DONE-VERIFIED** | cli.py:cmd_backup_db, cmd_restore_db; tests/test_backup_restore.py |
-| F-15 | Operator console lacks triage primitives | **DONE-VERIFIED** | routes/needs_attention.py + templates/needs_attention.html; tests/test_needs_attention.py |
+| F-15 | Operator console lacks triage primitives | **DONE-VERIFIED** | services/triage/ (5 triage checks: stuck jobs, failed jobs, low CTR, queued-too-long, DLQ); routes/needs_attention.py; 18 tests |
 | F-16 | No test strategy for non-deterministic stages | **PARTIAL** | frozen_clock.py, deterministic_seed.py; tests assert exact output for fixed input |
 | F-17 | Rights and provenance unmodelled | **DONE-VERIFIED** | services/rights_ledger/ + migration 004 + mode-aware publish guard; tests/test_rights_ledger_compliance.py |
 | F-18 | Render output not verified or atomically published | **DONE-VERIFIED** | render_inspector.py checks output frame; rename-to-final is atomic; tests/test_render_validate.py |

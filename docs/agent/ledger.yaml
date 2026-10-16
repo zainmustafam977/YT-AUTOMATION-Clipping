@@ -357,14 +357,15 @@
   type: finding
   title: "Operator console lacks triage primitives"
   status: DONE-VERIFIED
-  evidence: "routes/needs_attention.py + templates/needs_attention.html; tests/test_needs_attention.py"
+  evidence: "services/triage/ (5 triage checks: stuck jobs, failed jobs, low CTR, queued-too-long, DLQ); routes/needs_attention.py; 18 tests"
   commits: []
   tests:
-    - tests/test_needs_attention.py
+    - tests/test_triage.py
+    - tests/test_triage_routes.py
   files:
+    - shorts_engine/services/triage/__init__.py
     - shorts_engine/dashboard/routes/needs_attention.py
-    - shorts_engine/dashboard/templates/needs_attention.html
-  notes: ""
+  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with 5 triage checkers + JSON API + by-kind filter + by-priority breakdown."
 
 - id: "F-16"
   type: finding
@@ -765,14 +766,15 @@
   type: enhancement
   title: "Command palette + global search"
   status: DONE-VERIFIED
-  evidence: "static/dist/command_palette.js + /api/search; tests/test_search.py"
+  evidence: "shorts_engine/services/search/ (clips/channels/sources/saved_views/overlays), routes/search.py, 18 tests"
   commits: []
   tests:
-    - tests/test_search.py
+    - tests/test_search_service.py
+    - tests/test_search_routes.py
   files:
+    - shorts_engine/services/search/__init__.py
     - shorts_engine/dashboard/routes/search.py
-    - frontend/
-  notes: ""
+  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt as backend search + command palette. JS frontend can call /api/search and /api/command-palette."
 
 - id: "E-022"
   type: enhancement
@@ -790,13 +792,13 @@
   type: enhancement
   title: "CLI ergonomics (--json --yes --dry-run --filter shell completions exit codes)"
   status: DONE-VERIFIED
-  evidence: "cli.py uses typer with --json/--yes/--dry-run/--filter; tests/test_cli_ergonomics.py"
+  evidence: "shorts_engine/cli/ergonomics.py (run_cli, shell_completions, exit codes, filter parser); 22 tests"
   commits: []
   tests:
     - tests/test_cli_ergonomics.py
   files:
-    - cli.py
-  notes: ""
+    - shorts_engine/cli/ergonomics.py
+  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; built ergonomics layer with subprocess wrapper, exit codes, shell completions, filter expression parser."
 
 # ----------------------------------------------------------------------
 # Round 3 fresh additions (E-024..E-035)
@@ -865,14 +867,13 @@
   type: enhancement
   title: "Content calendar (drag-drop scheduling view)"
   status: DONE-VERIFIED
-  evidence: "routes/calendar.py + templates/calendar.html; tests/test_calendar.py"
+  evidence: "routes/calendar.py (calendar view, events feed, slots schedule, reschedule endpoint) + templates/calendar.html; 4 tests"
   commits: []
   tests:
-    - tests/test_calendar.py
+    - tests/test_calendar_routes.py
   files:
     - shorts_engine/dashboard/routes/calendar.py
-    - shorts_engine/dashboard/templates/calendar.html
-  notes: ""
+  notes: "Routes already implemented in pre-addendum codebase; R3 audit verified endpoint registration with route smoke tests."
 
 - id: "E-030"
   type: enhancement
@@ -1269,11 +1270,12 @@
   type: ease_of_use
   title: "Saved filters and views"
   status: DONE-VERIFIED
-  evidence: "user_view table; tests/test_saved_views.py"
+  evidence: "SavedView model + /api/saved-views routes; 10 tests"
   tests:
-    - tests/test_saved_views.py
-  files: []
-  notes: ""
+    - tests/test_saved_views_routes.py
+  files:
+    - shorts_engine/dashboard/routes/saved_views.py
+  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit caught the false-positive; rebuilt with SavedView model + full CRUD API."
 
 - id: "EASE-03"
   type: ease_of_use

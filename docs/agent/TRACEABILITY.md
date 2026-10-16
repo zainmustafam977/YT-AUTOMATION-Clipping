@@ -19,7 +19,7 @@ Hand-editing is forbidden; edit the ledger instead.
 | F-12 | Burnt-in-only captions | DONE-VERIFIED | tests/test_caption_emission.py | shorts_engine/services/captioning/ |
 | F-13 | A/B title mutations on live posts | DONE-VERIFIED | tests/test_winner_daemon.py | shorts_engine/services/ab_testing/winner_daemon.py |
 | F-14 | No backup and recovery discipline | DONE-VERIFIED | tests/test_backup_restore.py | cli.py |
-| F-15 | Operator console lacks triage primitives | DONE-VERIFIED | tests/test_needs_attention.py | shorts_engine/dashboard/routes/needs_attention.py, shorts_engine/dashboard/templates/needs_attention.html |
+| F-15 | Operator console lacks triage primitives | DONE-VERIFIED | tests/test_triage.py, tests/test_triage_routes.py | shorts_engine/services/triage/__init__.py, shorts_engine/dashboard/routes/needs_attention.py |
 | F-16 | No test strategy for non-deterministic stages | PARTIAL | tests/test_clip_production_fixes.py | shorts_engine/services/telemetry/ |
 | F-17 | Rights and provenance unmodelled | DONE-VERIFIED | tests/test_rights_ledger_compliance.py, tests/test_migration_004_compliance_ledger.py | migrations/004_compliance_ledger.sql, shorts_engine/services/rights_ledger/ |
 | F-18 | Render output not verified or atomically published | DONE-VERIFIED | tests/test_render_validate.py | shorts_engine/services/rendering/render_inspector.py |
