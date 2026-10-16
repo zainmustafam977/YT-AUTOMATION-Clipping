@@ -52,6 +52,13 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+pythonpath = ["."]
+markers = [
+    "ffmpeg_required: requires real ffmpeg on PATH",
+    "e2e: end-to-end tests requiring a dev server",
+    "real_ffmpeg: requires a real (non-shim) ffmpeg binary",
+    "network: requires network access",
+]
 
 [tool.ruff]
 line-length = 100

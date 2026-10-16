@@ -904,5 +904,95 @@ class LLMUsageLog(Base):
         }
 
 
+# ----------------------------------------------------------------------
+# Batch engine (E-001..E-010 + Round 3 BATCH-01..BATCH-25)
+# ----------------------------------------------------------------------
+class BatchJobState(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class BatchJob(Base):
+    __tablename__ = "batch_jobs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    operation = Column(String(64), nullable=False, index=True)
+    total_items = Column(Integer, nullable=False, default=0)
+    ok_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    actor = Column(String(64), nullable=False, default="system")
+    state = Column(
+        SQLEnum(BatchJobState),
+        default=BatchJobState.PENDING,
+        nullable=False,
+        index=True,
+    )
+    params_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    @property
+    def params(self) -> dict:
+        if not self.params_json:
+            return {}
+        try:
+            return json.loads(self.params_json)
+        except Exception:
+            return {}
+
+    @params.setter
+    def params(self, val: Optional[dict]) -> None:
+        if not val:
+            self.params_json = None
+        else:
+            self.params_json = json.dumps(val)
+
+
+class BatchItemLock(Base):
+    """Per-item exclusive lock for concurrent batches."""
+    __tablename__ = "batch_item_locks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(String(36), nullable=False, index=True)
+    operation = Column(String(64), nullable=False)
+    item_id = Column(String(64), nullable=False, index=True)
+    acquired_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    released_at = Column(DateTime, nullable=True, index=True)
+
+
+class BatchAuditLog(Base):
+    """Append-only audit log of every batch op + per-item result."""
+    __tablename__ = "batch_audit_log"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(String(36), nullable=False, index=True)
+    operation = Column(String(64), nullable=False, index=True)
+    item_id = Column(String(64), nullable=False, index=True)
+    actor = Column(String(64), nullable=False, default="system")
+    status = Column(String(16), nullable=False)  # OK / FAILED / SKIPPED
+    message = Column(Text, nullable=True)
+    before_json = Column(Text, nullable=True)
+    after_json = Column(Text, nullable=True)
+    idempotency_key = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "batch_id": self.batch_id,
+            "operation": self.operation,
+            "item_id": self.item_id,
+            "actor": self.actor,
+            "status": self.status,
+            "message": self.message,
+            "idempotency_key": self.idempotency_key,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 
