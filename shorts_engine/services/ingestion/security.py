@@ -10,7 +10,6 @@ Industrial-grade security layer guarding video ingestion against:
 ==============================================================================
 """
 
-import os
 import re
 import time
 import math
@@ -19,7 +18,7 @@ import logging
 import ipaddress
 import threading
 from urllib.parse import urlparse, parse_qs
-from typing import Optional, Dict, List
+from typing import Dict, List
 from collections import defaultdict
 
 from fastapi import HTTPException, status, Request

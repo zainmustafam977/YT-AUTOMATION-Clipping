@@ -5,7 +5,6 @@ and Real-Time EventBus Notifications.
 """
 
 import os
-import sys
 import time
 import logging
 import threading

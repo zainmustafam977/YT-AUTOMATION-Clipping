@@ -21,8 +21,7 @@ import json
 import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
@@ -47,7 +46,6 @@ from shorts_engine.services.publishing.quota import (
     VIDEOS_INSERT_COST_UNITS,
 )
 from shorts_engine.services.queue.durable_queue import durable_job_queue
-from shorts_engine.services.events.taxonomy import emit_platform_event, CLIP_APPROVED, CLIP_PUBLISHED
 
 logger = logging.getLogger(__name__)
 

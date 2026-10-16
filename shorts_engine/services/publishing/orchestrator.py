@@ -14,15 +14,11 @@ Implements Section 4 of the Enterprise Shorts Engine Specification:
 
 import json
 import logging
-import random
-import time
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
 from shorts_engine.services.publishing.worker import (
-    HttpError,
     build_youtube_client,
     check_channel_recent_uploads_for_clip,
     YouTubePublishWorker,
@@ -32,19 +28,13 @@ from shorts_engine.services.publishing.worker import (
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import (
     Clip,
-    ClipStatus,
     Channel,
-    ChannelCredential,
     PublishJob,
     PublishJobStatus,
-    PublishLog,
     AuditLog,
 )
-from shorts_engine.db.security import decrypt_secret
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
 from shorts_engine.services.publishing.quota import QuotaTracker
-from shorts_engine.services.events.bus import global_event_bus
-from shorts_engine.services.events.models import PlatformEvent
 
 logger = logging.getLogger(__name__)
 

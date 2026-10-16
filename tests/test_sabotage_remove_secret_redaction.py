@@ -33,11 +33,11 @@ def test_sabotage_redaction_disabled_leaks_secrets(monkeypatch):
     would appear in the payload that is logged or sent.
     """
     import shorts_engine.services.webhooks as wm
+    # Get the ORIGINAL redact before monkey-patching.
+    original = wm.redact
     monkeypatch.setattr(wm, "redact", lambda x: x)
     payload = {"access_token": "real-secret-123"}
     leaked = wm.redact(payload)
     assert leaked["access_token"] == "real-secret-123"
-    # Real redact would have replaced it with [REDACTED].
-    from importlib import reload
-    reload(wm)
-    assert wm.redact({"access_token": "x"})["access_token"] == "[REDACTED]"
+    # The original (un-patched) redact would have replaced it.
+    assert original({"access_token": "x"})["access_token"] == "[REDACTED]"

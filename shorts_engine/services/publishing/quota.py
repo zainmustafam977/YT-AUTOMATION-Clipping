@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 import portalocker
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.session import SessionLocal, engine
+from shorts_engine.db.session import engine
 from shorts_engine.db.models import QuotaLedger
 from shorts_engine.utils.fs import atomic_write_json
 

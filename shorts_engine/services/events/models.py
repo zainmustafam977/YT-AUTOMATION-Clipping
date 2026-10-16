@@ -6,7 +6,7 @@ and live UI toast notification system.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 

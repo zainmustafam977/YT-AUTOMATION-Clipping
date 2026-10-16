@@ -1,0 +1,28 @@
+# Pre-commit hooks (R3).
+#
+# Install: pre-commit install
+# Manual run: pre-commit run --all-files
+#
+# The CI workflow (.github/workflows/agent.yml) re-runs these
+# checks so a developer can rely on the pre-push feedback.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff lint
+        entry: .venv/bin/ruff check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: agent-ledger
+        name: agent ledger consistency
+        entry: .venv/bin/python tools/check_agent_ledger.py
+        language: system
+        pass_filenames: false
+
+      - id: agent-mypy-ratchet
+        name: agent mypy ratchet
+        entry: .venv/bin/python tools/check_mypy_ratchet.py
+        language: system
+        pass_filenames: false

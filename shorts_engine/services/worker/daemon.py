@@ -13,39 +13,30 @@ Implements:
 """
 
 import os
-import sys
-import time
 import json
 import signal
-import socket
 import logging
 import argparse
 import threading
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Set, Tuple
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from shorts_engine.db.session import SessionLocal, is_postgres, engine as default_engine
+from shorts_engine.db.session import SessionLocal, is_postgres
 from shorts_engine.db.models import (
     PipelineJob,
     PipelineJobStatus,
-    SourceVideo,
-    SourceVideoStatus,
-    ClipCandidate,
     Clip,
-    ClipStatus,
-    Transcript,
 )
 from shorts_engine.orchestration.stage_registry import (
     StageContext,
     StageExecutor,
-    PIPELINE,
 )
 from shorts_engine.orchestration.exceptions import JobCancelledError
 from shorts_engine.orchestration.telemetry import emit
-from shorts_engine.services.queue.durable_queue import durable_job_queue, DurableJobQueue
+from shorts_engine.services.queue.durable_queue import durable_job_queue
 from shorts_engine.services.worker.runner import (
     generate_worker_id,
     is_pid_alive,

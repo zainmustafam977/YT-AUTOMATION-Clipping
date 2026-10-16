@@ -55,21 +55,17 @@ from shorts_engine.db.models import (
     PublishJob,
     PublishJobStatus,
     PublishLog,
-    AuditLog,
     PipelineJob,
     PipelineJobStatus,
     PublishSlot,
     PublishSlotStatus,
 )
-from shorts_engine.db.security import decrypt_secret, encrypt_secret
+from shorts_engine.db.security import decrypt_secret
 from shorts_engine.services.publishing.quota import (
     QuotaTracker,
-    get_pacific_day_bounds,
     get_next_pacific_midnight,
     VIDEOS_INSERT_COST_UNITS,
     VIDEOS_UPDATE_COST_UNITS,
-    SEARCH_LIST_COST_UNITS,
-    CHANNELS_LIST_COST_UNITS,
 )
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent
@@ -623,7 +619,7 @@ class YouTubePublishWorker:
                 category="auth",
                 level="ERROR",
                 title=f"Channel Needs Re-Authentication: {channel.display_title}",
-                message=f"Google OAuth refresh token revoked or expired (invalid_grant). Reconnection required.",
+                message="Google OAuth refresh token revoked or expired (invalid_grant). Reconnection required.",
                 action_url="/channels",
             ))
         except Exception:

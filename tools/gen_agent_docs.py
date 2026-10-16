@@ -17,7 +17,6 @@ the build.
 """
 from __future__ import annotations
 
-import datetime as dt
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -95,7 +94,6 @@ def render_findings(rows: List[Dict[str, Any]]) -> str:
 def render_enhancements(rows: List[Dict[str, Any]]) -> str:
     qual = [r for r in rows if r.get("type") == "quality_attr"]
     qual.sort(key=lambda r: r["id"])
-    eo = [r for r in rows if r.get("type") in ("ease_of_use", "enhancement", "engine_gap", "batch_op", "repair", "sabotage", "e2e", "scale")]
 
     lines = [
         "# ENHANCEMENTS",

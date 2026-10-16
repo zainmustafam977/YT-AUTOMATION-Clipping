@@ -146,6 +146,19 @@ def ensure_schema_upgrades(target_engine=None):
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN variations_json TEXT"))
                     conn.commit()
+            # E-016 — caption editor
+            if "caption_words_json" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN caption_words_json TEXT"))
+                    conn.commit()
+            if "caption_edited_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE clip_candidates ADD COLUMN caption_edited_at {dt_type}"))
+                    conn.commit()
+            if "caption_edited_by" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN caption_edited_by VARCHAR(64)"))
+                    conn.commit()
 
         if "clips" in table_names:
             cols = [c["name"] for c in inspector.get_columns("clips")]
