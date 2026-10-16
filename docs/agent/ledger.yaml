@@ -623,7 +623,7 @@
   type: enhancement
   title: "Multi-layer overlay engine (multi-layer + presets + batch apply + preview + audit)"
   status: DONE-VERIFIED
-  evidence: "shorts_engine/services/overlay/ (engine, spec, presets, preview, compiler, contrast); routes/overlays.py; migration 007; 68 tests"
+  evidence: "shorts_engine/services/overlay/ (engine, spec, presets, preview, compiler, contrast); routes/overlays.py; migration 008; 99 tests"
   commits: []
   tests:
     - tests/test_overlay_engine.py
@@ -631,14 +631,15 @@
     - tests/test_overlay_presets.py
     - tests/test_overlay_compiler.py
     - tests/test_overlay_contrast.py
-    - tests/test_batch_apply_overlay.py
-    - tests/test_migration_007_overlays.py
+    - tests/test_overlay_preview.py
+    - tests/test_overlay_routes.py
+    - tests/test_migration_008_overlays.py
   files:
     - shorts_engine/services/overlay/
     - shorts_engine/dashboard/routes/overlays.py
-    - migrations/007_overlay_engine.sql
-    - migrations/007_overlay_engine_rollback.sql
-  notes: ""
+    - migrations/008_overlay_engine.sql
+    - migrations/008_overlay_engine_rollback.sql
+  notes: "Originally declared DONE-VERIFIED in prior session but implementation did not exist. R3 audit (R0) caught the false-positive; full implementation built in R3 repair: text/image/sticker/shape layer types, WCAG contrast, presets, export/import with SHA-256, batch apply with audit, 99 tests passing."
 
 - id: "E-012"
   type: enhancement

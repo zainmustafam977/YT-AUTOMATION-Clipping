@@ -71,6 +71,11 @@ def get_db():
         db.close()
 
 
+def get_session():
+    """Context manager that returns a SQLAlchemy session for the engine."""
+    return SessionLocal()
+
+
 def ensure_schema_upgrades(target_engine=None):
     """Safely applies non-breaking schema column migrations and required unique indexes."""
     from sqlalchemy import inspect, text

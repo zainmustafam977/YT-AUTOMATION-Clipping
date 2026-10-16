@@ -1189,3 +1189,35 @@ class OperatorGuide(Base):
 
 
 
+
+# ----------------------------------------------------------------------
+# Overlay engine (E-011)
+# ----------------------------------------------------------------------
+class OverlayPreset(Base):
+    __tablename__ = "overlay_preset"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=False, default="")
+    spec_json = Column(Text, nullable=False)
+    spec_sha256 = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(64), nullable=False, default="system")
+    is_builtin = Column(Integer, nullable=False, default=0)
+
+
+class OverlayRenderAudit(Base):
+    __tablename__ = "overlay_render_audit"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    candidate_id = Column(Integer, nullable=True, index=True)
+    preset_id = Column(Integer, nullable=True, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    ok = Column(Integer, nullable=False, default=0)
+    error = Column(Text, nullable=True)
+    ffmpeg_cmd = Column(Text, nullable=True)
+    output_path = Column(String(1024), nullable=True)
+    contrast_ratio = Column(Float, nullable=True)
+    bytes_written = Column(Integer, nullable=True)
