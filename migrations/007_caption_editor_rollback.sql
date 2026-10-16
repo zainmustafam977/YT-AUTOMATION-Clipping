@@ -1,0 +1,1 @@
+-- E-016 — caption editor rollback (SQLite <3.35 doesn't DROP COLUMN)
