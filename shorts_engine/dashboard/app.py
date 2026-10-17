@@ -3,6 +3,7 @@ FastAPI application factory for the Shorts Engine operator dashboard.
 Mounts all route groups and configures Jinja2 templating and unauthenticated browser redirects.
 """
 
+import os
 import urllib.parse
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -135,7 +136,19 @@ def create_dashboard_app() -> FastAPI:
             raw_host = raw_host.split(":")[0]
 
         allowed_hosts = {"127.0.0.1", "localhost", "testserver", "[::1]"}
-        if raw_host and raw_host.lower() not in allowed_hosts:
+        # Optional env-driven extension for preview/proxy deployments
+        # (e.g. DASHBOARD_EXTRA_ALLOWED_HOSTS="dev.example.com,10.0.0.5").
+        extra = os.environ.get("DASHBOARD_EXTRA_ALLOWED_HOSTS", "")
+        for _h in extra.split(","):
+            _h = _h.strip().lower()
+            if _h:
+                allowed_hosts.add(_h)
+        host_lc = raw_host.lower()
+        allowed = raw_host == "" or host_lc in allowed_hosts
+        # Opt-in: allow sandbox preview hosts (https://{port}-{sandbox}.e2b.app)
+        if not allowed and os.environ.get("DASHBOARD_ALLOW_E2B_PREVIEW", "").lower() in ("1", "true", "yes"):
+            allowed = host_lc.endswith(".e2b.app")
+        if not allowed:
             return JSONResponse(
                 status_code=400,
                 content={"detail": f"Invalid Host header '{host_header}'. Localhost access only."},
