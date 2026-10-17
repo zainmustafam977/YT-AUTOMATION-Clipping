@@ -25,7 +25,6 @@ from google_auth_oauthlib.flow import Flow
 from shorts_engine.services.publishing.worker import (
     HttpError,
     DEFAULT_SCOPES,
-    create_oauth_flow,
     build_youtube_client,
     fetch_channel_identity as worker_fetch_identity,
 )

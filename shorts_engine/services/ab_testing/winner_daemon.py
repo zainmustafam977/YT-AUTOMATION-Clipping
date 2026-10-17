@@ -25,8 +25,7 @@ from typing import List, Optional, Any
 from sqlalchemy.orm import Session
 
 from shorts_engine.config.settings import settings
-from sqlalchemy.orm import Session
-from shorts_engine.db.session import SessionLocal, engine
+from shorts_engine.db.session import engine
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog, AnalyticsMetric
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
 from shorts_engine.services.queue.durable_queue import durable_job_queue

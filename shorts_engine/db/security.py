@@ -9,7 +9,6 @@ from typing import Optional
 from shorts_engine.security.secretbox import (
     encrypt as secretbox_encrypt,
     decrypt as secretbox_decrypt,
-    rotate as secretbox_rotate,
     decrypt_legacy_aes_gcm,
 )
 

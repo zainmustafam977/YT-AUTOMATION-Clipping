@@ -10,7 +10,6 @@ proof record to docs/audit/_ledger.jsonl.
 """
 
 import sys
-import os
 import hashlib
 import json
 import datetime

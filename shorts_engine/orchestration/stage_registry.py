@@ -9,7 +9,6 @@ Implements:
 6. Quarantined jobs visibility query
 """
 
-import os
 import json
 import random
 import logging
@@ -31,14 +30,13 @@ from shorts_engine.db.models import (
 )
 from shorts_engine.config.settings import settings
 from shorts_engine.orchestration.exceptions import (
-    PipelineError,
     TransientError,
     PermanentError,
     DailyBudgetExceededError,
     JobCancelledError,
     classify_exception,
 )
-from shorts_engine.orchestration.telemetry import emit, get_telemetry_emitter
+from shorts_engine.orchestration.telemetry import emit
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +313,6 @@ def analyze_candidates_stage(ctx: StageContext) -> Dict[str, Any]:
 def crop_plan_stage(ctx: StageContext) -> Dict[str, Any]:
     """Stage 4: Reframing & Crop Plan."""
     from shorts_engine.services.reframing.cropper import VideoReframer
-    from shorts_engine.services.storage.path_manager import PathManager
 
     ctx.heartbeat()
     clip = None

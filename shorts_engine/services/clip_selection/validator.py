@@ -14,7 +14,7 @@ import json
 import math
 import logging
 import re
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from shorts_engine.services.clip_selection.prompts import (

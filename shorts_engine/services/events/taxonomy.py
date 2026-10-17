@@ -21,7 +21,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
-from shorts_engine.db.session import SessionLocal, engine
+from shorts_engine.db.session import engine
 from shorts_engine.db.models import EventLog
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent

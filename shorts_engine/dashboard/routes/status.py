@@ -9,7 +9,6 @@ import json
 import re
 import shutil
 import asyncio
-import threading
 import logging
 import urllib.parse
 from datetime import datetime
@@ -34,7 +33,6 @@ from shorts_engine.services.llm.quota_tracker import usage_tracker
 from shorts_engine.services.clip_selection.selector import parse_ai_provenance
 from shorts_engine.services.telemetry.progress_tracker import job_progress_tracker
 from shorts_engine.orchestration.runner import (
-    PipelineRunner,
     get_video_lock,
     release_video_lock,
     clear_cancellation,

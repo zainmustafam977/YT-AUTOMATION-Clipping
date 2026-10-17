@@ -71,6 +71,11 @@ def get_db():
         db.close()
 
 
+def get_session():
+    """Context manager that returns a SQLAlchemy session for the engine."""
+    return SessionLocal()
+
+
 def ensure_schema_upgrades(target_engine=None):
     """Safely applies non-breaking schema column migrations and required unique indexes."""
     from sqlalchemy import inspect, text
@@ -145,6 +150,19 @@ def ensure_schema_upgrades(target_engine=None):
             if "variations_json" not in cols:
                 with eng.connect() as conn:
                     conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN variations_json TEXT"))
+                    conn.commit()
+            # E-016 — caption editor
+            if "caption_words_json" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN caption_words_json TEXT"))
+                    conn.commit()
+            if "caption_edited_at" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE clip_candidates ADD COLUMN caption_edited_at {dt_type}"))
+                    conn.commit()
+            if "caption_edited_by" not in cols:
+                with eng.connect() as conn:
+                    conn.execute(text("ALTER TABLE clip_candidates ADD COLUMN caption_edited_by VARCHAR(64)"))
                     conn.commit()
 
         if "clips" in table_names:
