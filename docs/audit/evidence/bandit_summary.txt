@@ -1,0 +1,5 @@
+bandit/_totals: {'CONFIDENCE.HIGH': 188, 'CONFIDENCE.LOW': 4, 'CONFIDENCE.MEDIUM': 12, 'CONFIDENCE.UNDEFINED': 0, 'SEVERITY.HIGH': 3, 'SEVERITY.LOW': 183, 'SEVERITY.MEDIUM': 18, 'SEVERITY.UNDEFINED': 0, 'loc': 42851, 'nosec': 0, 'skipped_tests': 0}
+severity counts: {'LOW': 183, 'MEDIUM': 18, 'HIGH': 3}
+HIGH B324 hashlib shorts_engine/services/ingestion/local_loader.py 324
+HIGH B324 hashlib shorts_engine/services/monitoring/analytics_sync.py 77
+HIGH B324 hashlib shorts_engine/services/settings_io/__init__.py 208
