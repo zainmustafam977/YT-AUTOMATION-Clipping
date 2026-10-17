@@ -1,0 +1,184 @@
+================ SABOTAGE SB01: F-01 crash recovery: neutralize reconcile_stale_claims ================
+edited ok
+----- [SB01] running: tests/test_worker_queue.py tests/test_orphan_reconciliation.py tests/test_durable_job_queue.py
+.................                                                        [100%]
+17 passed in 5.70s
+================ SABOTAGE SB02: F-03 publish idempotency: format_idempotency_tag returns empty ================
+edited ok
+----- [SB02] running: tests/test_publish_worker_and_oauth_isolation.py tests/test_youtube_resumable_upload.py tests/test_publisher_oauth.py
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_self_declared_made_for_kids_and_scopes_explicitly_configured
+5 failed, 8 passed in 3.51s
+================ SABOTAGE SB03: F-05 url guard: is_safe_url allows everything ================
+edited ok
+----- [SB03] running: tests/test_ingestion_hardening.py tests/test_sabotage_remove_url_guard.py tests/test_channels_metadata.py
+FAILED tests/test_sabotage_remove_url_guard.py::test_url_guard_blocks_ipv6_loopback
+4 failed, 22 passed, 1 warning in 5.45s
+================ SABOTAGE SB04: F-06 ingestion dedupe: content hash unique per call ================
+edited ok
+----- [SB04] running: tests/test_local_ingestion.py tests/test_local_ingestion_gateway.py
+FAILED tests/test_local_ingestion_gateway.py::test_pipeline_runner_processes_local_ingested_video
+5 failed, 20 passed, 1 warning in 7.31s
+================ SABOTAGE SB05: F-09 event bus: async publish drops all events silently ================
+edited ok
+----- [SB05] running: tests/test_event_bus.py tests/test_event_bus_activation.py tests/test_live_progress_and_thumbnails.py
+FAILED tests/test_event_bus_activation.py::test_sse_stream_receives_live_events_without_page_refresh
+10 failed, 14 passed, 1 warning in 22.35s
+================ SABOTAGE SB06: F-13 winner daemon: quota-safe guard bypass in promote ================
+no marker found 13970 13970
+----- [SB06] running: tests/test_ab_winner_daemon_quota_safe.py tests/test_ab_winner_promotion.py
+............                                                             [100%]
+12 passed in 1.07s
+================ SABOTAGE SB07: batch undo: reverse handler does not reverse ================
+UNDO_REGISTRY: Dict[str, Handler] = {
+    "approve": _h_reject,
+    "reject": _h_approve,
+    "schedule": _h_reschedule,
+    "soft_delete": _h_archive,  # archive undoes a soft-delete via the restore handler
+}
+
+ALLOWED_OPERATIONS = sorted(OPERATION_REGISTRY.keys())
+
+
+# ----------------------------------------------------------------------
+# Engine
+# ----------------------------------------------------------------------
+class BatchEngine:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def list_operations(self) -> List[str]:
+        return ALLOWED_OPERATIONS
+
+    def prev
+no undo handler found
+----- [SB07] running: tests/test_batch_engine.py tests/test_sabotage_break_undo.py
+....................                                                     [100%]
+20 passed in 1.42s
+================ SABOTAGE SB08: authorization: batch /run without require_operator ================
+edited ok
+----- [SB08] running: tests/test_sabotage_remove_rbac.py tests/test_auth_rbac.py tests/test_batch_engine.py
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+35 passed, 1 warning in 14.14s
+================ SABOTAGE SB09: quota checks: can_publish always True ================
+edited ok
+----- [SB09] running: tests/test_phase1_quota_ledger.py tests/test_quota_concurrency_lock.py tests/test_multi_key_quota.py tests/test_sabotage_ignore_quota.py
+FAILED tests/test_phase1_quota_ledger.py::test_daily_cap_enforcement - assert...
+1 failed, 19 passed, 1 warning in 7.74s
+================ SABOTAGE SB10: CSRF: verify_csrf always passes ================
+edited ok
+----- [SB10] running: tests/test_auth_rbac.py tests/test_channels_metadata.py tests/test_audit_enhancements.py tests/test_dashboard.py
+FAILED tests/test_dashboard.py::test_queue_approve_transitions_clip_status - ...
+3 failed, 34 passed, 1 warning in 15.16s
+================ SABOTAGE SB11: batch item locks: _acquire_item_lock always succeeds ================
+edited ok
+----- [SB11] running: tests/test_batch_engine.py tests/test_concurrency_locks.py
+FAILED tests/test_batch_engine.py::test_concurrent_batches_serialise_on_same_item
+1 failed, 20 passed, 1 warning in 5.20s
+================ SABOTAGE SB12: F-18 render inspector: always passes validation ================
+functions: ['__init__', 'inspect_render']
+edited ok: inspect
+----- [SB12] running: tests/test_quality_gate_enhancements.py tests/test_rendering.py tests/test_media_qa_gate.py
+FAILED tests/test_rendering.py::test_render_synthetic_short_and_validate - as...
+4 failed, 7 passed in 48.47s
+================ GAUNTLET COMPLETE ================
+===== BASE SB01-set (recovery files) =====
+----- [BASE-SB01] tests: tests/test_worker_queue.py tests/test_orphan_reconciliation.py tests/test_durable_job_queue.py
+17 passed in 6.05s
+===== SB02-recheck: F-03 idempotency tag empty =====
+EDITED SB02
+----- [SB02] tests: tests/test_publish_worker_and_oauth_isolation.py tests/test_youtube_resumable_upload.py tests/test_publisher_oauth.py
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_403_quota_exceeded_defers_past_pacific_midnight
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_invalid_grant_parks_channel
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_ambiguous_failure_triggers_tag_verification
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_dry_run_path_bypasses_api_and_consumes_zero_quota
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_self_declared_made_for_kids_and_scopes_explicitly_configured
+5 failed, 8 passed in 3.75s
+===== SB02-BASE-recheck (identical files, unpatched) =====
+----- [SB02-BASE] tests: tests/test_publish_worker_and_oauth_isolation.py tests/test_youtube_resumable_upload.py tests/test_publisher_oauth.py
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_403_quota_exceeded_defers_past_pacific_midnight
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_invalid_grant_parks_channel
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_simulated_ambiguous_failure_triggers_tag_verification
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_dry_run_path_bypasses_api_and_consumes_zero_quota
+FAILED tests/test_publish_worker_and_oauth_isolation.py::test_self_declared_made_for_kids_and_scopes_explicitly_configured
+5 failed, 8 passed in 3.84s
+===== SB06b: F-13 max-swaps guard removed (bandit.py) =====
+EDITED SB06b
+----- [SB06b] tests: tests/test_ab_winner_daemon_quota_safe.py tests/test_ab_winner_promotion.py
+FAILED tests/test_ab_winner_daemon_quota_safe.py::test_second_swap_attempt_refused_max_swaps_one
+1 failed, 11 passed in 1.06s
+===== SB07b: undo uses forward handler =====
+EDITED SB07b
+----- [SB07b] tests: tests/test_batch_engine.py tests/test_sabotage_break_undo.py
+FAILED tests/test_batch_engine.py::test_undo_with_items_reverses_approve - As...
+1 failed, 19 passed in 1.51s
+===== SB07c: undo() retention window checked? (break undo_with_items entirely) =====
+EDITED SB07c
+----- [SB07c] tests: tests/test_batch_engine.py tests/test_sabotage_break_undo.py
+20 passed in 1.49s
+===== SB10b: CSRF off — full dashboard-facing suites with -rf =====
+EDITED SB10b
+----- [SB10b] tests: tests/test_dashboard.py tests/test_dashboard_enhancements.py tests/test_channels_metadata.py tests/test_auth_rbac.py tests/test_queue_routes.py
+===== SB12b: F-18 inspector stub — targeted -rf =====
+sig:     def inspect_render(self, video_path: Path) -> Tuple[bool, Dict[str, Any]]:
+
+"""
+Multimodal Post-Render Inspector: inspects the finished rendered MP4 video
+to ensure the subject is centered, captions do not collide with YouTube Shorts UI overlays,
+and audio is intelligible.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, Any, Tuple
+import cv2
+import numpy as np
+from shorts_engine.config.settings import settings
+from shorts_engine.services.reframing.detector import SubjectDetector
+
+logger = logging.getLogger(__name__)
+
+
+class RenderInspector:
+    def __init__(self):
+        self.detector = SubjectDetector()
+
+    def inspect_render(self, video_path: Path) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Samples keyframes across the rendered video to verify:
+        1. Subject stays within safe horizontal margins (15% <= X <= 85%).
+        2. Caption bounding box does not collide with YouTube Shorts UI overlay dead zones.
+        3. Audio channel integrity.
+        """
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            return False, {"error": "Could not open rendered video for inspection"}
+
+        try:
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames <= 0:
+                return False, {"error": "Video contains 0 frames"}
+
+            # Sample at 10%, 30%, 50%, 70%, 90%
+            sample_indices = [
+                int(total_frames * ratio)
+                for ratio in [0.1, 0.3, 0.5, 0.7, 0.9]
+            ]
+
+            subject_framing_violations = 0
+            caption_collision_violations = 0
+            inspected_frames = 0
+
+            for frame_idx in sample_indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    continue
+
+                inspected_frames += 1
+                h, w = frame.shape[:2]
+
+                # 1. Subject framing check: isolate primary subject (dominant face by area)
+                faces = self.detector.detect_faces(frame)
+                if faces:
+                    primary_face = max(faces, key=lambda f: f.area)
+ALL_REDO_DONE
