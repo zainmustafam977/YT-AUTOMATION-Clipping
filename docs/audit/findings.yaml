@@ -1,0 +1,317 @@
+# Independent verification findings — one row per FAIL/UNVERIFIED from VERIFICATION_REPORT§2.
+# severity: critical|high|medium|low. area: governance|security|data|idempotency|quality|ops|docs.
+# evidence paths are relative to docs/audit/evidence/.
+
+findings:
+  - id: AUD-001
+    severity: critical
+    area: governance
+    title: Ledger evidence fabricated w.r.t. this tree (210 broken refs)
+    item_ids: [A5, A11, "18.8-C1"]
+    evidence: missing_ledger_refs.txt
+    detail: >
+      ledger.yaml cites 210 non-existent tests/files/migrations incl. 16/24 F-finding
+      PROVE tests (test_worker_recovery, test_idempotency, test_oauth_token_encryption,
+      test_url_guard, test_outbox, test_caption_emission, test_winner_daemon,
+      test_backup_restore, test_rights_ledger_compliance, test_migration_004_compliance_ledger,
+      test_render_validate, test_settings_placeholder_guard, test_audio_mastering_real_ffmpeg,
+      test_reframing_confidence, test_drain_endpoint), 19/25 batch-op tests, 6/8 E2E files,
+      E-005..E-022 tests, ease-of-use tests EASE-01..15, sabotage tests SAB-03/05/06/07/12,
+      and docs: RUNBOOK.md, THREAT_MODEL.md, ROADMAP.md, 4 ADR files, E2E_EVIDENCE.md,
+      AGENT_MISSION.md, RESEARCH.md.
+
+  - id: AUD-002
+    severity: critical
+    area: quality
+    title: Full gate red at HEAD — 69 failed / 1038 passed / 1 skipped
+    item_ids: [A3, "18.1-C1", "10.5-C1", "18.11-C3"]
+    evidence: gate_pytest_not_network.log
+    detail: >
+      Excluding env-contingent failures (12 Playwright, 8 missing client_secret.enc,
+      ~6 ffmpeg libass/drawtext) leaves ~43 code/test defects reproduce in CI.
+      Same command promoted by CI workflow agent.yml and FINAL_REPORT.
+
+  - id: AUD-003
+    severity: critical
+    area: quality
+    title: Ruff gate red — 35 errors at 80370f5 (5 latent NameErrors)
+    item_ids: [A3, "18.11-C2"]
+    evidence: ruff_errors.txt
+    detail: >
+      F821 undefined names at app.py:49 (logging), worker.py:141 (get_default_client_config),
+      db/session.py:262 (datetime), db/data_migration.py:180 (datetime), db/backup.py:117 —
+      all confirmed undefined at their use sites. ruff excludes tests/, tools/ from linting.
+
+  - id: AUD-004
+    severity: critical
+    area: quality
+    title: mypy "0 errors" is equivalent to no mypy gate (ignore_errors=true)
+    item_ids: [A3, "10.2-C1", "18.4-C1"]
+    evidence: mypy_evidence.txt
+    detail: Real mypy run (same scope, config bypassed) = 1040 error lines.
+
+  - id: AUD-005
+    severity: high
+    area: security
+    title: Unauthenticated mutation endpoints (overlays) — authorization hole
+    item_ids: [A9]
+    evidence: [unauth_sweep.txt, behavioral_probes.txt]
+    detail: >
+      POST /api/overlays/seed-builtins (writes DB) and /api/overlays/presets/{name}/validate
+      return 200 with no auth for any name. Confirmed by both source inspection
+      (no dependency) and live probing.
+
+  - id: AUD-006
+    severity: high
+    area: security
+    title: Production accepts source-shipped default admin password
+    item_ids: [A9, F-19]
+    evidence: behavioral_probes.txt (PROBE-9)
+    detail: >
+      settings.py:477 DASHBOARD_PASSWORD="AdminPass12345!"; auth.py:36 fallback recreates
+      default admin at boot; production validates length only (>=12) — default passes.
+      Fix: env-mandatory without defaults + startup refusal when default present.
+
+  - id: AUD-007
+    severity: high
+    area: security
+    title: WebSub HMAC signature verification fails open when secret unset
+    item_ids: [A9, F-05]
+    evidence: behavioral_probes.txt (PROBE-4)
+    detail: verify_signature() returns True when WEBSUB_SECRET empty (default). Forged push
+      notifications accepted.
+
+  - id: AUD-008
+    severity: high
+    area: security
+    title: CSRF not wired on batch mutating routes (contract violation)
+    item_ids: [A9, batch-BATCH]
+    evidence: behavioral_probes.txt (PROBE-3), ../VERIFICATION_REPORT.md (C-S12 claim)
+    detail: verify_csrf absent from routes/batch.py; live cookie-only POST /api/batch/run 200.
+
+  - id: AUD-009
+    severity: high
+    area: security
+    title: "pip-audit: 6 starlette CVEs unaddressed; CI audit neutralized by || true"
+    item_ids: [A9, A3]
+    evidence: [pip_audit.txt, gate_weakening_and_ci.txt]
+    detail: "starlette 0.52.1 fails PYSEC-2026-161/248/249/2280/2281 (+1 companion); fixes need >=1.0.1; pin forbids."
+
+  - id: AUD-010
+    severity: high
+    area: data
+    title: Dry-run publish path broken at baseline (slot_id precheck kills dry-run)
+    item_ids: [A7, F-03, E-030]
+    evidence: gate_pytest_not_network.log (test_publish_worker_and_oauth_isolation x5)
+    detail: >
+      worker.execute_publish_intent -> PermanentError("Missing mandatory slot_id binding")
+      before dry-run logic; dry-run + ambiguous-failure (platform timeout after success)
+      paths unreachable; drive E-030 false.
+
+  - id: AUD-011
+    severity: high
+    area: idempotency
+    title: Publish idempotency-tag removal survives (0 test regressions)
+    item_ids: [A4, A5-F03]
+    evidence: sabotage_gauntlet.log (SB02)
+    detail: Baseline 5 fails identical after mutation -> tag never asserted by any test.
+
+  - id: AUD-012
+    severity: high
+    area: idempotency
+    title: Queue-level enqueue dedupe removal survives (0 test regressions)
+    item_ids: [A4]
+    evidence: sabotage_gauntlet.log (M13)
+    detail: Entry dedupe at JOB boundary untested in test_durable_job_queue/worker/concurrency suite.
+
+  - id: AUD-013
+    severity: high
+    area: data
+    title: Startup crash-reconcile removal survives regression suite
+    item_ids: [A4, A5-F01]
+    evidence: sabotage_gauntlet.log (SB01), behavioral_probes.txt (PROBE-8)
+    detail: Control verified live + wired (daemon.py init/loop, runner) but no test covers it.
+
+  - id: AUD-014
+    severity: high
+    area: quality
+    title: Date-bomb DST test fails every date except 2026-10-15
+    item_ids: [A4, A7]
+    evidence: gate_pytest_not_network.log
+    detail: Ledger 10.3 claims frozen-clock+skip; neither exists. CI red from 2026-10-16 onward.
+
+  - id: AUD-015
+    severity: high
+    area: quality
+    title: Batch/ease-of-use items delivered API-only; UI and CLI legs absent
+    item_ids: [A8, "18.9-C4", "18.10-C5"]
+    evidence: behavioral_probes.txt (PROBE-11, PROBE-12)
+    detail: 34 batch ops in API; 0 in UI (queue bulk-form = 2 legacy ops), 0 CLI batch commands.
+
+  - id: AUD-016
+    severity: high
+    area: data
+    title: Batch preview reports OK for items that fail at run (16.1 violation)
+    item_ids: [A8]
+    evidence: behavioral_probes.txt (PROBE-3)
+    detail: preview(rows status OK dry_run:true) vs run(FAILED clip not found) on same ids.
+
+  - id: AUD-017
+    severity: medium
+    area: data
+    title: Corrupt media accepted at local ingestion (no container integrity check)
+    item_ids: [A7, F-05]
+    evidence: behavioral_probes.txt (PROBE-6)
+    detail: random 300KB .mp4 -> SourceVideo(DETECTED, duration 0). Oversize/duration
+      guards exist (PASS).
+
+  - id: AUD-018
+    severity: medium
+    area: data
+    title: Migration system inconsistent (Postgres-only 002 on default SQLite; no 004; numbering collisions)
+    item_ids: [A10, F-17]
+    evidence: behavioral_probes.txt (PROBE-10)
+    detail: registry versions 002_channel_upload_defaults/003_source_video_overrides vs
+      files 002_m3_postgres/003_phase1_publishing_studio; two different "005" suites.
+
+  - id: AUD-019
+    severity: medium
+    area: security
+    title: Host-header allowlist blocks any proxied deployment incl. documented Caddy/docker setups
+    item_ids: [A6]
+    evidence: behavioral_probes.txt
+    detail: app hard-codes {127.0.0.1,localhost,testserver,::1}; docs ship Caddyfile+compose
+      proxying which 400s. Choose one model.
+
+  - id: AUD-020
+    severity: medium
+    area: quality
+    title: routes/status.py uses threading without import; 15 overlay route tests fail via pooled-driver close
+    item_ids: [A3]
+    evidence: gate_pytest_not_network.log
+    detail: overlays.py engine.connect().connection.driver_connection closed by route handler;
+      no such table / closed conn failures.
+
+  - id: AUD-021
+    severity: medium
+    area: governance
+    title: F-17 rights ledger control entirely absent
+    item_ids: [A5-F17]
+    evidence: missing_ledger_refs.txt
+    detail: no package/migration/flags/tests; cannot be serviced by any fix other than building it.
+
+  - id: AUD-022
+    severity: medium
+    area: governance
+    title: F-12 SRT/VTT sidecar generators absent
+    item_ids: [A5-F12]
+    evidence: repo-wide grep (0 hits for .srt/.vtt emitters)
+
+  - id: AUD-023
+    severity: medium
+    area: governance
+    title: F-16 frozen-clock strategy absent + F-23 reframing_confidence absent + F-24 drain endpoints absent
+    item_ids: [A5-F16, A5-F23, A5-F24]
+    evidence: repo-wide grep; probes 404
+
+  - id: AUD-024
+    severity: medium
+    area: security
+    title: SSRF guard absent on outbound consumers (broll client, rss poller, alerter websub-shim)
+    item_ids: [A9, F-05]
+    evidence: ../VERIFICATION_REPORT.md A11 #29, bandit_summary.txt
+    detail: url_guard only on /api/ingest; bandit B310 hits confirm raw urlopen paths.
+
+  - id: AUD-025
+    severity: medium
+    area: ops
+    title: Dead/unwired features advertised as delivered
+    item_ids: [A12, E-008, E-023]
+    evidence: route_inventory.txt (api/webhooks 404), behavioral_probes.txt
+    detail: webhooks engine+tables exist, no routes; cli/ergonomics imported only by tests;
+      telegram_notify.py has 0 call sites; channels export route exists but dead.
+
+  - id: AUD-026
+    severity: medium
+    area: docs
+    title: Docs-error rate 51% (21/41 sampled claims false or exaggerated)
+    item_ids: [A11]
+    evidence: ../VERIFICATION_REPORT.md section 4 claims table
+    detail: classes = nonexistent evidence files, inflated counts, vacuous gates, wrong file paths.
+
+  - id: AUD-027
+    severity: medium
+    area: docs
+    title: Windows acceptance doc absent; windows CI unexecutable here
+    item_ids: [A13]
+    evidence: ls docs/ (no WINDOWS_ACCEPTANCE.md); ci.yml matrix
+    detail: audit protocol fallback documented steps not available -> UNVERIFIED + missing artifact.
+
+  - id: AUD-028
+    severity: low
+    area: ops
+    title: 33MB node_modules + production JSON state committed; hygiene/misleading-size
+    item_ids: [A12, A9]
+    evidence: behavioral_probes.txt (PROBE-13)
+
+  - id: AUD-029
+    severity: low
+    area: data
+    title: SQLite lock contention not exercised under load
+    item_ids: [A7]
+    evidence: busy_timeout=30s + WAL verified; heavy-writer contention untested
+    status: UNVERIFIED
+
+  - id: AUD-030
+    severity: low
+    area: data
+    title: Disk-full scenario not exercised (housekeeping daemon exists)
+    item_ids: [A7]
+    status: UNVERIFIED
+
+  - id: AUD-031
+    severity: low
+    area: quality
+    title: UI browser E2E unexecutable in audit environment (Playwright browsers blocked)
+    item_ids: [A6, A7-S8]
+    evidence: 12 blocked tests in gate log; requires browser-capable CI to settle
+    status: UNVERIFIED
+
+  - id: AUD-032
+    severity: low
+    area: quality
+    title: npm audit unexecutable in audit environment (vendored node_modules, registry-only egress)
+    item_ids: [A9]
+    status: UNVERIFIED
+
+  - id: AUD-033
+    severity: low
+    area: governance
+    title: Round 4 §4.4/§4.5 prompt text absent -> owner requirement cross-check impossible
+    item_ids: [A14]
+    evidence: repo absence
+    status: UNVERIFIED
+
+  - id: AUD-034
+    severity: low
+    area: security
+    title: "Bandit medium-severity surface (204 findings) unaddressed: string-built SQL paths, broad except handlers"
+    item_ids: [A9]
+    evidence: bandit_summary.txt
+    detail: HIGH consistently hashlib/MD5; MEDIUM clusters around string-built SQL in batch queue
+      and raw urlopen/XML consumers; LOW 183. Documented data-flow audit recommended.
+
+  - id: AUD-035
+    severity: medium
+    area: quality
+    title: tests/test_channel_oauth_flow.py requires storage secrets file committed-clone cannot have
+    item_ids: [A3]
+    evidence: gate log (5 FileNotFoundError client_secret.enc)
+    detail: tests self-skip if fixture absent or CI provides stub (not done).
+
+  - id: AUD-036
+    severity: low
+    area: quality
+    title: tests/test_clip_production_fixes + phase2/delete_assert baseline failures
+    item_ids: [A3, F-10, F-16]
+    evidence: gate log

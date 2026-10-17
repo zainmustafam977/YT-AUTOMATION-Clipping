@@ -1,0 +1,37 @@
+shorts_engine/cli/ergonomics.py:12:36: F401 [*] `dataclasses.field` imported but unused
+shorts_engine/dashboard/app.py:49:9: F821 Undefined name `logging`
+shorts_engine/dashboard/routes/events.py:115:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/events.py:116:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/events.py:117:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/events.py:118:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/events.py:119:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/ingestion.py:51:1: E402 Module level import not at top of file
+shorts_engine/dashboard/routes/overlays.py:4:8: F401 [*] `json` imported but unused
+shorts_engine/dashboard/routes/overlays.py:5:8: F401 [*] `sqlite3` imported but unused
+shorts_engine/dashboard/routes/overlays.py:10:24: F401 [*] `sqlalchemy.text` imported but unused
+shorts_engine/dashboard/routes/overlays.py:12:38: F401 [*] `shorts_engine.db.session.get_session` imported but unused
+shorts_engine/dashboard/routes/overlays.py:14:5: F401 [*] `shorts_engine.services.overlay.OverlaySpec` imported but unused
+shorts_engine/dashboard/routes/overlays.py:16:5: F401 [*] `shorts_engine.services.overlay.serialize_spec` imported but unused
+shorts_engine/dashboard/routes/overlays.py:19:5: F401 [*] `shorts_engine.services.overlay.get_builtin_preset` imported but unused
+shorts_engine/dashboard/routes/overlays.py:27:5: F401 [*] `shorts_engine.services.overlay.apply_preset_to_candidate` imported but unused
+shorts_engine/dashboard/routes/overlays.py:30:5: F401 [*] `shorts_engine.services.overlay.last_audit_for_candidate` imported but unused
+shorts_engine/dashboard/routes/overlays.py:144:5: F811 Redefinition of unused `export_all_p` from line 92: `export_all_p` redefined here
+shorts_engine/dashboard/routes/search.py:4:32: F401 [*] `fastapi.HTTPException` imported but unused
+shorts_engine/db/data_migration.py:180:25: F821 Undefined name `migrated_for_table`
+shorts_engine/db/session.py:262:81: F821 Undefined name `datetime`
+shorts_engine/services/execution/watchdog.py:247:37: F821 Undefined name `Any`
+shorts_engine/services/ingestion/security.py:142:9: F841 Local variable `ip` is assigned to but never used
+shorts_engine/services/overlay/engine.py:11:19: F401 [*] `.spec.OverlaySpec` imported but unused
+shorts_engine/services/overlay/engine.py:12:22: F401 [*] `.presets.preset_sha256` imported but unused
+shorts_engine/services/overlay/presets.py:7:20: F401 [*] `typing.Dict` imported but unused
+shorts_engine/services/overlay/preview.py:10:32: F401 [*] `.spec.OverlayLayer` imported but unused
+shorts_engine/services/overlay/spec.py:7:36: F401 [*] `typing.Tuple` imported but unused
+shorts_engine/services/publishing/orchestrator.py:47:5: F811 Redefinition of unused `check_channel_recent_uploads_for_clip` from line 23: `check_channel_recent_uploads_for_clip` redefined here
+shorts_engine/services/publishing/slots.py:865:13: F841 Local variable `cand` is assigned to but never used
+shorts_engine/services/publishing/worker.py:141:31: F821 Undefined name `get_default_client_config`
+shorts_engine/services/publishing/worker.py:471:1: E402 Module level import not at top of file
+shorts_engine/services/search/__init__.py:16:37: F401 `typing.Optional` imported but unused
+shorts_engine/services/search/__init__.py:16:47: F401 `typing.Tuple` imported but unused
+shorts_engine/services/triage/__init__.py:12:26: F401 `typing.Optional` imported but unused
+Found 35 errors.
+[*] 16 fixable with `--fix` (2 unsafe fixes available with `--fix --unsafe-fixes`).

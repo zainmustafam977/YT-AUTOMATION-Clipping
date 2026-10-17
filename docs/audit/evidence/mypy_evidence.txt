@@ -1,0 +1,15 @@
+=== mypy via ratchet (config: ignore_errors=true) ===
+OK: mypy errors 0 <= baseline 0
+
+=== mypy with ignore_errors disabled (real) ===
+1040
+shorts_engine/services/security/url_guard.py:75: error: Argument 1 to "_is_blocked_ip" has incompatible type "str | int"; expected "str"  [arg-type]
+shorts_engine/services/overlay/spec.py:79: error: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "float | str")  [assignment]
+shorts_engine/services/overlay/spec.py:83: error: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "float | str")  [assignment]
+shorts_engine/services/overlay/spec.py:85: error: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "float | str")  [assignment]
+shorts_engine/services/overlay/spec.py:87: error: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "float | str")  [assignment]
+shorts_engine/cli/ergonomics.py:70: error: Argument "stdout" to "CliResult" has incompatible type "bytes | str"; expected "str"  [arg-type]
+shorts_engine/cli/ergonomics.py:71: error: Argument "stderr" to "CliResult" has incompatible type "bytes | str"; expected "str"  [arg-type]
+shorts_engine/cli/ergonomics.py:71: error: Unsupported operand types for + ("bytes" and "str")  [operator]
+shorts_engine/services/overlay/presets.py:120: error: Argument 1 to "int" has incompatible type "int | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"  [arg-type]
+shorts_engine/utils/url_guard.py:61: error: "_BaseAddress" has no attribute "is_loopback"  [attr-defined]

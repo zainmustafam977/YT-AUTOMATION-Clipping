@@ -1,0 +1,17 @@
+===SABOTAGE===
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+24 passed, 1 warning in 5.11s
+===SCALE===
+..                                                                       [100%]
+2 passed in 4.68s
+===S3===
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 4.71s
+===S7===
+.                                                                        [100%]
+1 passed in 0.50s
+===FRESH-EYES===
+....                                                                     [100%]
+4 passed in 13.20s
