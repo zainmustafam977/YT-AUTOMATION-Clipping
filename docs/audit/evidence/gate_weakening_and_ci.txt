@@ -1,0 +1,75 @@
+GATE WEAKENING INVENTORY (auditor's own read of every CI workflow / config)
+
+1. .github/workflows/ci.yml, job "security-audit", step "Run Dependency Vulnerability Audit":
+       pip-audit -r requirements.txt || true
+   -> CVE scan NEVER fails the build. pip-audit here finds 5 real starlette CVEs
+      (PYSEC-2026-161, 248, 249, 2280, 2281) whose fixes are all >=1.0.1, which the
+      requirements pin (starlette>=0.36.0,<1.0.0) forbids.
+
+2. pyproject.toml [tool.mypy]:
+       ignore_errors = true
+       ignore_missing_imports = true
+   -> GLOBAL error suppression. "tools/check_mypy_ratchet.py" runs
+      `mypy --no-error-summary shorts_engine/` and counts "error:" lines; with this
+      config the count is ALWAYS 0. Ratchet "0 <= baseline 0" is vacuous.
+      AUDITOR RUN with --config-file=/dev/null (same scope): 1040 "error:" lines.
+      See mypy_evidence.txt.
+
+3. pyproject.toml [tool.ruff]:
+       exclude = [..., "tests", "tools", "docs", "scratch", "in progress dev",
+                  "storage", "dist", "build", "*.egg-info", "scripts", "patch.py"]
+       select = ["E", "F"]; ignore = ["E501"]
+   -> tests/ (121 files) and tools/ (the gate scripts themselves) are not linted.
+   -> On 80370f5: `ruff check .` => 35 errors, incl. 5 F821 "Undefined name"
+      (latent NameErrors in production paths), so BOTH ruff CI jobs
+      (agent.yml "Ruff Lint", ci-cd.yml "Run Ruff Linter") FAIL on this commit.
+      FINAL_REPORT "Ruff: clean on all new code" is only true for the 8-dir
+      whitelist hardcoded in tests/test_fresh_eyes.py::test_ruff_on_new_code.
+
+4. tests/test_fresh_eyes.py::test_ruff_on_new_code runs ruff only on:
+      shorts_engine/services/{abtesting,webhooks,settings_io,cost,captioning,
+      security,batch}/ + dashboard/routes/batch.py + tools/
+   -> the "ruff passes" fresh-eyes sub-test cannot see the 35 repo-wide errors.
+
+5. .github/workflows/agent.yml, job "pytest":
+      run: pytest -m "not network" --tb=short -q tests/
+      inline comment: "Exclude pre-existing e2e tests that need Playwright
+                      (those run in a separate workflow)."
+   -> marker exclusion is "not network" only; e2e tests (4 files) DO run and 12 of
+      them fail on a machine without Playwright browsers. Ledger 10.5 claims the
+      gate is "pytest -m 'not network and not e2e'" : the marker `not e2e` is NOT
+      in the workflow. No Playwright workflow exists in .github/workflows/.
+
+6. No coverage/--cov gate anywhere; FINAL_REPORT/ENHANCEMENTS claim "coverage floor
+   80%" (ENHANCEMENTS E row) has NO implementing config (no --cov-fail-under, no
+   coverage job).
+
+7. .github/workflows/ci-cd.yml CD jobs deploy via `echo` only:
+     "Trigger Staging Healthcheck" -> `echo "Staging container deployed. Running smoke tests..."`
+     "Execute Rolling Restart & Health Verification" -> `echo ...`
+   -> jobs provably never verify anything; gated by vars.CD_ENABLED (never set).
+
+8. .github/workflows/ci.yml test-matrix includes windows-latest + py3.10/3.11, but
+   requirements.txt pins torch>=2.1/faster-whisper etc.; no windows wheel issue
+   recorded; cannot be executed here (see A13 in report). NOT a weakening, noted
+   as the only Windows artifact besides setup.ps1.
+
+9. tools/check_agent_ledger.py checks: required keys, status vocabulary, F-title
+   match vs a HARDCODED AUDIT_TITLES dict inside the script itself, no-TODO, dup
+   ids, and doc regeneration. It does NOT check that any tests[] or files[] path
+   exists (210 broken refs pass clean), and its audit-title source of truth is
+   the script itself (circular: the "audit report" is not in the repo).
+   Also: job "Ledger Consistency" runs gen_agent_docs.py BEFORE check — gen
+   rewrites the docs, so the "diverges => fail CI" claim (ledger 10.7) is void
+   for hand edits.
+
+10. .pre-commit-config.yaml pins entry paths ".venv/bin/..." (machine-local venv);
+    no secret-scan hook, no pip-audit hook — FINAL_REPORT 18.2 claims
+    "pre-commit secret-scan + pip-audit" exist. They do not.
+
+DATE-BOMB TEST (ledger 10.3 claims "frozen clock ... skip when date != 2026-10-15"):
+    tests/test_publish_slots.py::test_automatic_slot_calculation_and_dst
+    contains NO skip; it hard-asserts computed date == 2026-10-15.
+    AUDITOR RUN on 2026-10-17: FAILED (assert date(2026,10,17) == date(2026,10,15)).
+    The test fails on every date except 2026-10-15. The ledger's "Frozen clock
+    DONE-VERIFIED" is false in both directions (no skip, no frozen clock).

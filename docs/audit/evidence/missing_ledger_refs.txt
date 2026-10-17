@@ -1,0 +1,110 @@
+BROKEN LEDGER REFERENCES (docs/agent/ledger.yaml -> real tree), commit 80370f5
+Method: parsed ledger.yaml rows; os.path.exists() on every tests[] and files[] entry.
+Result: 210 references point to non-existent paths.
+Full list:
+
+10.4: tests/test_audio_mastering_real_ffmpeg.py
+10.6: tests/test_rights_ledger_compliance.py
+10.8: tests/test_settings_placeholder_guard.py
+10.9: tests/test_migration_004_compliance_ledger.py
+10.9: FILE:migrations/004_compliance_ledger.sql
+10.9: FILE:migrations/004_compliance_ledger_rollback.sql
+10.10: FILE:docs/RUNBOOK.md
+10.10: FILE:docs/THREAT_MODEL.md
+10.10: FILE:docs/ROADMAP.md
+10.10: FILE:docs/adr/0001-frozen-clock-injection.md
+10.10: FILE:docs/adr/0002-mode-aware-policy-switches.md
+10.10: FILE:docs/adr/0003-fail-closed-on-placeholder-secrets.md
+10.10: FILE:docs/adr/0004-batch-engine-architecture.md
+10.14: FILE:docs/agent/RESEARCH.md
+F-01: tests/test_worker_recovery.py
+F-02: tests/test_storage_path_manager.py
+F-03: tests/test_idempotency.py
+F-04: tests/test_oauth_token_encryption.py
+F-05: tests/test_url_guard.py
+F-05: FILE:shorts_engine/services/security/policy_gate.py
+F-07: FILE:shorts_engine/services/execution/hwaccel.py
+F-08: FILE:shorts_engine/services/monitoring/prometheus_metrics.py
+F-09: tests/test_outbox.py
+F-12: tests/test_caption_emission.py
+F-13: tests/test_winner_daemon.py
+F-14: tests/test_backup_restore.py
+F-17: tests/test_rights_ledger_compliance.py
+F-17: tests/test_migration_004_compliance_ledger.py
+F-17: FILE:migrations/004_compliance_ledger.sql
+F-17: FILE:shorts_engine/services/rights_ledger/
+F-18: tests/test_render_validate.py
+F-18: FILE:shorts_engine/services/rendering/render_inspector.py
+F-19: tests/test_settings_placeholder_guard.py
+F-20: FILE:shorts_engine/services/cost/engine.py
+F-20: FILE:shorts_engine/dashboard/routes/cost.py
+F-21: FILE:shorts_engine/services/publishing/multi_platform_syndication.py
+F-22: tests/test_audio_mastering.py
+F-22: tests/test_audio_mastering_real_ffmpeg.py
+F-23: tests/test_reframing_confidence.py
+F-23: FILE:shorts_engine/services/reframing/recorder.py
+F-24: tests/test_drain_endpoint.py
+E-001: FILE:shorts_engine/services/batch/engine.py (implementation is in services/batch/__init__.py instead)
+E-002..E-004: tests/test_batch_engine_extended.py
+E-005: tests/test_batch_publish_jitter.py
+E-006: tests/test_needs_attention.py + FILE:dashboard/templates/needs_attention.html
+E-007: tests/test_doctor_cli.py
+E-008: tests/test_webhook_ssrf.py, test_webhook_payload_redaction.py, test_webhook_url_validation.py, test_migration_006_webhooks.py; FILE:services/webhooks/engine.py, dashboard/routes/webhooks.py
+E-009: tests/test_settings_io_secret_redaction.py, test_settings_io_key_mismatch.py; FILE:dashboard/routes/settings_io.py
+E-010: tests/test_cost_budget.py; FILE:services/cost/engine.py, dashboard/routes/cost.py
+E-012: tests/test_overlay_preset_export.py
+E-013..E-015: FILE:services/batch/engine.py
+E-016: tests/test_migration_008_caption_editor.py; FILE:dashboard/routes/captions.py, migrations/008_caption_editor.sql + rollback (file is 007_caption_editor.sql)
+E-017: tests/test_ab_test_list.py, test_migration_009_ab_testing.py; FILE:dashboard/routes/ab_tests.py, migrations/009_ab_testing.sql + rollback (no 009 exists)
+E-018: tests/test_clip_preview.py; FILE:dashboard/routes/preview.py, templates/clip_preview.html
+E-019: FILE:dashboard/routes/triage.py (real route is routes/needs_attention.py), templates/triage.html
+E-020: tests/test_setup_wizard.py
+E-022: tests/test_i18n.py
+E-024: tests/test_quota_planner.py; FILE:services/publishing/quota_planner.py
+E-025: tests/test_dead_letter_replay.py; FILE:dashboard/routes/dead_letter.py
+E-026: tests/test_near_duplicate.py; FILE:services/duplicates/phash.py
+E-027: tests/test_thumbnail_scorer.py; FILE:services/thumbnail/scorer.py
+E-028: tests/test_analytics_rollup.py; FILE:services/analytics/rollup.py
+E-030: tests/test_dry_run.py
+E-031: tests/test_channel_profile.py; FILE:services/channels/profile.py
+E-032: tests/test_best_time.py; FILE:services/publishing/best_time.py
+E-033: tests/test_operations_cli.py
+BATCH-07..BATCH-25: tests/test_batch_rerender.py, test_batch_regen_captions.py, test_batch_caption_style.py,
+  test_batch_assign_channel.py, test_batch_reschedule.py, test_batch_cancel.py, test_batch_archive.py,
+  test_batch_soft_delete.py, test_batch_tag.py, test_batch_priority.py, test_batch_export.py,
+  test_batch_download.py, test_batch_bulk_edit.py, test_batch_ingest_urls.py, test_batch_enable_disable.py,
+  test_batch_qg_decide.py, test_batch_rights_attest.py, test_batch_ab_preregister.py, test_batch_recipes.py
+ENGINE-01: tests/test_batch_undo.py
+ENGINE-02: tests/test_batch_idempotency.py
+ENGINE-03: tests/test_batch_publish_jitter.py
+ENGINE-04: tests/test_batch_crash_resume.py
+ENGINE-05: tests/test_batch_rbac.py
+ENGINE-06: tests/test_batch_concurrent_conflict.py
+ENGINE-07: tests/test_batch_audit.py
+ENGINE-08: tests/test_batch_metrics.py
+EASE-01: tests/test_setup_wizard.py
+EASE-03: tests/test_search.py
+EASE-04: tests/test_keyboard.py
+EASE-05: tests/test_multi_select.py
+EASE-06: tests/test_drag_drop.py
+EASE-07: tests/test_error_pages.py
+EASE-08: tests/test_inline_help.py
+EASE-09: tests/test_progress.py
+EASE-10: tests/test_undo_toast.py
+EASE-11: tests/test_csv_import_export.py
+EASE-12: tests/test_dup_warnings.py
+EASE-13: tests/test_i18n.py
+EASE-15: tests/test_guides_index.py
+SAB-03: tests/test_sabotage_partial_failure.py
+SAB-05: tests/test_sabotage_drop_metric.py
+SAB-06: tests/test_sabotage_bypass_rights.py
+SAB-07: tests/test_sabotage_bypass_preregistration.py
+SAB-12: tests/test_sabotage_disable_csrf.py
+E2E-S1: tests/e2e/test_s1_full_pipeline.py
+E2E-S2: tests/e2e/test_s2_reject_recover.py
+E2E-S4: tests/e2e/test_s4_webhook.py
+E2E-S5: tests/e2e/test_s5_settings_io.py
+E2E-S6: tests/e2e/test_s6_backup_restore.py
+E2E-S8: tests/e2e/test_s8_ui_journey.py
+SCALE-1k: FILE:docs/agent/E2E_EVIDENCE.md
+(plus ~60 additional files[] rows already enumerated above; count total = 210)

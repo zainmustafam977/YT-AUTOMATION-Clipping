@@ -1,0 +1,150 @@
+BEHAVIORAL PROBE TRANSCRIPTS (live server + direct function calls)
+Server: uvicorn shorts_engine.dashboard.app:app on 0.0.0.0:8000, ENV=development,
+DASHBOARD_SECRET_KEY=audit-secret-key-..., SECRETS_MASTER_KEY=audit-master-key-...
+All requests sent with "Host: localhost" (see Host-header finding).
+
+[PROBE-1 | health/probes]
+GET /livez -> 200 {"status":"alive",...}
+GET /readyz -> 200 {"status":"ready","is_ready":true, checks:{database,storage,...}}
+GET /healthz -> 200
+GET /health/drain -> 404
+GET /drain -> 404
+GET /metrics -> 200 (shorts_uptime_seconds etc.)
+-> F-24: probes exist at /livez,/readyz,/healthz, NOT the claimed /health/live,
+   /health/ready, /health/drain. No drain endpoint anywhere.
+
+[PROBE-2 | auth]
+POST /login (form admin / AdminPass12345!<default>) -> 200, session cookie set.
+Unauthenticated POSTs to 108 mutating endpoints (see unauth_sweep.txt):
+  96x401, 5x422, 1x400, 2x404, 4x200 ->
+  200s: POST /api/overlays/presets/x/validate, POST /api/overlays/seed-builtins,
+        POST /logout (benign), POST /websub/callback (see PROBE-4)
+-> AUTHORIZATION HOLE: overlays seed-builtins + presets/{name}/validate execute
+   without any auth; seed-builtins writes to the DB ({"seeded":0} on second call).
+
+[PROBE-3 | batch API + CSRF]
+GET /api/batch/operations (authed) -> 200, 34 operations registered:
+  [ab_preregister, apply_profile, approve, archive, assign_channel,
+   assign_platforms, bulk_edit_metadata, cancel, disable_source, download,
+   enable_source, export, ingest_urls, publish, purge, qg_decide,
+   regenerate_captions, reject, requeue, rerender, reschedule, restore,
+   retry_stage, rights_attest, run_recipe, save_recipe, schedule,
+   set_caption_style, set_priority, set_reframing, soft_delete, tag,
+   unpublish, untag]
+POST /api/batch/run with session cookie and NO CSRF token -> 200 executed.
+  -> CSRF NOT wired on any /api/batch/* route (verify_csrf absent from router).
+POST /api/batch/preview item_ids=["nonexistent-clip"] ->
+  {"items":[{"status":"OK","after":{"dry_run":true}}]}
+POST /api/batch/run     item_ids=["nonexistent-clip"] ->
+  {"items":[{"status":"FAILED","message":"clip not found"}]}
+  -> PREVIEW/RUN DIVERGENCE: preview claims OK for items that will fail at run
+     time — MISSION 16.1 "preview shows exactly what would change" violated.
+POST /api/batch/run {"operation":"approve","item_ids":["nonexistent-clip"]}
+  (repeat) -> new batch_id each time (idempotency key per item present).
+
+[PROBE-4 | websub HMAC]
+POST /websub/callback unsigned -> {"status":"ok","detected":0}
+POST /websub/callback forged Atom entry -> {"status":"ok","detected":0,"queued":[]}
+Code: services/detection/websub.py verify_signature():
+  "if not self.secret: ... return True  # dev mode"
+-> Signature verification FAILS OPEN when WEBSUB_SECRET is unset (the default).
+   "HMAC secured" (dashboard/app.py comment) only holds when configured.
+
+[PROBE-5 | SSRF]
+POST /api/ingest {"url":"http://127.0.0.1:8000/metrics"} (authed) ->
+  400 {"detail":"SSRF Protection: Direct IP addresses are strictly forbidden: '127.0.0.1'."}
+-> url guard enforced on /api/ingest. Not used by: services/broll/client.py,
+   services/detection/rss_poller.py, services/detection/websub.py (outbound),
+   services/monitoring/alerter.py (bandit B310/B314 on all of these, no
+   url_guard import anywhere).
+Rate limit observed: "Rate limit exceeded: maximum 5 ingestion requests per minute."
+
+[PROBE-6 | corrupt media intake]
+L.validate_local_file(garbage 300KB .mp4) -> ACCEPTED
+L.probe_video_metadata -> {'duration_sec': 0.0, 'width': 0, 'height': 0,
+                           'codec': 'unknown', 'has_audio': False, ...}
+L.ingest_local_path(db, corrupt.mp4) -> SourceVideo CREATED, status=DETECTED,
+duration_sec=0
+-> NO container-integrity enforcement at local ingestion: random bytes become a
+   registered SourceVideo. README "Policy Gate: pre-flight validation enforcing
+   ... container integrity" is not true at this entry point.
+
+[PROBE-7 | duplicate + cross-session ingestion]
+ingest_local_path twice on same file -> same SourceVideo id, 1 row; second
+DB session -> same id. F-06 ingestion-boundary idempotency: VERIFIED.
+L.validate_local_file('/tmp/../../etc/passwd') -> REJECTED (extension allowlist)
+L.validate_local_file(missing file) -> REJECTED (FileNotFoundError)
+
+[PROBE-8 | F-01 crash recovery (queue-level, simulated worker kill)]
+enqueue(render, clip1) -> claim_next_job(w-crashed) -> status RUNNING,
+locked_by=w-crashed. Set heartbeat_at/locked_at/updated_at = T-2h.
+DurableJobQueue.reconcile_orphaned_jobs(stale_timeout_sec=600)
+  -> reclaimed=1, status PENDING, attempts=1, backoff next_run applied.
+claim_next_job(w2) -> same job id, locked_by=w2.
+q.enqueue(same entity+stage twice) -> same job id (idempotent dedupe verified);
+reconcile_stale_claims(db) reclaims Clip-level "CLAIMED:" markers on boot
+(called from dashboard/app.py startup and orchestration/runner.py);
+reconcile_orphaned_jobs is called from services/worker/daemon.py (2x) and
+services/worker/runner.py.
+-> F-01 capability VERIFIED operationally. (Its absence breaks NO test: see
+   sabotage SB01.)
+
+[PROBE-9 | production placeholder guard]
+ENV=production + code defaults -> REFUSED (ValidationError: Insecure
+DASHBOARD_SECRET_KEY for 'production')
+ENV=production + good secret key + DASHBOARD_PASSWORD left at the source-shipped
+default -> STARTS with password "AdminPass12345!" (17 chars passes the >=12
+check; not in the blocklist). Default admin lives in source in TWO places:
+shorts_engine/config/settings.py:477 and shorts_engine/dashboard/auth.py:36
+(fallback "settings.DASHBOARD_PASSWORD or 'AdminPass12345!'").
+-> 10.8 refuse-to-start holds for DASHBOARD_* only; master-key placeholders only
+   WARN unless opt-in ENFORCE_SECRET_ENTROPY=1.
+
+[PROBE-10 | A10 data]
+DatabaseBackupManager.create_backup(compress=True)
+  -> storage/backups/shorts_backup_*.db.gz, list_backups shows it.
+Manual restore-verify: gunzip -> PRAGMA integrity_check=ok; 39 tables;
+row counts identical to live DB on all tables. startup migrations: init_db()
+second run is a no-op (no duplicate tables/rows). PASS.
+Live DB journal_mode=wal. PASS (WAL claim).
+Migrations dir: 002_m3_postgres_scale.sql does NOT apply on SQLite
+("near DO: syntax error"); 003-008 rollbacks chain-depend on their applies;
+ledger's migrations/004_compliance_ledger.sql (+rollback) DOES NOT EXIST and
+db/migrations.py registry has no 004 entry. Version numbering collides
+(registry version "005_phase1_publishing_studio" vs file 005_batch_engine.sql).
+"upgrade baseline-commit DB to head" NOT APPLICABLE: repo has exactly 1 commit.
+
+[PROBE-11 | CLI wiring]
+python cli.py --help -> commands: init-db, rotate-secrets, backup-db,
+list-backups, restore-db, channel (add/list/remove), process, resume,
+reconcile-stale, status, watch, dashboard, subscribe, create-user, worker.
+NO batch / cost / doctor / drain / settings-export / dry-run-pipeline commands.
+  -> F-20 "cli cost command": ABSENT. E-007 doctor: ABSENT. E-033 drain
+  op: ABSENT. E-023/EASE-14: shorts_engine/cli/ergonomics.py exists but is
+  imported ONLY by tests; cli commands expose --dry-run on process/resume only.
+
+[PROBE-12 | UI surface]
+React SPA (frontend/src + built static/dist): pages Status, Queue, Channels,
+Logs, Settings. Jinja: login, status, queue, calendar, channels, settings,
+logs, visibility, dead_letter, admin_users, base.
+NO page for: batch operations, needs-attention home, triage console, cost,
+setup wizard, caption editor, A/B tests, clip preview, overlays studio,
+command palette. GET /queue 200 (175KB), GET /login 200, /dead-letter 200,
+/calendar 200, /api/triage/needs-attention 200 (JSON, API-only),
+/api/quota 200, /api/settings/export 200, /api/webhooks 404, /api/cost 404,
+/api/analytics 404, /setup-wizard 404.
+
+[PROBE-13 | secrets in committed tree]
+git ls-files storage/ -> storage/detailed_failure_audit.json (real production
+rejection log with real YouTube video titles/channel data) and
+storage/quota_state.json COMMITTED even though .gitignore lines 77/81 try to
+exclude them (committed before the rule; gitignore does not untrack).
+frontend/node_modules: 1526 files, 33 MB committed to git.
+detect-secrets scan over the worktree found no live credentials (only
+examples/docs placeholders). Full git history = this single commit.
+
+[PROBE-14 | F-08 logging]
+grep -rn "correlation_id" shorts_engine/ -> ZERO matches.
+/metrics endpoint VERIFIED (prometheus exposition live).
+-> F-08 claim "correlation_id is in every log line": FALSE; claim "/metrics":
+TRUE.
