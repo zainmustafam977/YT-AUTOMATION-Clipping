@@ -1,0 +1,16 @@
+{
+  "api_version": "v3",
+  "recorded_at": "2026-10-17",
+  "recorded_by": "owner-fixture-bootstrap",
+  "kind": "youtube#video",
+  "id": "FIXTURE_VIDEO_ID",
+  "status": {
+    "uploadStatus": "uploaded",
+    "privacyStatus": "unlisted"
+  },
+  "snippet": {
+    "title": "Fixture Video",
+    "description": "recorded fixture",
+    "publishedAt": "2026-10-17T00:00:00Z"
+  }
+}

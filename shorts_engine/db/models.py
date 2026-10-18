@@ -278,6 +278,10 @@ class ClipCandidate(Base):
     payoff_text = Column(Text, nullable=True)
     variations_json = Column(Text, nullable=True)        # JSON-encoded list of A/B title and hook variants
     selected = Column(Boolean, default=False, nullable=False, index=True)
+    # E-016 — caption editor
+    caption_words_json = Column(Text, nullable=True)
+    caption_edited_at = Column(DateTime, nullable=True)
+    caption_edited_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     source_video = relationship("SourceVideo", back_populates="candidates")
@@ -904,5 +908,316 @@ class LLMUsageLog(Base):
         }
 
 
+# ----------------------------------------------------------------------
+# Batch engine (E-001..E-010 + Round 3 BATCH-01..BATCH-25)
+# ----------------------------------------------------------------------
+class BatchJobState(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
+class BatchJob(Base):
+    __tablename__ = "batch_jobs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    operation = Column(String(64), nullable=False, index=True)
+    total_items = Column(Integer, nullable=False, default=0)
+    ok_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    actor = Column(String(64), nullable=False, default="system")
+    state = Column(
+        SQLEnum(BatchJobState),
+        default=BatchJobState.PENDING,
+        nullable=False,
+        index=True,
+    )
+    params_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    @property
+    def params(self) -> dict:
+        if not self.params_json:
+            return {}
+        try:
+            return json.loads(self.params_json)
+        except Exception:
+            return {}
+
+    @params.setter
+    def params(self, val: Optional[dict]) -> None:
+        if not val:
+            self.params_json = None
+        else:
+            self.params_json = json.dumps(val)
+
+
+class BatchItemLock(Base):
+    """Per-item exclusive lock for concurrent batches."""
+    __tablename__ = "batch_item_locks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(String(36), nullable=False, index=True)
+    operation = Column(String(64), nullable=False)
+    item_id = Column(String(64), nullable=False, index=True)
+    acquired_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    released_at = Column(DateTime, nullable=True, index=True)
+
+
+class BatchAuditLog(Base):
+    """Append-only audit log of every batch op + per-item result."""
+    __tablename__ = "batch_audit_log"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(String(36), nullable=False, index=True)
+    operation = Column(String(64), nullable=False, index=True)
+    item_id = Column(String(64), nullable=False, index=True)
+    actor = Column(String(64), nullable=False, default="system")
+    status = Column(String(16), nullable=False)  # OK / FAILED / SKIPPED
+    message = Column(Text, nullable=True)
+    before_json = Column(Text, nullable=True)
+    after_json = Column(Text, nullable=True)
+    idempotency_key = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "batch_id": self.batch_id,
+            "operation": self.operation,
+            "item_id": self.item_id,
+            "actor": self.actor,
+            "status": self.status,
+            "message": self.message,
+            "idempotency_key": self.idempotency_key,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ----------------------------------------------------------------------
+# Webhooks (E-008)
+# ----------------------------------------------------------------------
+class Webhook(Base):
+    __tablename__ = "webhooks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(128), nullable=False)
+    url = Column(String(1024), nullable=False)
+    secret_hash = Column(String(64), nullable=False)
+    events_json = Column(Text, nullable=False, default="[]")
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_by = Column(String(64), nullable=False, default="system")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    @property
+    def events(self) -> list:
+        try:
+            return json.loads(self.events_json or "[]")
+        except Exception:
+            return []
+
+    @events.setter
+    def events(self, val: list) -> None:
+        self.events_json = json.dumps(val)
+
+
+class WebhookDelivery(Base):
+    __tablename__ = "webhook_deliveries"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    webhook_id = Column(String(36), ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event = Column(String(64), nullable=False, index=True)
+    status = Column(String(32), nullable=False, index=True)
+    http_status = Column(Integer, nullable=True)
+    duration_ms = Column(Integer, nullable=False, default=0)
+    attempts = Column(Integer, nullable=False, default=1)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    webhook = relationship("Webhook")
+
+
+class WebhookDeadLetter(Base):
+    __tablename__ = "webhook_dead_letters"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    webhook_id = Column(String(36), ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event = Column(String(64), nullable=False)
+    body = Column(Text, nullable=False)
+    last_status = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+# ----------------------------------------------------------------------
+# Settings I/O (E-009)
+# ----------------------------------------------------------------------
+class SettingsExport(Base):
+    __tablename__ = "settings_exports"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    payload_json = Column(Text, nullable=False)
+    schema_version = Column(Integer, nullable=False, default=1)
+    created_by = Column(String(64), nullable=False, default="system")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ----------------------------------------------------------------------
+# Cost roll-up (E-010)
+# ----------------------------------------------------------------------
+class CostEntry(Base):
+    __tablename__ = "cost_entries"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    job_id = Column(String(64), nullable=True, index=True)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), nullable=True, index=True)
+    kind = Column(String(32), nullable=False, index=True)  # llm_input, llm_output, tts, render, etc.
+    units = Column(Float, nullable=False, default=0)
+    unit_cost_usd = Column(Float, nullable=False, default=0)
+    total_cost_usd = Column(Float, nullable=False, default=0)
+    actor = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    @property
+    def total(self) -> float:
+        return self.units * self.unit_cost_usd
+
+
+class CostBudget(Base):
+    __tablename__ = "cost_budgets"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    scope = Column(String(32), nullable=False, default="global", index=True)  # global, channel
+    scope_id = Column(String(64), nullable=True, index=True)
+    soft_limit_usd = Column(Float, nullable=False, default=10.0)
+    hard_limit_usd = Column(Float, nullable=False, default=20.0)
+    period = Column(String(16), nullable=False, default="daily")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+# ----------------------------------------------------------------------
+# Caption editor (E-016)
+# ----------------------------------------------------------------------
+# (Columns added directly to ClipCandidate in migration 008 — see models.)
+
+
+# ----------------------------------------------------------------------
+# A/B testing (E-017)
+# ----------------------------------------------------------------------
+class ABTestStatus2(str, Enum):
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    COMPLETED = "COMPLETED"
+
+
+class ABTest2(Base):
+    __tablename__ = "ab_tests_2"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    metric = Column(String(16), default="ctr", nullable=False)
+    status = Column(String(16), default="RUNNING", nullable=False, index=True)
+    rotation_seconds = Column(Integer, default=21600, nullable=False)
+    winner_variant_id = Column(String(36), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    variants = relationship(
+        "ABVariant2", cascade="all, delete-orphan",
+        order_by="ABVariant2.created_at",
+    )
+
+
+class ABVariant2(Base):
+    __tablename__ = "ab_variants_2"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    test_id = Column(String(36), ForeignKey("ab_tests_2.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(100), nullable=False)
+    description = Column(String(5000), nullable=True)
+    tags = Column(Text, nullable=True)
+    is_control = Column(Boolean, default=False, nullable=False)
+    impressions = Column(Integer, default=0, nullable=False)
+    views = Column(Integer, default=0, nullable=False)
+    last_published_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ABMetricSnapshot2(Base):
+    __tablename__ = "ab_metric_snapshots_2"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    test_id = Column(String(36), ForeignKey("ab_tests_2.id", ondelete="CASCADE"), nullable=False, index=True)
+    variant_id = Column(String(36), ForeignKey("ab_variants_2.id", ondelete="CASCADE"), nullable=False, index=True)
+    captured_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    impressions = Column(Integer, default=0, nullable=False)
+    views = Column(Integer, default=0, nullable=False)
+    ctr = Column(Float, default=0.0, nullable=False)
+
+
+# ----------------------------------------------------------------------
+# Saved views + search (EASE-02, E-021)
+# ----------------------------------------------------------------------
+class SavedView(Base):
+    __tablename__ = "saved_views"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(128), nullable=False)
+    expression = Column(Text, nullable=False, default="")
+    owner = Column(String(64), nullable=False, default="system")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class OperatorGuide(Base):
+    __tablename__ = "operator_guides"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    slug = Column(String(128), nullable=False, unique=True, index=True)
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+
+
+# ----------------------------------------------------------------------
+# Overlay engine (E-011)
+# ----------------------------------------------------------------------
+class OverlayPreset(Base):
+    __tablename__ = "overlay_preset"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=False, default="")
+    spec_json = Column(Text, nullable=False)
+    spec_sha256 = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(64), nullable=False, default="system")
+    is_builtin = Column(Integer, nullable=False, default=0)
+
+
+class OverlayRenderAudit(Base):
+    __tablename__ = "overlay_render_audit"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    candidate_id = Column(Integer, nullable=True, index=True)
+    preset_id = Column(Integer, nullable=True, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    ok = Column(Integer, nullable=False, default=0)
+    error = Column(Text, nullable=True)
+    ffmpeg_cmd = Column(Text, nullable=True)
+    output_path = Column(String(1024), nullable=True)
+    contrast_ratio = Column(Float, nullable=True)
+    bytes_written = Column(Integer, nullable=True)

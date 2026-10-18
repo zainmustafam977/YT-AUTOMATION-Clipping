@@ -9,7 +9,6 @@ import re
 import json
 import shutil
 import logging
-import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any, Union
 from sqlalchemy.orm import Session

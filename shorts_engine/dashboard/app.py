@@ -24,6 +24,12 @@ from shorts_engine.dashboard.routes import (
     oauth as oauth_route,
     publish as publish_route,
     visibility as visibility_route,
+    batch as batch_route,
+    overlays as overlays_route,
+    search as search_route,
+    saved_views as saved_views_route,
+    needs_attention as needs_attention_route,
+    clip_folder as clip_folder_route,
 )
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
@@ -164,6 +170,12 @@ def create_dashboard_app() -> FastAPI:
     app.include_router(oauth_route.router, tags=["OAuth"])
     app.include_router(publish_route.router, tags=["Publishing"])
     app.include_router(visibility_route.router, tags=["Visibility"])
+    app.include_router(batch_route.router)
+    app.include_router(overlays_route.router, tags=["Overlays"])
+    app.include_router(search_route.router, tags=["Search"])
+    app.include_router(saved_views_route.router, tags=["SavedViews"])
+    app.include_router(needs_attention_route.router, tags=["Triage"])
+    app.include_router(clip_folder_route.router, tags=["Clips"])
 
     # Mount pre-compiled React 19 SPA static assets
     from pathlib import Path

@@ -21,7 +21,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import (
@@ -32,7 +31,6 @@ from shorts_engine.db.models import (
     PublishLog,
     Clip,
     ClipCandidate,
-    ClipStatus,
     SourceVideo,
 )
 from shorts_engine.services.publishing.quota import QuotaTracker

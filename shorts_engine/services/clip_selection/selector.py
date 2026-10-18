@@ -22,7 +22,7 @@ from shorts_engine.services.clip_selection.prompts import (
 )
 from shorts_engine.services.llm.router import LLMRouter
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
-from shorts_engine.services.clip_selection.validator import ClipCandidateValidator, CandidateValidationResult
+from shorts_engine.services.clip_selection.validator import ClipCandidateValidator
 
 logger = logging.getLogger(__name__)
 

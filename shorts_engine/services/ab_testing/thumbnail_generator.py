@@ -14,7 +14,6 @@ from typing import Optional, List, Dict, Any
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
 from shorts_engine.services.rendering.thumbnail_generator import ThumbnailGenerator
-from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
 logger = logging.getLogger(__name__)
 

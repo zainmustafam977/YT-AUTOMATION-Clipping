@@ -6,9 +6,13 @@ Implements unified single source of truth for all pipeline constants.
 import os
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-from pydantic import Field, model_validator
+from typing import Optional, List, Dict, Any, Tuple
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shorts_engine.config._parsers import (
+    tolerant_list, tolerant_json, TolerantEnvSource,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +24,52 @@ class PipelineSettings(BaseSettings):
         extra="ignore",
     )
 
+    # --- R4-1.5: tolerant env source ----------------------------------------
+    # Replace the EnvSettingsSource with a TolerantEnvSource so empty /
+    # whitespace / CSV values for known list fields (e.g. ``GEMINI_API_KEYS=``)
+    # are normalized to ``[]`` before pydantic-settings tries to JSON-decode
+    # them. This is the only place a JSONDecodeError used to be raised at
+    # startup.
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ) -> Tuple[Any, ...]:
+        tolerant = TolerantEnvSource(settings_cls)
+        return (
+            init_settings,
+            tolerant,
+            dotenv_settings,
+            file_secret_settings,
+        )
+
     # General App Config
     APP_NAME: str = "YouTube Shorts Automation"
     ENV: str = Field(default="development", description="development, staging, or production")
+    # R4-5.2: STRICT_MODE. Default True in production/staging, False in
+    # development/test. The strict_mode helper reads this and the fallback
+    # sites branch on it.
+    STRICT_MODE: Optional[bool] = Field(
+        default=None,
+        description=(
+            "If True, all fallbacks (LLM provider swap, encoder swap, etc.) "
+            "raise a clear error instead of silently substituting. "
+            "Defaults to True in production/staging, False in development/test."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _default_strict_mode(self) -> "PipelineSettings":
+        if self.STRICT_MODE is None:
+            object.__setattr__(
+                self, "STRICT_MODE",
+                self.ENV in ("production", "staging"),
+            )
+        return self
     DEBUG: bool = False
     
     # Base paths
@@ -569,6 +616,44 @@ class PipelineSettings(BaseSettings):
         description="Hard timeout in seconds for ffmpeg/ffprobe subprocess execution",
     )
 
+
+    # --- R4-1.5: tolerant env-value parsers ---------------------------------
+    # Pydantic-settings v2 JSON-decodes list/dict fields at the EnvSource level,
+    # so an empty string like ``GEMINI_API_KEYS=`` would otherwise raise a
+    # JSONDecodeError before any field validator can run. We intercept at
+    # ``model_validator(mode="before")`` and pre-clean the input dict.
+    @model_validator(mode="before")
+    @classmethod
+    def _clean_env_values(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        list_fields = (
+            "GEMINI_API_KEYS", "GROQ_API_KEYS", "OPENAI_API_KEYS", "OPENROUTER_API_KEYS",
+            "PUBLISH_SLOT_TIMES_LOCAL", "INGESTION_PROXY_POOL",
+        )
+        for fname in list_fields:
+            if fname in values:
+                values[fname] = tolerant_list(values[fname])
+        if "LLM_MODEL_PRICING" in values:
+            values["LLM_MODEL_PRICING"] = tolerant_json(values["LLM_MODEL_PRICING"])
+        return values
+
+    @field_validator(
+        "GEMINI_API_KEYS", "GROQ_API_KEYS", "OPENAI_API_KEYS", "OPENROUTER_API_KEYS",
+        "PUBLISH_SLOT_TIMES_LOCAL", "INGESTION_PROXY_POOL",
+        mode="before",
+    )
+    @classmethod
+    def _parse_list_setting(cls, v: Any) -> Any:
+        return tolerant_list(v)
+
+    @field_validator(
+        "LLM_MODEL_PRICING",
+        mode="before",
+    )
+    @classmethod
+    def _parse_json_setting(cls, v: Any) -> Any:
+        return tolerant_json(v)
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "PipelineSettings":

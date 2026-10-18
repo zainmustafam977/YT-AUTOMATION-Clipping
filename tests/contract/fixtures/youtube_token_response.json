@@ -1,0 +1,10 @@
+{
+  "api_version": "v3",
+  "recorded_at": "2026-10-17",
+  "recorded_by": "owner-fixture-bootstrap",
+  "access_token": "ya29.RECORDED_FIXTURE_NOT_REAL",
+  "expires_in": 3599,
+  "refresh_token": "1//RECORDED_FIXTURE_NOT_REAL",
+  "scope": "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube",
+  "token_type": "Bearer"
+}

@@ -5,13 +5,11 @@ quota enforcement, dry-run simulation mode, and duplicate publish prevention.
 
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from shorts_engine.services.publishing.worker import (
-    HttpError,
     build_youtube_client,
     _upload_video as worker_upload_video,
     set_video_thumbnail,

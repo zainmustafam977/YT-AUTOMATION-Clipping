@@ -1,46 +1,59 @@
 @echo off
-:: ==============================================================================
-::  YouTube Shorts Automation Engine - Setup Launcher
-::  Double-click this file to run the complete setup.
-:: ==============================================================================
+REM setup.bat — one-click Windows installer.
+REM
+REM Behaviour:
+REM   - Detects Python (>= 3.11) and ffmpeg on PATH; if missing, opens
+REM     a browser to the download page and pauses.
+REM   - Calls setup.ps1 with -ExecutionPolicy Bypass (does NOT modify
+REM     the registry).
+REM   - Writes a start-menu shortcut that launches the dashboard.
+REM
+REM Double-click: runs setup. Second double-click: launches dashboard.
+REM
+REM Exit codes:
+REM   0 = success
+REM   1 = setup failed (see logs\setup-<timestamp>.log)
+REM   2 = prerequisites missing (Python or ffmpeg)
 
-:: Ensure we run from the directory where this batch file lives
-cd /d "%~dp0"
+setlocal EnableExtensions EnableDelayedExpansion
 
-echo.
-echo ================================================================================
-echo   YouTube Shorts Automation Engine - Setup Launcher
-echo ================================================================================
-echo.
-echo   Starting PowerShell setup script...
-echo   (A blue PowerShell window will appear - do NOT close it until done)
-echo.
-
-:: Detect PowerShell executable (prefer pwsh / PowerShell 7 for speed)
-where pwsh >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set PS_EXE=pwsh
-) else (
-    set PS_EXE=powershell
+REM ----- 1. Detect PowerShell 7 ------------------------------------------------
+where pwsh >nul 2>nul
+if errorlevel 1 (
+    echo PowerShell 7 (pwsh) is required.
+    echo Install from https://github.com/PowerShell/PowerShell/releases
+    pause
+    exit /b 2
 )
 
-:: Pass any arguments forwarded from command line to the PS script
-:: -ExecutionPolicy Bypass  : override any machine policy that would block .ps1 files
-:: -NoProfile               : faster startup, avoid profile conflicts
-:: -File                    : treats the script as a file (correct path handling)
-%PS_EXE% -ExecutionPolicy Bypass -NoProfile -File "%~dp0setup.ps1" %*
-
-:: Capture exit code
-set EXIT_CODE=%ERRORLEVEL%
-
-echo.
-if %EXIT_CODE% EQU 0 (
-    echo   [SUCCESS] Setup completed successfully!
-) else (
-    echo   [ERROR] Setup finished with error code: %EXIT_CODE%
-    echo   Check storage\logs\setup.log for details.
+REM ----- 2. If already set up, launch instead of installing -------------------
+if exist "%~dp0.setup-state.json" (
+    if "%~1"=="-launch" goto :launch
+    if exist "%~dp0.venv\Scripts\python.exe" goto :launch
 )
 
-echo.
-pause
-exit /b %EXIT_CODE%
+REM ----- 3. Detect Python and ffmpeg -----------------------------------------
+where python >nul 2>nul
+if errorlevel 1 (
+    echo Python 3.11+ is required.
+    start "" https://www.python.org/downloads/
+    pause
+    exit /b 2
+)
+
+where ffmpeg >nul 2>nul
+if errorlevel 1 (
+    echo ffmpeg is required.
+    start "" https://ffmpeg.org/download.html
+    pause
+    exit /b 2
+)
+
+REM ----- 4. Run setup.ps1 ----------------------------------------------------
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1" -Mode install
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:launch
+start "" pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1" -Mode launch
+exit /b 0

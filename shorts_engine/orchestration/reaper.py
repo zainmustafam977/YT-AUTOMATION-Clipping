@@ -6,9 +6,8 @@ Workers update heartbeat_at and locked_at periodically so long-running operation
 
 import logging
 import threading
-import time
-from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
+from datetime import datetime
+from typing import Optional, List
 from sqlalchemy.orm import Session
 
 from shorts_engine.db.session import SessionLocal

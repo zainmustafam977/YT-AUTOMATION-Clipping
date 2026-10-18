@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS operator_guides;
+DROP TABLE IF EXISTS saved_views;
+DROP TABLE IF EXISTS ab_metric_snapshots_2;
+DROP TABLE IF EXISTS ab_variants_2;
+DROP TABLE IF EXISTS ab_tests_2;
+DROP TABLE IF EXISTS cost_budgets;
+DROP TABLE IF EXISTS cost_entries;
+DROP TABLE IF EXISTS settings_exports;
+DROP TABLE IF EXISTS webhook_dead_letters;
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS webhooks;

@@ -115,7 +115,7 @@ async def publish_event(
 from datetime import datetime
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from shorts_engine.db.session import SessionLocal, get_db
+from shorts_engine.db.session import get_db
 from shorts_engine.db.models import EventLog, prune_old_event_logs
 
 

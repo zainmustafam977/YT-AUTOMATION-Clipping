@@ -1,134 +1,141 @@
-"""
-Tests for Title A/B variant generation (4 archetypes, 100-char limits)
-and Two-Tier Analytics Ingestion with graceful scope degradation.
-"""
+"""Tests for E-017 A/B testing (Wilson score, round-robin, snapshot, finalize)."""
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from unittest.mock import MagicMock
-from shorts_engine.services.ab_testing.title_generator import (
-    TitleGenerator,
-    TitleVariantSet,
+from shorts_engine.db.session import Base
+from shorts_engine.db.models import (
+    Channel, Clip, ClipCandidate, ClipStatus, SourceVideo,
 )
-from shorts_engine.services.ab_testing.analytics_ingestion import (
-    AnalyticsIngestionService,
-    VideoPerformanceMetrics,
+from shorts_engine.services.abtesting import (
+    ABTestService, ABTestError, wilson_lower_bound, wilson_upper_bound,
 )
 
 
-def test_title_generator_generates_all_four_archetypes_under_100_chars():
-    """Verifies that TitleGenerator produces all 4 archetypes within 100 characters."""
-    gen = TitleGenerator()
-    variants = gen.generate_variants(
-        topic="Python Performance Optimization in Production Systems",
-        hook_text="Your code is running 10x slower than it should",
-        key_point="Use vectorization instead of loops",
+@pytest.fixture
+def db_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
-
-    assert isinstance(variants, TitleVariantSet)
-    assert len(variants.curiosity_gap) <= 100
-    assert len(variants.question_hook) <= 100
-    assert len(variants.bold_statement) <= 100
-    assert len(variants.numbered_listicle) <= 100
-
-    assert len(variants.curiosity_gap) > 0
-    assert len(variants.question_hook) > 0
-    assert len(variants.bold_statement) > 0
-    assert len(variants.numbered_listicle) > 0
-    assert variants.validate_lengths() is True
-
-
-def test_title_generator_truncates_excessive_topic():
-    """Verifies extreme topic length is handled safely without exceeding 100 chars."""
-    gen = TitleGenerator()
-    very_long_topic = "A" * 200
-    variants = gen.generate_variants(topic=very_long_topic)
-    assert variants.validate_lengths() is True
-
-
-def test_two_tier_analytics_ingestion_both_tiers_present():
-    """Verifies ingestion when both Data API v3 and Analytics API succeed."""
-    # Mock Data API client
-    mock_data = MagicMock()
-    mock_data.videos().list().execute.return_value = {
-        "items": [{
-            "statistics": {
-                "viewCount": "15000",
-                "likeCount": "850",
-                "commentCount": "42",
-            }
-        }]
-    }
-
-    # Mock Analytics API client
-    mock_analytics = MagicMock()
-    mock_analytics.reports().query().execute.return_value = {
-        "rows": [["video_001", "78.5", "42.3"]]
-    }
-
-    service = AnalyticsIngestionService(
-        youtube_data_client=mock_data,
-        youtube_analytics_client=mock_analytics,
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    ch = Channel(id="ch1", youtube_channel_id="UC1", name="C")
+    db.add(ch)
+    sv = SourceVideo(
+        id="sv1", channel_id="ch1", youtube_video_id="yt1",
+        title="t", duration_sec=60,
     )
-    metrics = service.fetch_metrics("video_001")
-
-    assert metrics.view_count == 15000
-    assert metrics.like_count == 850
-    assert metrics.comment_count == 42
-    assert metrics.average_view_percentage == 78.5
-    assert metrics.average_view_duration_sec == 42.3
-    assert metrics.tier2_available is True
-    assert metrics.engagement_rate > 0.0
-    assert metrics.composite_score > 0.0
-
-
-def test_two_tier_analytics_graceful_degradation_on_missing_analytics_scope(caplog):
-    """
-    Verifies that if Analytics API returns 403 / missing scope,
-    Tier 1 metrics are preserved and Tier 2 gracefully degrades to None.
-    """
-    mock_data = MagicMock()
-    mock_data.videos().list().execute.return_value = {
-        "items": [{
-            "statistics": {
-                "viewCount": "5000",
-                "likeCount": "200",
-                "commentCount": "10",
-            }
-        }]
-    }
-
-    # Mock Analytics API client raising 403 Forbidden
-    mock_analytics = MagicMock()
-    mock_analytics.reports().query().execute.side_effect = Exception("403 Forbidden: Insufficient Permission")
-
-    service = AnalyticsIngestionService(
-        youtube_data_client=mock_data,
-        youtube_analytics_client=mock_analytics,
+    db.add(sv)
+    cand = ClipCandidate(
+        id="cand1", source_video_id="sv1",
+        start_ms=0, end_ms=5000, score=0.5, reason="x",
     )
-
-    metrics = service.fetch_metrics("video_scope_missing")
-
-    # Tier 1 should be completely intact
-    assert metrics.view_count == 5000
-    assert metrics.like_count == 200
-    assert metrics.comment_count == 10
-
-    # Tier 2 safely degraded
-    assert metrics.average_view_percentage is None
-    assert metrics.tier2_available is False
-    assert metrics.composite_score > 0.0
+    db.add(cand)
+    db.flush()
+    db.add(Clip(id="c1", clip_candidate_id="cand1", status=ClipStatus.WAITING_APPROVAL))
+    db.commit()
+    yield db
+    db.close()
 
 
-def test_rank_archetypes():
-    """Verifies that rank_archetypes sorts variants by performance composite score."""
-    service = AnalyticsIngestionService()
-    metrics_map = {
-        "curiosity_gap": VideoPerformanceMetrics(video_id="v1", view_count=20000, like_count=1200, average_view_percentage=85.0),
-        "question_hook": VideoPerformanceMetrics(video_id="v2", view_count=5000, like_count=100, average_view_percentage=40.0),
-        "bold_statement": VideoPerformanceMetrics(video_id="v3", view_count=15000, like_count=900, average_view_percentage=70.0),
-    }
+def test_wilson_lower_bound_zero():
+    assert wilson_lower_bound(0, 0) == 0.0
 
-    ranked = service.rank_archetypes(metrics_map)
-    assert len(ranked) == 3
-    assert ranked[0]["archetype"] == "curiosity_gap"
-    assert ranked[1]["archetype"] == "bold_statement"
-    assert ranked[2]["archetype"] == "question_hook"
+
+def test_wilson_lower_bound_known():
+    # 50/100, z=1.96 -> approx 0.40-0.41
+    assert 0.39 < wilson_lower_bound(100, 50) < 0.42
+
+
+def test_wilson_upper_above_lower():
+    assert wilson_lower_bound(1000, 200) < wilson_upper_bound(1000, 200)
+
+
+def test_create_with_two_variants(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "A"}, {"title": "B"}])
+    assert test.status == "RUNNING"
+    assert len(test.variants) == 2
+    assert any(v.is_control for v in test.variants)
+
+
+def test_create_rejects_single_variant(db_session):
+    with pytest.raises(ABTestError, match="2 variants"):
+        ABTestService(db_session).create("c1", [{"title": "A"}])
+
+
+def test_create_rejects_unknown_clip(db_session):
+    with pytest.raises(ABTestError, match="clip not found"):
+        ABTestService(db_session).create("nope", [{"title": "A"}, {"title": "B"}])
+
+
+def test_create_rejects_short_rotation(db_session):
+    with pytest.raises(ABTestError, match="rotation"):
+        ABTestService(db_session).create("c1", [{"title": "A"}, {"title": "B"}], rotation_seconds=10)
+
+
+def test_advance_round_robin(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "A"}, {"title": "B"}, {"title": "C"}])
+    assert svc.advance(test.id).title == "B"
+    assert svc.advance(test.id).title == "C"
+    assert svc.advance(test.id).title == "A"
+
+
+def test_record_snapshot(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "A"}, {"title": "B"}])
+    v_a = next(v for v in test.variants if v.title == "A")
+    svc.record_snapshot(test.id, v_a.id, 1000, 100)
+    db_session.refresh(v_a)
+    assert v_a.impressions == 1000
+    assert v_a.views == 100
+
+
+def test_record_snapshot_rejects_negative(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "A"}, {"title": "B"}])
+    v_a = next(v for v in test.variants if v.title == "A")
+    with pytest.raises(ABTestError, match=">= 0"):
+        svc.record_snapshot(test.id, v_a.id, -1, 0)
+
+
+def test_pick_winner_with_significant_challenger(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "C"}, {"title": "H"}])
+    control = next(v for v in test.variants if v.is_control)
+    challenger = next(v for v in test.variants if not v.is_control)
+    svc.record_snapshot(test.id, control.id, 5000, 250)
+    svc.record_snapshot(test.id, challenger.id, 5000, 400)
+    winner = svc.pick_winner(test.id, min_impressions=1000)
+    assert winner is not None
+    assert winner.id == challenger.id
+
+
+def test_pick_winner_too_thin(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "C"}, {"title": "H"}])
+    control = next(v for v in test.variants if v.is_control)
+    challenger = next(v for v in test.variants if not v.is_control)
+    svc.record_snapshot(test.id, control.id, 50, 5)
+    svc.record_snapshot(test.id, challenger.id, 50, 4)
+    assert svc.pick_winner(test.id, min_impressions=1000) is None
+
+
+def test_finalize_pins_winner_to_clip(db_session):
+    svc = ABTestService(db_session)
+    test = svc.create("c1", [{"title": "C"}, {"title": "H"}])
+    control = next(v for v in test.variants if v.is_control)
+    challenger = next(v for v in test.variants if not v.is_control)
+    svc.record_snapshot(test.id, control.id, 5000, 250)
+    svc.record_snapshot(test.id, challenger.id, 5000, 400)
+    winner = svc.finalize(test.id)
+    assert winner is not None
+    db_session.refresh(test)
+    assert test.status == "COMPLETED"
+    clip = db_session.query(Clip).filter_by(id="c1").first()
+    assert clip.generated_title == "H"

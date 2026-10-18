@@ -6,8 +6,8 @@ ensuring idempotent, transactional schema upgrades across SQLite and PostgreSQL.
 
 import logging
 from datetime import datetime
-from typing import Callable, List, Dict, Any, Optional
-from sqlalchemy import text, inspect, Engine
+from typing import Callable, List, Any, Optional
+from sqlalchemy import text, Engine
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
     Migration(
         version="001_initial_core_schema",
         description="Initial core tables: channels, source_videos, transcripts, clip_candidates, clips, users",
+        upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
+    ),
+    Migration(
+        version="005_batch_engine_tables",
+        description="E-001 + R3 batch engine: batch_jobs, batch_item_locks, batch_audit_log",
         upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
     ),
     Migration(

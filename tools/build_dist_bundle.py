@@ -4,12 +4,11 @@ Packages project distribution archives using fnmatch allow-before-deny matching
 to guarantee zero leakage of secret keys, database files, auth tokens, or cookies.
 """
 
-import sys
 import fnmatch
 import zipfile
 import logging
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 logger = logging.getLogger(__name__)
 

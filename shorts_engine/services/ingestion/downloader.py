@@ -9,7 +9,6 @@ import time
 import random
 import logging
 import tempfile
-import contextlib
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yt_dlp

@@ -17,7 +17,7 @@ from sqlalchemy import or_
 from shorts_engine.config.settings import settings
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf, get_csrf_token
 from shorts_engine.db.session import SessionLocal
-from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, PublishJob, PipelineJob, PipelineJobStatus
+from shorts_engine.db.models import Clip, ClipStatus, ClipCandidate, SourceVideo, SourceVideoStatus, Channel, User, PublishJob, PipelineJob
 from shorts_engine.services.clip_selection.selector import parse_ai_provenance
 from shorts_engine.services.analytics.predictor import viral_predictor
 from shorts_engine.services.captioning.templates import list_caption_templates

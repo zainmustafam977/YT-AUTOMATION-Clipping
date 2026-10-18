@@ -14,13 +14,12 @@ Exits non-zero on any gap.
 """
 
 import sys
-import os
 import hashlib
 import json
 import fnmatch
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Set
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -278,8 +277,8 @@ def main():
     if missing_from_ledger:
         has_gaps = True
         print(f"[!] (d) Files completely missing from ledger ({len(missing_from_ledger)}):")
-        for f, l in missing_from_ledger[:25]:
-            print(f"    - {f} ({l} lines)")
+        for f, lines in missing_from_ledger[:25]:
+            print(f"    - {f} ({lines} lines)")
         if len(missing_from_ledger) > 25:
             print(f"    ... and {len(missing_from_ledger) - 25} more files.")
 

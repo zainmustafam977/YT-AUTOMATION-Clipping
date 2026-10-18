@@ -8,11 +8,11 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 from sqlalchemy import create_engine, inspect, text, Table, MetaData, Boolean, DateTime
 from sqlalchemy.engine import Engine
 
-from shorts_engine.db.session import init_db, is_postgres, Base
+from shorts_engine.db.session import init_db
 
 logger = logging.getLogger(__name__)
 
