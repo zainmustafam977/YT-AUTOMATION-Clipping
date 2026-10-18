@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List
 
 
 @dataclass

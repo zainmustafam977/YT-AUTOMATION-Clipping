@@ -1,22 +1,16 @@
 """E-011 — Overlay engine HTTP routes."""
 from __future__ import annotations
 
-import json
-import sqlite3
 from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 
-from shorts_engine.db.session import get_session, engine
+from shorts_engine.db.session import engine
 from shorts_engine.services.overlay import (
-    OverlaySpec,
     parse_spec,
-    serialize_spec,
     validate_spec,
     list_builtin_presets,
-    get_builtin_preset,
     upsert_preset,
     export_preset,
     export_all,
@@ -24,10 +18,8 @@ from shorts_engine.services.overlay import (
     preset_sha256,
     seed_builtins_if_empty,
     compile_ffmpeg_filter,
-    apply_preset_to_candidate,
     batch_apply_preset,
     list_audit,
-    last_audit_for_candidate,
     preview_overlay_at_t,
     preview_ascii,
     preview_summary,
@@ -138,15 +130,6 @@ def import_p(body: PresetImportIn):
     finally:
         conn.close()
     return {"id": row_id, "verified": verified}
-
-
-@router.get("/presets/export-all")
-def export_all_p():
-    conn = _sqlite()
-    try:
-        return {"presets": export_all(conn)}
-    finally:
-        conn.close()
 
 
 @router.post("/presets/{name}/compile")

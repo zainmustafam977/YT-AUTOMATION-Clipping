@@ -13,7 +13,7 @@ Returns ranked results with type, id, label, snippet, score.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List
 
 
 # Each entry: (kind, table, label_fields, snippet_fields, score_field)

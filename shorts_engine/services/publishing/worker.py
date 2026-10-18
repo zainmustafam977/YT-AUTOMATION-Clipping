@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 
+from shorts_engine.orchestration.exceptions import PermanentError, JobCancelledError
+
 # ==============================================================================
 # EXCLUSIVE GOOGLE OAUTH & YOUTUBE CLIENT LIBRARY IMPORTS
 # (No other module in shorts_engine may import these libraries)
@@ -138,8 +140,11 @@ def build_youtube_analytics_client(
     """
     Builds an authorized YouTube Analytics API v2 client using OAuth credentials.
     """
-    config = client_config or get_default_client_config()
-    installed = config.get("installed") or config.get("web") or {}
+    # `get_default_client_config()` never existed, so this raised NameError.
+    # Fall back to {} like build_youtube_client() does, and accept either the
+    # nested (client_secrets.json) or flat config shape.
+    config = client_config or {}
+    installed = config.get("installed") or config.get("web") or config
     client_id = installed.get("client_id")
     client_secret = installed.get("client_secret")
     token_uri = installed.get("token_uri", "https://oauth2.googleapis.com/token")
@@ -467,8 +472,6 @@ def check_channel_recent_uploads_for_clip(
 # ==============================================================================
 # YouTube Publish Worker Engine
 # ==============================================================================
-
-from shorts_engine.orchestration.exceptions import PermanentError, JobCancelledError
 
 
 class YouTubePublishWorker:

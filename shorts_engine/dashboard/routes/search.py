@@ -1,7 +1,7 @@
 """E-021 — Global search + command palette HTTP routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from shorts_engine.db.session import engine
 from shorts_engine.services.search import search_all, command_palette

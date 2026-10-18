@@ -15,7 +15,7 @@ import subprocess
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Union, Dict
+from typing import Any, Dict, List, Optional, Union
 import psutil
 
 logger = logging.getLogger(__name__)
