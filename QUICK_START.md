@@ -73,7 +73,8 @@ python run.py dashboard
 ```
 Then open: **http://127.0.0.1:8000/**
 
-> **Default login:** Username: `admin` · Password: `AdminPass12345!`
+> **Login:** Username: `admin` · Password: the `DASHBOARD_PASSWORD` value you set in `.env`
+> (Never reuse a password published in the docs or examples.)
 
 ### Terminal 2 — Background Worker
 ```powershell

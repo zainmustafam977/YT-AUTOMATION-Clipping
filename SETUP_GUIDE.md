@@ -53,7 +53,7 @@ chmod +x setup.sh
 4. Copies `.env.example` to `.env` and generates fresh 256-bit cryptographic keys.
 5. Verifies and creates all required local `storage/` directories.
 6. Initializes database tables and schema migrations.
-7. Automatically seeds the initial administrator account (`admin` / `AdminPass12345!`).
+7. Automatically seeds the initial administrator account (`admin` / your `DASHBOARD_PASSWORD`).
 
 ---
 
@@ -165,7 +165,7 @@ ENCRYPTION_SALT=yt_shorts_kdf_salt_2026_secure!
 DASHBOARD_HOST=127.0.0.1
 DASHBOARD_PORT=8000
 DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=AdminPass12345!
+DASHBOARD_PASSWORD=change-me-generate-a-unique-32-char-value
 
 # Multi-Provider AI Keys (Configure any or all - free tiers available)
 GROQ_API_KEYS=gsk_...
@@ -195,7 +195,7 @@ python setup_environment.py
 python run.py init-db
 
 # 2. Seed initial admin user
-python run.py create-user --username admin --password "AdminPass12345!" --role admin
+python run.py create-user --username admin --password "<your-own-strong-password>" --role admin
 ```
 
 ---
@@ -221,7 +221,7 @@ python run.py dashboard --host 127.0.0.1 --port 8000
 - Open your browser at: **`http://127.0.0.1:8000/`**
 - **Default Login:**
   - **Username:** `admin`
-  - **Password:** `AdminPass12345!` *(or the password set during user creation)*
+  - **Password:** the `DASHBOARD_PASSWORD` value from your `.env` *(or the password set during user creation)*
 
 ### 2. Start the Background Rendering & Verification Worker
 In a second terminal window (with virtual environment active):

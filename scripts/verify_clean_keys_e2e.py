@@ -1,3 +1,4 @@
+import os
 import asyncio
 from pathlib import Path
 from playwright.async_api import async_playwright
@@ -12,7 +13,7 @@ async def run():
         print("Logging in...")
         await page.goto("http://127.0.0.1:8000/login", wait_until="networkidle")
         await page.fill("#username", "admin")
-        await page.fill("#password", "AdminPass12345!")
+        await page.fill("#password", os.environ["DASHBOARD_PASSWORD"])
         await page.click("button[type='submit']")
         await page.wait_for_url("http://127.0.0.1:8000/", timeout=8000)
         print("Logged in successfully.")

@@ -13,7 +13,7 @@ from typing import Optional, List, Union
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from shorts_engine.config.settings import settings
+from shorts_engine.config.settings import settings, LEGACY_DEFAULT_DASHBOARD_PASSWORD
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import User, UserRole
 
@@ -36,7 +36,17 @@ def ensure_default_admin(db: Session) -> None:
     try:
         admin_user = db.query(User).filter_by(username="admin").first()
         default_user = settings.DASHBOARD_USERNAME or "admin"
-        default_pass = settings.DASHBOARD_PASSWORD or "AdminPass12345!"
+        # Never fall back to a hardcoded credential. If the operator has not
+        # configured one, generate a random password and log it once so the
+        # account is still reachable without shipping a known default.
+        default_pass = settings.DASHBOARD_PASSWORD
+        if not default_pass or default_pass == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+            default_pass = secrets.token_urlsafe(24)
+            logger.warning(
+                "DASHBOARD_PASSWORD is unset or still the shipped default; "
+                "generated a random administrator password for this boot. "
+                "Set DASHBOARD_PASSWORD in the environment to make it durable."
+            )
 
         if not admin_user:
             admin_user = User(

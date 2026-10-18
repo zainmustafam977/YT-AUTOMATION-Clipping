@@ -10,6 +10,14 @@ from typing import Optional, List, Dict
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Shipped default operator password (SEV-2 - see docs/audit/VERIFICATION_REPORT.md
+# and docs/audit/findings.yaml). It is a real credential-shaped value that was
+# committed to source, so it must be treated as burned:
+#   ROTATE THIS SECRET - if any deployment ever used it, change it everywhere.
+# The literal is retained ONLY so startup can detect and refuse to boot on it.
+# Do not reintroduce it as a fallback anywhere else in the codebase.
+LEGACY_DEFAULT_DASHBOARD_PASSWORD = "AdminPass12345!"
+
 logger = logging.getLogger(__name__)
 
 
@@ -474,7 +482,14 @@ class PipelineSettings(BaseSettings):
     DASHBOARD_PORT: int = 8080
     DASHBOARD_SECRET_KEY: str = Field(default="change-me-in-prod", description="Session signing key")
     DASHBOARD_USERNAME: str = Field(default="admin", description="Operator dashboard username")
-    DASHBOARD_PASSWORD: str = Field(default="AdminPass12345!", description="Operator dashboard password")
+    DASHBOARD_PASSWORD: str = Field(
+        default=LEGACY_DEFAULT_DASHBOARD_PASSWORD,
+        description=(
+            "Operator dashboard password. Development convenience default only; "
+            "staging/production/STRICT_MODE require an explicit, non-default value "
+            "supplied through the environment."
+        ),
+    )
 
     # Video Ingestion & Triple-Tier Authentication (Pillars 1-4)
     YOUTUBE_OAUTH_TOKEN_PATH: Path = Field(
@@ -583,12 +598,32 @@ class PipelineSettings(BaseSettings):
                 f"TARGET_DURATION_MAX_SEC ({self.TARGET_DURATION_MAX_SEC})"
             )
         # Production & Staging security guard: disallow default credentials & enforce minimum entropy
-        if self.ENV in ("staging", "production"):
-            insecure_passwords = {"change-me", "admin", "password", "123456", "12345678", "root", "ytpassword_secret_change_me", ""}
+        if self.ENV in ("staging", "production") or self.ENFORCE_SECRET_ENTROPY:
+            insecure_passwords = {
+                "change-me", "admin", "password", "123456", "12345678", "root",
+                "ytpassword_secret_change_me", "",
+                LEGACY_DEFAULT_DASHBOARD_PASSWORD.lower(),
+            }
+            mode = self.ENV if self.ENV in ("staging", "production") else "ENFORCE_SECRET_ENTROPY"
+            if self.DASHBOARD_PASSWORD == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+                raise ValueError(
+                    f"DASHBOARD_PASSWORD is still the shipped default for '{mode}'. "
+                    "ROTATE THIS SECRET: set a unique value through the environment "
+                    "(DASHBOARD_PASSWORD=...) before starting."
+                )
             if self.DASHBOARD_PASSWORD.lower() in insecure_passwords or len(self.DASHBOARD_PASSWORD) < 12:
                 raise ValueError(
-                    f"Insecure DASHBOARD_PASSWORD for '{self.ENV}' environment. "
+                    f"Insecure DASHBOARD_PASSWORD for '{mode}' environment. "
                     "Password must not be a common default and must be at least 12 characters long."
+                )
+            # The built-in default is a development convenience only. Staging,
+            # production and strict mode must receive the value explicitly from
+            # the environment (or an explicit constructor argument), never from
+            # the field default.
+            if "DASHBOARD_PASSWORD" not in self.model_fields_set:
+                raise ValueError(
+                    f"DASHBOARD_PASSWORD must be explicitly provided via the environment "
+                    f"for '{mode}'. Falling back to the built-in default is not permitted."
                 )
             if self.DASHBOARD_SECRET_KEY in ("change-me-in-prod", "") or len(self.DASHBOARD_SECRET_KEY) < 32:
                 raise ValueError(
