@@ -20,7 +20,13 @@ jobs:
     name: Ledger Consistency
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 is required, not cosmetic. check_agent_ledger.py
+      # validates every cited commit id with `git cat-file -t`, and a default
+      # fetch-depth: 1 checkout only contains the tip commit, so every
+      # ancestor oid cited by a round4 row appears to be an invented id.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
