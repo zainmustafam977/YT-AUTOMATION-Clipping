@@ -267,6 +267,7 @@ def test_api_local_file_empty_upload_rejected(api_client, auth_headers):
     assert "empty" in res.json()["detail"].lower()
 
 
+@pytest.mark.network
 def test_pipeline_runner_processes_local_ingested_video(synthetic_video, test_db):
     """Verifies that PipelineRunner cleanly executes Step A on a locally ingested video without yt-dlp."""
     from shorts_engine.orchestration.runner import PipelineRunner
