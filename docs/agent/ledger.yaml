@@ -1898,3 +1898,86 @@
     - .github/workflows/agent.yml
   commits:
     - 2991cb7737c1eee680e032ae79419fa40b519b89
+
+- id: R4-15
+  type: round4
+  title: CI dependency sources diverge by five packages
+  status: CONFIRMED
+  evidence: >-
+    requirements.txt declares 34 packages; pyproject.toml
+    [project.dependencies] declares 31. Only in requirements.txt: asyncpg,
+    psycopg2-binary, starlette, tzdata. Only in pyproject: watchdog.
+    This matters because the workflows install differently - ci.yml uses
+    "pip install -r requirements.txt -r requirements-dev.txt", while
+    agent.yml uses "pip install -e .[dev]" and so gets the pyproject set.
+    Impact assessed as low: starlette arrives transitively via fastapi, and
+    asyncpg/psycopg2/tzdata are imported nowhere in shorts_engine/ or
+    tests/. Reported rather than silently reconciled - unifying the two
+    sources is a packaging decision for the owner.
+    Drift is now guarded by
+    tests/test_packaging_dependencies.py::test_requirements_and_pyproject_
+    declare_the_same_dependencies, which pins the currently-known
+    divergence; verified by sabotage (adding a package to
+    requirements.txt alone fails it). Update the expected set and this
+    row together.
+  tests:
+    - tests/test_packaging_dependencies.py
+  files:
+    - requirements.txt
+    - pyproject.toml
+  commits:
+    - 08f0b98e8f8377f69b96b4fc5ad351cd209159f2
+
+- id: R4-16
+  type: round4
+  title: CI Pytest jobs still fail - root cause not identified
+  status: DEFERRED
+  evidence: >-
+    As of 08f0b98 all four workflows execute (they previously never ran at
+    all - zero runs on the branch). Seven job types succeed: Security CVE
+    Scan, Code Quality/Linting, Docker Build, Ruff Lint, mypy Ratchet,
+    Ledger Consistency, Dependency Audit. Every Pytest job fails:
+    Agent Gates/Pytest, CI-CD Pipeline/Lint & Test Suite, and all four
+    Test Suite Matrix legs.
+    I could not identify why, so this is DEFERRED, not fixed.
+    What is ruled out by measurement, not guesswork:
+      1. Environment variables. Reproduced the CI condition locally
+         (unset ALLOW_IN_PROCESS_PREVIEW, set DASHBOARD_SECRET_KEY and
+         ENCRYPTION_KEY, pre-create the DB with init_db as the workflow
+         does). This exposed one genuine bug, now fixed in TEST-4: the
+         dry-run test depended on ALLOW_IN_PROCESS_PREVIEW being exported
+         on the developer's machine. After that fix the full suite under
+         CI's exact conditions is 1098 passed, 23 skipped, 1 deselected,
+         exit 0.
+      2. Dependency plugins. pytest 9.1.1 and pytest-asyncio 1.4.0 are
+         installed locally, matching what "pip install -e .[dev]" resolves.
+      3. Dependency content (see R4-15). The five-package divergence does
+         not touch anything the tests import.
+    Why it is not resolved: the Actions logs endpoint returns 0 bytes with
+    the available token, and log download from
+    results-receiver.actions.githubusercontent.com is blocked from this
+    sandbox. No failure output could be read, so the remaining difference
+    between the runner and this machine is unmeasured.
+    One unverified hypothesis worth testing first: ci.yml runs
+    "pytest tests -q" (no marker filter) with timeout-minutes: 15, so it
+    includes the network-marked test that downloads a faster-whisper model
+    from HuggingFace. A ~500MB download on every matrix leg under a 15
+    minute cap is a plausible timeout. This does NOT explain agent.yml,
+    which already filters with -m "not network".
+    I deliberately did not change the unfiltered commands speculatively,
+    as that could mask a real failure.
+    Manual steps: open the failing job in the Actions UI and read the
+    pytest summary, or run "gh run view <id> --log-failed" from a network
+    unrestricted machine. If the hypothesis above holds, add
+    -m "not network" to ci.yml and ci-cd.yml to match agent.yml.
+  tests:
+    # No test determines which CI job fails - see evidence. Cited here is the
+    # suite that validates CI workflow invariants, which is the area under
+    # investigation.
+    - tests/test_ci_workflow_hardening.py
+  files:
+    - .github/workflows/ci.yml
+    - .github/workflows/ci-cd.yml
+    - .github/workflows/agent.yml
+  commits:
+    - 08f0b98e8f8377f69b96b4fc5ad351cd209159f2
