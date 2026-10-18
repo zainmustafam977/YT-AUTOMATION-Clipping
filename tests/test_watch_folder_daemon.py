@@ -8,6 +8,7 @@ Verifies:
 5. Clean start/stop thread lifecycle and context manager support.
 """
 
+import sys
 import time
 import pytest
 from pathlib import Path
@@ -35,6 +36,13 @@ def test_is_file_locked_on_nonexistent_file(tmp_path):
     assert is_file_locked(tmp_path / "missing.mp4") is True
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("win"),
+    reason="Asserts the Win32 CreateFileW/ERROR_SHARING_VIOLATION contract. "
+           "The POSIX fallback opens r+b and reports NOT locked for a write "
+           "handle held by the same process, so this expectation only holds "
+           "on Windows.",
+)
 def test_is_file_locked_when_open_for_writing(tmp_path):
     """Verifies is_file_locked detects an actively open file handle."""
     target = tmp_path / "writing.mp4"
@@ -183,6 +191,13 @@ def test_is_file_locked_on_readonly_file(tmp_path):
         p.chmod(stat.S_IWRITE)
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("win"),
+    reason="Asserts the Win32 CreateFileW/ERROR_SHARING_VIOLATION contract. "
+           "The POSIX fallback opens r+b and reports NOT locked for a write "
+           "handle held by the same process, so this expectation only holds "
+           "on Windows.",
+)
 def test_lock_release_resets_stability_window(tmp_path):
     """Verifies that the stability timer only begins AFTER an active lock is fully released."""
     processed = []

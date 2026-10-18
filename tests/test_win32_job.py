@@ -11,6 +11,8 @@ import sys
 import subprocess
 from unittest.mock import patch
 
+import pytest
+
 from shorts_engine.services.execution.win32_job import (
     Win32JobManager,
     init_win32_job_object,
@@ -70,6 +72,10 @@ def test_win32_job_non_windows_platform_mock():
         assert mgr.assign_process(1234) is False
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("win"),
+    reason="Patches ctypes.windll.kernel32, which only exists on Windows.",
+)
 def test_win32_job_handles_api_failure_gracefully():
     """Verifies that Win32 API failure during creation is caught and logged."""
     mgr = Win32JobManager()
