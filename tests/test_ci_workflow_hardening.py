@@ -71,3 +71,32 @@ def test_dependency_audit_runs_on_pull_requests():
         "ci.yml does not trigger on pull_request, so the dependency audit "
         "cannot block a vulnerable change from merging."
     )
+
+
+def test_ledger_job_checks_out_full_history():
+    """The ledger gate needs git history to validate cited commit ids.
+
+    check_agent_ledger.py runs `git cat-file -t <oid>` on every commit a
+    ledger row cites. actions/checkout@v4 defaults to fetch-depth: 1, which
+    fetches only the tip commit, so every ancestor oid cited by a round4 row
+    reports as "does not exist in this repository (never invent commit ids)" -
+    a false failure that reads as a fabricated commit.
+
+    Observed on run 39169764361: Ledger Consistency failed with exactly that
+    while Dependency Audit, Ruff and mypy all passed.
+    """
+    data = yaml.safe_load(Path(".github/workflows/agent.yml").read_text(encoding="utf-8"))
+    jobs = data.get("jobs", {})
+    assert "ledger" in jobs, "agent.yml has no `ledger` job"
+
+    checkouts = [
+        step for step in jobs["ledger"].get("steps", [])
+        if str(step.get("uses", "")).startswith("actions/checkout")
+    ]
+    assert checkouts, "the ledger job does not check out the repository"
+
+    depth = checkouts[0].get("with", {}).get("fetch-depth", 1)
+    assert depth == 0, (
+        f"ledger job checks out with fetch-depth: {depth}. It must be 0, so "
+        "cited commit ids resolve."
+    )

@@ -32,8 +32,7 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 | BLOCKED | 1 |
 | CONFIRMED | 1 |
 | DEFERRED | 1 |
-| DONE-VERIFIED | 147 |
-| PARTIAL | 1 |
+| DONE-VERIFIED | 151 |
 | UNKNOWN | 15 |
 
 ## F-01..F-24 (audit findings, titles verbatim)
@@ -95,8 +94,8 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 
 ## Ledger facts (computed by this generator at run time)
 
-* Ledger rows loaded: 166
-* Status counts: BLOCKED=1, CONFIRMED=1, DEFERRED=1, DONE-VERIFIED=147, PARTIAL=1, UNKNOWN=15
+* Ledger rows loaded: 169
+* Status counts: BLOCKED=1, CONFIRMED=1, DEFERRED=1, DONE-VERIFIED=151, UNKNOWN=15
 * Rows with TODO/void cells: 0
 
 ## External gates - NOT measured by this generator
@@ -113,5 +112,5 @@ this file.
 
 ## Anything NOT done
 
-Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 3 PARTIAL/BLOCKED/DEFERRED.
+Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 2 PARTIAL/BLOCKED/DEFERRED.
 
