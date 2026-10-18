@@ -6,7 +6,7 @@ Covers:
 - CaptionPreset ORM model and ASS color conversion utilities.
 - Caption template resolution, aliases ('cyberpunk' -> 'neon', 'high_contrast' -> 'high_contrast_box'),
   and DB preset CRUD operations.
-- ASS subtitle generation with Segoe UI Emoji font fallback, active-word scale-pop animation,
+- ASS subtitle generation with platform emoji font fallback, active-word scale-pop animation,
   and background box styles.
 - Dual-engine watermark matrix with 9-point grid anchor coordinate calculation.
 - VideoCompositor single-pass rendering with PNG watermark, text handle, dynamic hook banner,
@@ -48,6 +48,9 @@ from shorts_engine.services.captioning.templates import (
     delete_preset_from_db,
 )
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
+from shorts_engine.services.captioning.ass_generator import DEFAULT_EMOJI_FONT
+
+# Platform-dependent: "Segoe UI Emoji" on Windows, "Noto Color Emoji" elsewhere.
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.rendering.compositor import (
     VideoCompositor,
@@ -57,6 +60,11 @@ from shorts_engine.services.reframing.cropper import CropPlan
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.dashboard.routes import queue as queue_route
 from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf
+
+# Platform-dependent: "Segoe UI Emoji" on Windows, "Noto Color Emoji" elsewhere.
+def _emoji_tag(emoji: str) -> str:
+    """Expected ASS font-tag wrapper for `emoji` on this platform."""
+    return "{\\fn" + DEFAULT_EMOJI_FONT + "}" + emoji + "{\\fnArial Black}"
 
 
 @pytest.fixture
@@ -266,10 +274,10 @@ def test_ass_generator_emoji_font_fallback(tmp_path):
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
 
-    # Segoe UI Emoji tag must wrap emoji characters and revert to Arial Black
-    assert "{\\fnSegoe UI Emoji}😱{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}🔥{\\fnArial Black}" in content
-    # Normal text should not be wrapped in Segoe UI Emoji
+    # Expected emoji font is platform-dependent (see DEFAULT_EMOJI_FONT)
+    assert _emoji_tag("😱") in content
+    assert _emoji_tag("🔥") in content
+    # Normal text should not be wrapped in the emoji font
     assert "WAIT" in content
 
 
@@ -665,9 +673,9 @@ def test_ass_generator_flags_variation_selectors_and_zwj(tmp_path):
     content = out_file.read_text(encoding="utf-8")
 
     # Full emoji sequences must be enclosed inside emoji font tags
-    assert "{\\fnSegoe UI Emoji}⚠️{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}❤️{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}🇺🇸{\\fnArial Black}" in content
+    assert _emoji_tag("⚠️") in content
+    assert _emoji_tag("❤️") in content
+    assert _emoji_tag("🇺🇸") in content
 
 
 def test_ass_generator_sanitizes_transcript_braces(tmp_path):

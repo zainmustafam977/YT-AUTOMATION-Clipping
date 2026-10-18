@@ -15,6 +15,18 @@ from shorts_engine.orchestration.telemetry import emit
 from shorts_engine.services.worker.daemon import WorkerDaemon
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _ensure_schema():
+    """These tests use the process-wide SessionLocal/engine.
+
+    They previously depended on whichever module happened to run first having
+    created the tables, so they failed with "no such table" whenever collection
+    order changed. Create the schema explicitly instead.
+    """
+    Base.metadata.create_all(engine)
+    yield
+
+
 def test_emit_with_db_parameter_does_not_close_session(tmp_path):
     """
     Unit test: emit() with db parameter uses the provided session

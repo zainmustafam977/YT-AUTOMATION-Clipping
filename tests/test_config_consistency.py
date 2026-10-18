@@ -89,3 +89,82 @@ def test_production_embedded_postgres_password_rejected():
             DATABASE_URL="postgresql://ytuser:ytpassword_secret_change_me@postgres:5432/ytshorts",
         )
 
+
+
+# ---------------------------------------------------------------------------
+# Shipped default operator password (SEV-2, docs/audit/VERIFICATION_REPORT.md)
+# ---------------------------------------------------------------------------
+
+STRONG_PASSWORD = "correct-horse-battery-staple-42!"
+STRONG_SECRET_KEY = "cryptographically_secure_random_key_abc_12345"
+
+
+def test_production_rejects_shipped_default_password(monkeypatch):
+    """Production must refuse to boot on the committed default, unconditionally.
+
+    This is deliberately NOT gated behind ENFORCE_SECRET_ENTROPY: an optional
+    flag is not a sufficient control for a real credential in source.
+    """
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.delenv("ENFORCE_SECRET_ENTROPY", raising=False)
+
+    with pytest.raises(ValidationError, match="shipped default"):
+        PipelineSettings(
+            ENV="production",
+            DASHBOARD_PASSWORD="AdminPass12345!",
+            DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+        )
+
+
+def test_production_requires_explicitly_provided_password(monkeypatch):
+    """Production must not silently inherit the field default."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.delenv("ENFORCE_SECRET_ENTROPY", raising=False)
+
+    # The default *is* the shipped credential, so the more actionable
+    # "shipped default" error fires first. Either rejection is acceptable here;
+    # what matters is that production never boots on an inherited default.
+    with pytest.raises(ValidationError, match="shipped default|explicitly provided"):
+        PipelineSettings(
+            ENV="production",
+            DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+        )
+
+
+def test_strict_mode_rejects_shipped_default_password(monkeypatch):
+    """ENFORCE_SECRET_ENTROPY=1 rejects the default even outside production."""
+    monkeypatch.setenv("ENFORCE_SECRET_ENTROPY", "1")
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+
+    with pytest.raises(ValidationError, match="shipped default"):
+        PipelineSettings(
+            ENV="development",
+            DASHBOARD_PASSWORD="AdminPass12345!",
+            DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+        )
+
+
+def test_production_accepts_properly_configured_secret(monkeypatch):
+    """A genuinely configured secret must still boot."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.delenv("ENFORCE_SECRET_ENTROPY", raising=False)
+
+    prod = PipelineSettings(
+        ENV="production",
+        DASHBOARD_PASSWORD=STRONG_PASSWORD,
+        DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+    )
+    assert prod.DASHBOARD_PASSWORD == STRONG_PASSWORD
+
+
+def test_rotated_password_is_not_treated_as_default(monkeypatch):
+    """After rotation the new value must validate in strict mode."""
+    monkeypatch.setenv("ENFORCE_SECRET_ENTROPY", "1")
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+
+    prod = PipelineSettings(
+        ENV="production",
+        DASHBOARD_PASSWORD=STRONG_PASSWORD,
+        DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+    )
+    assert prod.DASHBOARD_PASSWORD != "AdminPass12345!"
