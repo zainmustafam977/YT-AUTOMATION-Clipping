@@ -151,11 +151,14 @@ jobs:
           pytest -m "not network" --tb=short -q tests/ 2>&1 | tee pytest-output.txt
 
       - name: Publish test summary
-        # Runner logs are not retrievable through the API or `gh run view`
-        # from every caller, so the failure list is written to the job
-        # summary, which IS readable via the check-runs endpoint
-        # (output.summary). Without this, diagnosing a red Pytest job means
-        # opening the Actions UI by hand.
+        # Runner logs cannot be read from this environment: the logs
+        # endpoint returns 0 bytes with the available token and
+        # `gh run view --log-failed` is blocked at the network level. The
+        # failure list is therefore surfaced three ways:
+        #   * the job summary (visible on the run page, no log expansion)
+        #   * workflow-command annotations (readable through the
+        #     check-runs annotations endpoint)
+        #   * the console, as a fallback
         if: always()
         run: |
           {
@@ -164,11 +167,30 @@ jobs:
             echo '```'
             tail -n 60 pytest-output.txt
             echo '```'
-            echo
-            echo "### Failing tests"
-            echo
-            grep -E '^(FAILED|ERROR) ' pytest-output.txt || echo "(none)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
+
+          if [ -s failed-lines.txt ]; then
+            {
+              echo
+              echo "### Failing tests"
+              echo
+              cat failed-lines.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            # Emit one annotation per failure so they are queryable.
+            while IFS= read -r line; do
+              echo "::error title=Pytest failure::$line"
+            done < failed-lines.txt
+          else
+            echo "### Failing tests" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "(no FAILED/ERROR lines found - see the log tail above)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "--- failing tests ---"
+          cat failed-lines.txt
 
   # ----------------------------------------------------------------
   # Gate 4 — scale-1k
