@@ -68,7 +68,16 @@ jobs:
 
     steps:
       - name: Checkout Source Code
+        # fetch-depth: 0 - this job runs the whole suite, which includes
+        # tests/test_fresh_eyes.py::test_ledger_consistency. That test shells
+        # out to tools/check_agent_ledger.py, which validates every cited
+        # commit id with `git cat-file -t`. Under the default fetch-depth: 1
+        # (tip commit only) it exits 1 on "commit ... does not exist in this
+        # repository" - which reads as a fabricated commit id but is really
+        # just a truncated checkout.
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

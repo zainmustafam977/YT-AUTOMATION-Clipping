@@ -128,6 +128,13 @@ def test_production_requires_explicitly_provided_password(monkeypatch):
         PipelineSettings(
             ENV="production",
             DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+            # _env_file=None: a .env supplying DASHBOARD_PASSWORD is a
+            # legitimate explicit configuration and must not suppress this.
+            # setup_environment.py creates one, so without this the test only
+            # passes on checkouts that happen to have no .env (it failed in
+            # CI, which runs the bootstrap, and passed locally, which does
+            # not).
+            _env_file=None,
         )
 
 
@@ -153,6 +160,11 @@ def test_production_accepts_properly_configured_secret(monkeypatch):
         ENV="production",
         DASHBOARD_PASSWORD=STRONG_PASSWORD,
         DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+        # _env_file=None so the assertions hold whether or not a .env exists.
+        # .env.example carries placeholder values for other secrets, and
+        # setup_environment.py copies it to .env; loading it here made the
+        # test fail on an unrelated "default placeholder keys" error.
+        _env_file=None,
     )
     assert prod.DASHBOARD_PASSWORD == STRONG_PASSWORD
 
@@ -166,6 +178,11 @@ def test_rotated_password_is_not_treated_as_default(monkeypatch):
         ENV="production",
         DASHBOARD_PASSWORD=STRONG_PASSWORD,
         DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+        # _env_file=None so the assertions hold whether or not a .env exists.
+        # .env.example carries placeholder values for other secrets, and
+        # setup_environment.py copies it to .env; loading it here made the
+        # test fail on an unrelated "default placeholder keys" error.
+        _env_file=None,
     )
     assert prod.DASHBOARD_PASSWORD != "AdminPass12345!"
 
