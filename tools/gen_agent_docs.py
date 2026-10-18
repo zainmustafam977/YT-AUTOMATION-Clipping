@@ -264,7 +264,6 @@ def render_final_report(rows: List[Dict[str, Any]]) -> str:
         "## Anything NOT done",
         "",
         "Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 0 PARTIAL/BLOCKED/DEFERRED.",
-        "",
     ]
     return "\n".join(lines) + "\n"
 

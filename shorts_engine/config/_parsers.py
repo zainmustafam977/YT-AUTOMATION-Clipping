@@ -193,4 +193,3 @@ class TolerantEnvSource(_BASE_SOURCE):  # type: ignore[misc, valid-type]
         return "TolerantEnvSource(list_fields=%d, json_fields=%d)" % (
             len(self._list_fields), len(self._json_fields),
         )
-

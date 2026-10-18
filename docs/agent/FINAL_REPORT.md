@@ -103,4 +103,3 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 ## Anything NOT done
 
 Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 0 PARTIAL/BLOCKED/DEFERRED.
-
