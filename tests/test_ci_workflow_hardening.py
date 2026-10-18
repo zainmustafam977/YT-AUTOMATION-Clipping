@@ -73,30 +73,41 @@ def test_dependency_audit_runs_on_pull_requests():
     )
 
 
-def test_ledger_job_checks_out_full_history():
-    """The ledger gate needs git history to validate cited commit ids.
+def _checkout_depth(job: dict):
+    for step in job.get("steps", []) or []:
+        if str(step.get("uses", "")).startswith("actions/checkout"):
+            return step.get("with", {}).get("fetch-depth", 1)
+    return None
 
-    check_agent_ledger.py runs `git cat-file -t <oid>` on every commit a
-    ledger row cites. actions/checkout@v4 defaults to fetch-depth: 1, which
-    fetches only the tip commit, so every ancestor oid cited by a round4 row
-    reports as "does not exist in this repository (never invent commit ids)" -
-    a false failure that reads as a fabricated commit.
 
-    Observed on run 39169764361: Ledger Consistency failed with exactly that
-    while Dependency Audit, Ruff and mypy all passed.
+def test_jobs_running_the_ledger_checker_check_out_full_history():
+    """Any job that can run check_agent_ledger.py needs full git history.
+
+    That script validates every cited commit id with `git cat-file -t <oid>`.
+    actions/checkout@v4 defaults to fetch-depth: 1, which fetches only the tip
+    commit, so every ancestor oid cited by a round4 row reports as
+    "does not exist in this repository (never invent commit ids)" - a false
+    failure that reads like a fabricated commit id.
+
+    Two jobs reach the checker:
+      * `ledger` - runs it directly. Observed on run 39169764361: Ledger
+        Consistency failed with exactly that while Dependency Audit, Ruff and
+        mypy all passed.
+      * `pytest` - runs the whole suite, which includes
+        tests/test_fresh_eyes.py::test_ledger_consistency, which shells out
+        to the same script. Observed on run 39175287890: this was the single
+        failure in a run where every other gate passed.
     """
     data = yaml.safe_load(Path(".github/workflows/agent.yml").read_text(encoding="utf-8"))
     jobs = data.get("jobs", {})
-    assert "ledger" in jobs, "agent.yml has no `ledger` job"
 
-    checkouts = [
-        step for step in jobs["ledger"].get("steps", [])
-        if str(step.get("uses", "")).startswith("actions/checkout")
-    ]
-    assert checkouts, "the ledger job does not check out the repository"
-
-    depth = checkouts[0].get("with", {}).get("fetch-depth", 1)
-    assert depth == 0, (
-        f"ledger job checks out with fetch-depth: {depth}. It must be 0, so "
-        "cited commit ids resolve."
-    )
+    for name in ("ledger", "pytest"):
+        assert name in jobs, f"agent.yml has no `{name}` job"
+        depth = _checkout_depth(jobs[name])
+        assert depth is not None, f"the `{name}` job does not check out the repository"
+        assert depth == 0, (
+            f"`{name}` job checks out with fetch-depth: {depth}. It must be 0 "
+            "so that cited commit ids resolve - this job runs "
+            "tools/check_agent_ledger.py, either directly or via "
+            "tests/test_fresh_eyes.py."
+        )
