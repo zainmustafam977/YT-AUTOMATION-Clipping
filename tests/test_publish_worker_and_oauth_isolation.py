@@ -33,6 +33,8 @@ from shorts_engine.db.models import (
     PipelineJobStatus,
     PublishJob,
     PublishLog,
+    PublishSlot,
+    PublishSlotStatus,
 )
 from shorts_engine.db.security import encrypt_secret
 from shorts_engine.services.publishing.worker import (
@@ -126,6 +128,27 @@ def _create_test_clip(db, channel_yt_id="UC_test_chan_123", clip_id="clip_abc_12
     return chan, cred, clip, tmp
 
 
+def _bind_publish_slot(db, channel, clip):
+    """Allocate the PublishSlot that mandatory slot binding (I2) requires.
+
+    execute_publish_intent() refuses to publish unless the payload carries a
+    slot_id bound to the clip's channel. These tests predate that invariant
+    and passed an empty payload, so they now allocate a slot explicitly
+    rather than the product relaxing the check.
+    """
+    slot = PublishSlot(
+        id=f"slot_{clip.id}",
+        channel_id=channel.id,
+        clip_id=clip.id,
+        slot_start=datetime.now(timezone.utc),
+        platform="youtube",
+        status=PublishSlotStatus.RESERVED.value,
+    )
+    db.add(slot)
+    db.commit()
+    return slot
+
+
 # ==============================================================================
 # Acceptance Test 1: Code Isolation & AST/Grep Verification
 # ==============================================================================
@@ -186,6 +209,7 @@ def test_simulated_403_quota_exceeded_defers_past_pacific_midnight(db_session):
     Never retries immediately. Emits an alert event.
     """
     chan, cred, clip, tmp = _create_test_clip(db_session)
+    slot = _bind_publish_slot(db_session, chan, clip)
 
     job = PipelineJob(
         id="job_quota_403",
@@ -213,7 +237,7 @@ def test_simulated_403_quota_exceeded_defers_past_pacific_midnight(db_session):
     mock_client.playlistItems.return_value.list.return_value.execute.return_value = {"items": []}
 
     with patch("shorts_engine.services.publishing.worker.build_youtube_client", return_value=mock_client):
-        res = worker.execute_publish_intent(clip_id=clip.id, payload={}, db=db_session, job_entity=job)
+        res = worker.execute_publish_intent(clip_id=clip.id, payload={"slot_id": slot.id}, db=db_session, job_entity=job)
 
     assert res["success"] is False
     assert res["status"] == "DEFERRED"
@@ -245,6 +269,7 @@ def test_simulated_invalid_grant_parks_channel(db_session):
     surfaces it in the dashboard, and NEVER auto-retries that channel.
     """
     chan, cred, clip, tmp = _create_test_clip(db_session)
+    slot = _bind_publish_slot(db_session, chan, clip)
 
     job = PipelineJob(
         id="job_invalid_grant",
@@ -271,7 +296,7 @@ def test_simulated_invalid_grant_parks_channel(db_session):
     mock_client.playlistItems.return_value.list.return_value.execute.return_value = {"items": []}
 
     with patch("shorts_engine.services.publishing.worker.build_youtube_client", return_value=mock_client):
-        res = worker.execute_publish_intent(clip_id=clip.id, payload={}, db=db_session, job_entity=job)
+        res = worker.execute_publish_intent(clip_id=clip.id, payload={"slot_id": slot.id}, db=db_session, job_entity=job)
 
     assert res["success"] is False
     assert res["status"] == "QUARANTINED"
@@ -288,7 +313,7 @@ def test_simulated_invalid_grant_parks_channel(db_session):
     assert "re-authentication" in job.error_message
 
     # Re-running worker on parked channel halts immediately without touching YouTube
-    res2 = worker.execute_publish_intent(clip_id=clip.id, payload={}, db=db_session, job_entity=job)
+    res2 = worker.execute_publish_intent(clip_id=clip.id, payload={"slot_id": slot.id}, db=db_session, job_entity=job)
     assert res2["status"] == "QUARANTINED"
 
 
@@ -302,6 +327,7 @@ def test_simulated_ambiguous_failure_triggers_tag_verification(db_session):
     triggers the tag-verification path ([c:<clip_id>]), not a duplicate upload.
     """
     chan, cred, clip, tmp = _create_test_clip(db_session, clip_id="clip_ambig_999")
+    slot = _bind_publish_slot(db_session, chan, clip)
 
     worker = YouTubePublishWorker(dry_run=False)
     tag = format_idempotency_tag(clip.id)  # e.g. [c:clip_ambig_999]
@@ -344,7 +370,7 @@ def test_simulated_ambiguous_failure_triggers_tag_verification(db_session):
             # 1st call before upload = None, 2nd call in ambiguous failure = yt_recovered_ambig_id
             mock_check.side_effect = [None, "yt_recovered_ambig_id"]
 
-            res = worker.execute_publish_intent(clip_id=clip.id, payload={}, db=db_session)
+            res = worker.execute_publish_intent(clip_id=clip.id, payload={"slot_id": slot.id}, db=db_session)
 
     assert res["success"] is True
     assert res["youtube_video_id"] == "yt_recovered_ambig_id"
@@ -369,6 +395,7 @@ def test_dry_run_path_bypasses_api_and_consumes_zero_quota(db_session):
     and consumes zero quota.
     """
     chan, cred, clip, tmp = _create_test_clip(db_session, clip_id="clip_dryrun_555")
+    slot = _bind_publish_slot(db_session, chan, clip)
 
     tracker = QuotaTracker()
     initial_quota = tracker.get_used_units()
@@ -379,6 +406,7 @@ def test_dry_run_path_bypasses_api_and_consumes_zero_quota(db_session):
         res = worker.execute_publish_intent(
             clip_id=clip.id,
             payload={
+                "slot_id": slot.id,
                 "title": "Dry Run Short Title",
                 "privacy_status": "unlisted",
                 "made_for_kids": False,
@@ -397,9 +425,12 @@ def test_dry_run_path_bypasses_api_and_consumes_zero_quota(db_session):
     # Zero quota was deducted
     assert tracker.get_used_units() == initial_quota
 
-    # Clip is marked PUBLISHED and PublishLog created with DRY_RUN status
+    # Preview mode is explicitly non-mutating: worker.py documents that a dry
+    # run must NEVER mark the clip PUBLISHED and never change slot status.
+    # Asserting PUBLISHED here would contradict that safety contract, so we
+    # assert the clip is left untouched instead.
     db_session.refresh(clip)
-    assert clip.status == ClipStatus.PUBLISHED
+    assert clip.status == ClipStatus.APPROVED
 
     p_log = db_session.query(PublishLog).filter_by(clip_id=clip.id).first()
     assert p_log is not None
@@ -419,6 +450,7 @@ def test_self_declared_made_for_kids_and_scopes_explicitly_configured(db_session
     assert "https://www.googleapis.com/auth/yt-analytics.readonly" in DEFAULT_SCOPES
 
     chan, cred, clip, tmp = _create_test_clip(db_session, clip_id="clip_kids_check")
+    slot = _bind_publish_slot(db_session, chan, clip)
 
     worker = YouTubePublishWorker(dry_run=False)
     mock_client = MagicMock()
@@ -430,7 +462,7 @@ def test_self_declared_made_for_kids_and_scopes_explicitly_configured(db_session
     with patch("shorts_engine.services.publishing.worker.build_youtube_client", return_value=mock_client):
         res = worker.execute_publish_intent(
             clip_id=clip.id,
-            payload={"made_for_kids": True},
+            payload={"slot_id": slot.id, "made_for_kids": True},
             db=db_session,
         )
 

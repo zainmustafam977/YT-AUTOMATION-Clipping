@@ -19,7 +19,6 @@ import uvicorn
 
 # Test environment configuration
 os.environ.setdefault("TESTING", "1")
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.config.settings import settings
@@ -41,9 +40,21 @@ from shorts_engine.db.models import (
 )
 from shorts_engine.config.dynamic_store import DynamicConfigStore
 from shorts_engine.services.publishing.metadata import (
+
     extract_clip_id_from_description,
     check_duplicate_upload,
 )
+
+@pytest.fixture(autouse=True)
+def _in_memory_db(request):
+    """Scope this module to a private in-memory DB.
+
+    Previously the URL was set in os.environ at import time, which leaked an
+    empty in-memory engine into every other test module (tests/e2e is
+    collected first). See `in_memory_sqlite` in tests/conftest.py.
+    """
+    return request.getfixturevalue("in_memory_sqlite")
+
 
 
 def get_free_port() -> int:
@@ -422,6 +433,7 @@ def test_edge_case_rapid_button_spamming_idempotency(realtime_platform):
         responses.append(r.status_code)
 
     # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request
-    assert responses[0] in (200, 303), f"Initial click failed: {responses[0]}"
+    # 202 is the enqueue-only approval response (W3-2).
+    assert responses[0] in (200, 202, 303), f"Initial click failed: {responses[0]}"
     for status_code in responses[1:]:
         assert status_code in (200, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"
