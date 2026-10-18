@@ -782,12 +782,24 @@ class YouTubePublishWorker:
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
             allow_preview_flag = os.environ.get("ALLOW_IN_PROCESS_PREVIEW", "").lower() in ("1", "true", "yes")
-            bind_url = str(db.get_bind().url).lower()
+            bind = db.get_bind()
+            bind_url = str(bind.url).lower()
+            # str(URL) percent-encodes the database name, so an in-memory
+            # SQLite URL renders as "sqlite:///%3Amemory%3A" and a plain
+            # substring check for ":memory:" never matches. Compare against
+            # URL.database, which is the unquoted name.
+            # getattr: some tests inject a lightweight URL double that does not
+            # expose `.database`; fall back to the rendered form in that case.
+            bind_db = (getattr(bind.url, "database", None) or "").lower()
             is_non_prod_db = (
                 ":memory:" in bind_url
+                or ":memory:" in bind_db
                 or "tmp" in bind_url
+                or "tmp" in bind_db
                 or "test" in bind_url
+                or "test" in bind_db
                 or "pytest" in bind_url
+                or "pytest" in bind_db
             )
             if not (allow_preview_flag and is_non_prod_db):
                 raise PermanentError(

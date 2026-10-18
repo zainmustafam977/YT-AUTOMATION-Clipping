@@ -50,6 +50,11 @@ opencv-python-headless>=4.9.0.80
 pillow>=10.2.0
 scikit-learn>=1.4.0
 scipy>=1.11.0
+# Used by ass_generator.get_font_supported_codepoints() to read the bundled
+# caption font cmap. It was imported but never declared, so on a clean install
+# the ImportError was swallowed and every non-ASCII caption glyph silently
+# degraded to "?" instead of being checked against the font.
+fonttools>=4.47.0
 
 # --- CLI & Terminal UX ---
 typer>=0.9.0,<1.0.0

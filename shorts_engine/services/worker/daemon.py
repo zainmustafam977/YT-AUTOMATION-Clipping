@@ -397,6 +397,12 @@ class WorkerDaemon:
             self._on_job_completed(job_db, result, session, stage_name=stage_str)
 
             clear_cuda_cache()
+
+            # Success path. This method is annotated `-> bool` and callers gate
+            # fan-out on its result; previously it fell off the end here and
+            # returned None, so a job that completed correctly was reported to
+            # the caller as a failure.
+            return True
         except JobCancelledError:
             logger.info("Worker %s: job %s was cancelled during execution; preserving CANCELLED state.", self.worker_id, job.id)
             clear_cuda_cache()
