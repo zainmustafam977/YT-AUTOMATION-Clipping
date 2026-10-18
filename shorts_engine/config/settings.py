@@ -6,9 +6,9 @@ Implements unified single source of truth for all pipeline constants.
 import os
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Any, Annotated, Optional, List, Dict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Shipped default operator password (SEV-2 - see docs/audit/VERIFICATION_REPORT.md
 # and docs/audit/findings.yaml). It is a real credential-shaped value that was
@@ -19,6 +19,43 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LEGACY_DEFAULT_DASHBOARD_PASSWORD = "AdminPass12345!"
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_key_pool(value: Any) -> List[str]:
+    """Parse an API-key pool value, tolerating the blank shipped template.
+
+    .env.example ships the pool entries empty (GEMINI_API_KEYS=,
+    GROQ_API_KEYS=, ...) and setup_environment.py copies that template
+    verbatim to .env. Recent pydantic-settings JSON-decodes complex fields
+    at the source and raises
+      SettingsError: error parsing value for field ... from source
+      "DotEnvSettingsSource"
+    on an empty string, so the application cannot even be imported after a
+    bootstrap - every test touching settings then dies during collection.
+
+    The fields are annotated NoDecode so the raw string reaches this
+    validator instead of being rejected upstream. Blank means "no keys",
+    which is the field default. JSON arrays and comma-separated values are
+    both accepted for real key lists.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        try:
+            import json
+
+            parsed = json.loads(text)
+        except ValueError as exc:
+            raise ValueError(f"not a valid JSON list: {text!r}") from exc
+        if not isinstance(parsed, list):
+            raise ValueError(f"expected a JSON list, got {type(parsed).__name__}")
+        return [str(v).strip() for v in parsed if str(v).strip()]
+    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 class PipelineSettings(BaseSettings):
@@ -92,21 +129,41 @@ class PipelineSettings(BaseSettings):
         description="Enable high-speed cloud Whisper transcription via Groq (whisper-large-v3-turbo, 28.8k ASD free)",
     )
     GEMINI_API_KEY: Optional[str] = Field(default=None, description="Google Gemini API Key")
-    GEMINI_API_KEYS: List[str] = Field(default_factory=list, description="Pool of Gemini API keys for load balancing & 429 failover")
+    @field_validator("GEMINI_API_KEYS", mode="before")
+    @classmethod
+    def _validate_gemini_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    GEMINI_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of Gemini API keys for load balancing & 429 failover")
     GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API Key (high-speed LPU inference)")
-    GROQ_API_KEYS: List[str] = Field(default_factory=list, description="Pool of Groq API keys for load balancing & 429 failover")
+    @field_validator("GROQ_API_KEYS", mode="before")
+    @classmethod
+    def _validate_groq_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    GROQ_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of Groq API keys for load balancing & 429 failover")
     GROQ_MODEL_NAME: str = Field(
         default="openai/gpt-oss-120b",
         description="Groq model identifier (e.g. openai/gpt-oss-120b, qwen/qwen3.8-27b)",
     )
     OPENROUTER_API_KEY: Optional[str] = Field(default=None, description="OpenRouter API Key for multi-model fallback")
-    OPENROUTER_API_KEYS: List[str] = Field(default_factory=list, description="Pool of OpenRouter API keys for load balancing & 429 failover")
+    @field_validator("OPENROUTER_API_KEYS", mode="before")
+    @classmethod
+    def _validate_openrouter_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    OPENROUTER_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of OpenRouter API keys for load balancing & 429 failover")
     OPENROUTER_MODEL_NAME: str = Field(
         default="meta-llama/llama-3.3-70b-instruct:free",
         description="OpenRouter model identifier (e.g. meta-llama/llama-3.3-70b-instruct:free, google/gemini-2.0-flash-exp:free)",
     )
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key for backup / failover")
-    OPENAI_API_KEYS: List[str] = Field(default_factory=list, description="Pool of OpenAI API keys for load balancing & 429 failover")
+    @field_validator("OPENAI_API_KEYS", mode="before")
+    @classmethod
+    def _validate_openai_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    OPENAI_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of OpenAI API keys for load balancing & 429 failover")
     OPENAI_MODEL_NAME: str = Field(
         default="gpt-4o-mini",
         description="OpenAI model identifier (e.g. gpt-4o-mini, gpt-4o)",

@@ -168,3 +168,49 @@ def test_rotated_password_is_not_treated_as_default(monkeypatch):
         DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
     )
     assert prod.DASHBOARD_PASSWORD != "AdminPass12345!"
+
+
+@pytest.mark.parametrize("field", ["GEMINI_API_KEYS", "GROQ_API_KEYS", "OPENAI_API_KEYS", "OPENROUTER_API_KEYS"])
+def test_blank_api_key_pool_parses_as_empty_list(field):
+    """A blank pool entry must mean "no keys", not a hard import failure.
+
+    .env.example ships these entries empty, and setup_environment.py copies
+    that template verbatim to .env. Recent pydantic-settings JSON-decodes
+    complex fields at the dotenv source and raises
+      SettingsError: error parsing value for field "GEMINI_API_KEYS" from
+      source "DotEnvSettingsSource"
+    before any validator runs - so a bootstrapped install could not import
+    settings at all, and every test touching config died at collection.
+    This is what made the CI Test Suite Matrix legs fail on all four OS /
+    Python combinations.
+
+    The fields are annotated NoDecode so the raw string reaches the
+    validator instead of being rejected upstream.
+    """
+    for blank in ("", "   "):
+        settings = PipelineSettings(**{field: blank})
+        assert getattr(settings, field) == []
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ('["key-a", "key-b"]', ["key-a", "key-b"]),
+        ("key-a, key-b", ["key-a", "key-b"]),
+        ("solo-key", ["solo-key"]),
+    ],
+)
+def test_api_key_pool_accepts_json_and_comma_separated(value, expected):
+    """Real key lists must still parse - the blank handling must not be a
+    blanket "always empty".
+    """
+    settings = PipelineSettings(GEMINI_API_KEYS=value)
+    assert settings.GEMINI_API_KEYS == expected
+
+
+def test_malformed_api_key_pool_raises_clearly():
+    """A genuinely malformed value should fail with a readable message."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="not a valid JSON list"):
+        PipelineSettings(GEMINI_API_KEYS="[not-json")
