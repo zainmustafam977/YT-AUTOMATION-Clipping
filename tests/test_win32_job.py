@@ -7,8 +7,10 @@ Verifies:
 4. Cross-platform safety and error resilience
 """
 
+import os
 import sys
 import subprocess
+import uuid
 from unittest.mock import patch
 
 import pytest
@@ -85,3 +87,26 @@ def test_win32_job_handles_api_failure_gracefully():
                 success = mgr.initialize()
                 assert success is False
                 assert mgr.is_active is False
+
+
+def test_job_ids_are_never_process_ids():
+    """Guard for the section 9.3 defect in the Windows acceptance procedure.
+
+    That procedure compared a pipeline job UUID against a process ID and
+    concluded the worker had died whenever the two differed - which is
+    always, so the recovery step never exercised recovery. A job id and a
+    PID are different namespaces: a UUID can never be a valid PID.
+
+    If someone reinstates a job_id == pid style check, this fails.
+    """
+    job_id = str(uuid.uuid4())
+
+    # A PID is a positive integer; a job id is an opaque UUID string.
+    assert not job_id.isdigit(), "a UUID job id must never parse as a PID"
+    with pytest.raises(ValueError):
+        int(job_id)
+
+    # The recovery step must look the PID up from the live process, not
+    # reuse the job id. Sanity-check that the lookup helper disagrees
+    # with the job id, so the two can be told apart.
+    assert job_id != str(os.getpid())

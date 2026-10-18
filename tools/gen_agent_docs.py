@@ -169,6 +169,24 @@ def render_state(rows: List[Dict[str, Any]]) -> str:
     ]
     for k in sorted(counts):
         lines.append(f"| {k} | {counts[k]} |")
+
+    r4 = [r for r in rows if r.get("type") == "round4"]
+    if r4:
+        r4.sort(key=lambda r: str(r.get("id", "")))
+        lines.extend(["", "## Round 4", ""])
+        for r in r4:
+            lines.append(f"### {r.get('id')} — {r.get('title')} `[{r.get('status')}]`")
+            lines.append("")
+            ev = " ".join(str(r.get("evidence", "")).split())
+            if ev:
+                lines.append(f"* Evidence: {ev}")
+            for label, key in (("Tests", "tests"), ("Files", "files"), ("Commits", "commits")):
+                vals = r.get(key) or []
+                if vals:
+                    lines.append(f"* {label}: " + ", ".join(f"`{v}`" for v in vals))
+                else:
+                    lines.append(f"* {label}: none")
+            lines.append("")
     return "\n".join(lines) + "\n"
 
 

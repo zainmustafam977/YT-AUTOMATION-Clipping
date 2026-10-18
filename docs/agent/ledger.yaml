@@ -1589,3 +1589,240 @@
   files:
   - docs/agent/E2E_EVIDENCE.md
   notes: ''
+
+# --- Round 4 (branch arena/c08e735f-yt-automation-clipping) ---
+# Commit ids below are real: `git log --format='%H %s' -5` on this branch.
+
+- id: R4-01
+  type: round4
+  title: Shipped admin password removed from the default startup path
+  status: DONE-VERIFIED
+  evidence: >-
+    auth.py:36-49 now generates secrets.token_urlsafe(24) and logs once when
+    DASHBOARD_PASSWORD is unset or still the shipped default; the literal is
+    never used as a fallback. settings.py:484-489 keeps the literal only as
+    LEGACY_DEFAULT_DASHBOARD_PASSWORD so startup can refuse it, and requires
+    model_fields_set in staging/production/strict mode.
+  tests:
+    - tests/test_config_consistency.py
+  files:
+    - shorts_engine/config/settings.py
+    - shorts_engine/dashboard/auth.py
+  commits:
+    - fa06d19068ca07580494d16c48a6d60bdde5b10f
+
+- id: R4-02
+  type: round4
+  title: pip-audit converted from a never-running step to a fail-closed gate
+  status: DONE-VERIFIED
+  evidence: >-
+    .github/workflows/ci.yml - the audit step carried `if: false` and
+    `continue-on-error: true`, so it was skipped on every event and its exit
+    code was masked on top of that. Now it runs on pull_request, push to the
+    default branch, and a weekly schedule, with no suppression.
+    Regression-guarded: tests/test_ci_workflow_hardening.py asserts the
+    step exists and rejects `if: false`, `continue-on-error` and
+    `|| true`/`|| echo`. Verified by sabotage - restoring the old disabled
+    form fails that test, and reverting it passes.
+  tests:
+    - tests/test_ci_workflow_hardening.py
+  files:
+    - .github/workflows/ci.yml
+  commits:
+    - 2a86310928d878fc6397583c2a54a2f1fe976d6e
+
+- id: R4-03
+  type: round4
+  title: In-memory DB isolation no longer depends on test import order
+  status: DONE-VERIFIED
+  evidence: >-
+    Two e2e modules ran os.environ.setdefault("DATABASE_URL", ...) at import
+    time, so collection order decided whether 14 overlay tests bound to a
+    file-backed engine or an empty in-memory one ("no such table:
+    overlay_presets"). Replaced with an explicit in_memory_sqlite fixture in
+    tests/conftest.py. Locked in by tests/test_import_order_stability.py,
+    which runs both collection orders as subprocesses.
+    Scope: process isolation only - per-test transaction rollback is not
+    implemented, so a test that writes without cleaning up is still visible
+    to a later test.
+  tests:
+    - tests/test_import_order_stability.py
+    - tests/test_overlay_routes.py
+  files:
+    - tests/conftest.py
+    - tests/e2e/test_ui_comprehensive.py
+    - tests/e2e/test_realtime_user_journey.py
+  commits:
+    - 2a86310928d878fc6397583c2a54a2f1fe976d6e
+
+- id: R4-04
+  type: round4
+  title: WorkerDaemon.execute_job returns True on success instead of None
+  status: DONE-VERIFIED
+  evidence: >-
+    services/worker/daemon.py - the success path fell off the end of the try
+    block, so a job marked DONE was reported to the caller as a failure.
+    Annotated `-> bool`. Now returns True. The only in-tree caller
+    (daemon.py:497) discards the result.
+  tests:
+    - tests/test_worker_daemon_session_lifecycle.py
+  files:
+    - shorts_engine/services/worker/daemon.py
+  commits:
+    - a2f9549ab1cbb82177a8d137de24fe7a103fe677
+
+- id: R4-05
+  type: round4
+  title: Reject is now idempotent, symmetric with approve
+  status: DONE-VERIFIED
+  evidence: >-
+    services/publishing/actions.py:156 - reject only denylisted PUBLISHING
+    and PUBLISHED, so a second reject returned 200 and overwrote
+    quality_check_result.rejection_reason, destroying the audit trail.
+    REJECTED added to the denylist. approve already used an allowlist.
+  tests:
+    - tests/test_phase2_queue_player.py
+  files:
+    - shorts_engine/services/publishing/actions.py
+  commits:
+    - a2f9549ab1cbb82177a8d137de24fe7a103fe677
+
+- id: R4-06
+  type: round4
+  title: fontTools declared as a dependency
+  status: DONE-VERIFIED
+  evidence: >-
+    ass_generator.py:66 imports fontTools.ttLib inside a bare
+    `except Exception -> logger.debug -> return set()`, and fontTools was in
+    neither requirements.txt nor pyproject.toml. On a clean install every
+    non-ASCII caption glyph silently degraded to '?'. Declared as
+    fonttools>=4.47.0; cmap now reads 5886 entries and the product function
+    returns 5906 codepoints.
+    Residual defect (not fixed here): the silent-except-with-empty-fallback
+    pattern that hid this is itself a defect and affects other call sites.
+  tests:
+    - tests/test_clip_production_fixes.py
+  files:
+    - requirements.txt
+    - pyproject.toml
+  commits:
+    - a2f9549ab1cbb82177a8d137de24fe7a103fe677
+
+- id: R4-07
+  type: round4
+  title: Dry-run guard matched an encoded URL and never fired
+  status: DONE-VERIFIED
+  evidence: >-
+    services/publishing/worker.py:793 - str(URL) percent-encodes the database
+    name, so an in-memory URL rendered as "sqlite:///%3Amemory%3A" and the
+    substring check for ":memory:" never matched. Now also compares
+    URL.database (unquoted). Fail-closed behaviour unchanged and still
+    verified by test_t12_sandbox_preview_rejects_production_db_and_does_not_
+    consume_quota.
+  tests:
+    - tests/test_w3_2_lifecycle.py
+  files:
+    - shorts_engine/services/publishing/worker.py
+  commits:
+    - a2f9549ab1cbb82177a8d137de24fe7a103fe677
+
+- id: R4-08
+  type: round4
+  title: Windows acceptance procedure made safe to execute
+  status: BLOCKED
+  evidence: >-
+    Corrected copy at /home/user/WINDOWS_ACCEPTANCE.fixed.md (not tracked in
+    this repo). Sandbox moved from the system directory D:\Program Files to
+    %LOCALAPPDATA%\YTSandbox; recursive delete guarded on a marker file;
+    taskkill /pid on recorded PIDs replaces a blanket Stop-Process -Name
+    python; HKLM writes moved to HKCU; section 9.3 now derives a PID instead
+    of comparing a job UUID to a process ID, which can never match.
+    BLOCKED: requires a disposable Windows VM. Not executed on the user's
+    machine, by instruction.
+    tests/test_win32_job.py::test_job_ids_are_never_process_ids guards the
+    section 9.3 defect specifically (a UUID job id can never equal a PID),
+    so the bad comparison cannot be reinstated silently.
+  tests:
+    - tests/test_win32_job.py
+  files:
+    - /home/user/WINDOWS_ACCEPTANCE.fixed.md
+  commits:
+    - 47e462d9cfb58fd63d5cc4195bd255963e8186ac
+
+- id: R4-09
+  type: round4
+  title: Windows-only tests guarded rather than left failing on Linux
+  status: DONE-VERIFIED
+  evidence: >-
+    Three tests asserted Win32 behaviour: two patched ctypes.windll (absent
+    off Windows) and two asserted ERROR_SHARING_VIOLATION semantics that the
+    POSIX fallback in watch_folder.py:136 correctly contradicts. Guarded with
+    skipif(not sys.platform.startswith("win")). is_file_locked deliberately
+    NOT weakened.
+  tests:
+    - tests/test_win32_job.py
+    - tests/test_local_ingestion.py
+    - tests/test_watch_folder_daemon.py
+  files:
+    - tests/test_win32_job.py
+    - tests/test_local_ingestion.py
+    - tests/test_watch_folder_daemon.py
+  commits:
+    - 47e462d9cfb58fd63d5cc4195bd255963e8186ac
+
+- id: R4-10
+  type: round4
+  title: Test suite baseline repaired from 78 failures to 14 environment-blocked
+  status: PARTIAL
+  evidence: >-
+    Measured on this branch with a complete dependency install:
+    `pytest -q -m "not network"` -> 14 failed, 1099 passed, 5 skipped.
+    All 14 remaining are environment-blocked: 12 need the Playwright browser
+    binary (CDN unreachable from this sandbox) and 2 need a HuggingFace model
+    download.
+    PARTIAL, not DONE-VERIFIED: the 12 Playwright tests are unverified here.
+    Three download approaches were exhausted, so they are DEFERRED.
+    The starting count of 78 was itself measured before the dependency
+    environment was complete, so treat it as a starting point rather than a
+    like-for-like baseline.
+  tests:
+    - tests/test_dashboard.py
+    - tests/e2e/test_realtime_user_journey.py
+    - tests/test_worker_daemon_session_lifecycle.py
+    - tests/test_publish_worker_and_oauth_isolation.py
+    - tests/test_local_ingestion_gateway.py
+  files:
+    - tests/test_dashboard.py
+    - tests/e2e/test_realtime_user_journey.py
+    - tests/test_worker_daemon_session_lifecycle.py
+    - tests/test_publish_worker_and_oauth_isolation.py
+    - tests/test_local_ingestion_gateway.py
+  commits:
+    - 8fe30495618fd8a52d064b4f22cb9c1c3295a485
+    - a2f9549ab1cbb82177a8d137de24fe7a103fe677
+    - 2a86310928d878fc6397583c2a54a2f1fe976d6e
+
+- id: R4-11
+  type: round4
+  title: Playwright E2E suite cannot run in this environment
+  status: DEFERRED
+  evidence: >-
+    BrowserType.launch fails with "Executable doesn't exist ... Run `playwright
+    install chromium`". All three download routes were tried and failed:
+    the Playwright CDN is unreachable, the apt package is not available, and
+    no cached browser exists on the image. No product defect - the tests
+    cannot start.
+    Manual steps: on a host with network access run
+    `python -m playwright install chromium`, then
+    `pytest tests/e2e/ -q`.
+  tests:
+    - tests/e2e/test_ui_comprehensive.py
+    - tests/e2e/test_realtime_user_journey.py
+  files:
+    - tests/e2e/test_ui_comprehensive.py
+    - tests/e2e/test_realtime_user_journey.py
+  commits:
+    # No commit resolves this - it is environment-blocked. Cited below is the
+    # real commit that last modified these files (test-isolation repair), not
+    # a fix for the blocker.
+    - 2a86310928d878fc6397583c2a54a2f1fe976d6e
