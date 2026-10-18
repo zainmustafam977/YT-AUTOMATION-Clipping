@@ -47,6 +47,13 @@ pyvenv.cfg
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Frontend dependencies (install with npm ci; do not commit node_modules)
+/frontend/node_modules/
+
+# The app uses the system font (Segoe UI Emoji on Windows, Noto Color Emoji
+# elsewhere) by name, not by loading the file from the repo.
+/assets/fonts/seguiemj.ttf
 *.so
 .Python
 
