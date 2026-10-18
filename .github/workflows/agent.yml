@@ -147,7 +147,28 @@ jobs:
         run: |
           # Exclude pre-existing e2e tests that need Playwright
           # (those run in a separate workflow).
-          pytest -m "not network" --tb=short -q tests/
+          set -o pipefail
+          pytest -m "not network" --tb=short -q tests/ 2>&1 | tee pytest-output.txt
+
+      - name: Publish test summary
+        # Runner logs are not retrievable through the API or `gh run view`
+        # from every caller, so the failure list is written to the job
+        # summary, which IS readable via the check-runs endpoint
+        # (output.summary). Without this, diagnosing a red Pytest job means
+        # opening the Actions UI by hand.
+        if: always()
+        run: |
+          {
+            echo "### Pytest result"
+            echo
+            echo '```'
+            tail -n 60 pytest-output.txt
+            echo '```'
+            echo
+            echo "### Failing tests"
+            echo
+            grep -E '^(FAILED|ERROR) ' pytest-output.txt || echo "(none)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ----------------------------------------------------------------
   # Gate 4 — scale-1k
