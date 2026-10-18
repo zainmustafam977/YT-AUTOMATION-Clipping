@@ -7,7 +7,10 @@
 # --- Web Framework & API Server ---
 fastapi>=0.110.0,<1.0.0
 uvicorn[standard]>=0.28.0,<1.0.0
-starlette>=0.36.0,<1.0.0
+# Bumped from >=0.36.0,<1.0.0: pip-audit reports 10 advisories (PYSEC-2026-161,
+# -2280, -2281, -248, -249) against every release below 1.3.1. Verified against
+# fastapi>=0.110 (which requires starlette>=0.46.0 and sets no upper bound).
+starlette>=1.3.1,<2.0.0
 jinja2>=3.1.2,<4.0.0
 python-multipart>=0.0.9
 httpx>=0.27.0,<1.0.0

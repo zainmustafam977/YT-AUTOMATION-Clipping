@@ -616,12 +616,16 @@ class PipelineSettings(BaseSettings):
             "change-me-in-prod",
             "change-me",
             "ytpassword_secret_change_me",
+            # Shipped default operator password. It is a real credential-shaped
+            # default in source, so it must be covered by this guard.
+            "AdminPass12345!",
         }
         has_placeholders = (
             (self.MASTER_ENCRYPTION_KEY is not None and self.MASTER_ENCRYPTION_KEY in placeholder_keys)
             or (self.SECRETS_MASTER_KEY is not None and self.SECRETS_MASTER_KEY in placeholder_keys)
             or (self.ENCRYPTION_SALT is not None and self.ENCRYPTION_SALT in placeholder_keys)
             or self.DASHBOARD_SECRET_KEY in placeholder_keys
+            or self.DASHBOARD_PASSWORD in placeholder_keys
             or (self.MASTER_ENCRYPTION_KEY is not None and len(self.MASTER_ENCRYPTION_KEY) < 32)
             or (self.SECRETS_MASTER_KEY is not None and len(self.SECRETS_MASTER_KEY) < 32)
             or len(self.DASHBOARD_SECRET_KEY) < 32
