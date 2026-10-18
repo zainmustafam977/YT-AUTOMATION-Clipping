@@ -8,7 +8,6 @@ Verifies all 5 Acceptance Criteria:
 5. dry_run path logs payload, skips API calls, and consumes zero quota.
 """
 
-import os
 import ast
 import json
 import random
@@ -389,11 +388,18 @@ def test_simulated_ambiguous_failure_triggers_tag_verification(db_session):
 # Acceptance Test 5: Dry-Run Mode Covered By Tests (Zero Quota Consumption)
 # ==============================================================================
 
-def test_dry_run_path_bypasses_api_and_consumes_zero_quota(db_session):
+def test_dry_run_path_bypasses_api_and_consumes_zero_quota(db_session, monkeypatch):
     """
     CRITERION 5: dry_run flag logs full payload, skips Google API call,
     and consumes zero quota.
     """
+    # worker.py refuses an in-process dry run unless this is set, so a
+    # preview cannot be pointed at a production database by accident. The
+    # test binds an in-memory database, so it opts in explicitly rather
+    # than depending on the ambient environment - without this the test
+    # only passes on a developer machine that happens to export the var,
+    # and fails in CI.
+    monkeypatch.setenv("ALLOW_IN_PROCESS_PREVIEW", "1")
     chan, cred, clip, tmp = _create_test_clip(db_session, clip_id="clip_dryrun_555")
     slot = _bind_publish_slot(db_session, chan, clip)
 
