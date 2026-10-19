@@ -230,6 +230,28 @@ altered to accommodate them.
 Full clean runs on `c714e8e` (CI-14), `68a23ca` (DOC-6) and `204ced5`
 (DOC-8), including all four matrix legs.
 
+### A second red run, and why it is not a regression
+
+`cdd7632` (DOC-9, a markdown-only change to this report) produced three
+failing matrix legs plus one cancelled. Investigated rather than assumed:
+
+- **Ruled out — stale manifest.** `FILE_MANIFEST.md` lists files by name, not
+  by hash, so editing a doc does not invalidate it. Confirmed directly: the
+  ledger checker returns `OK` at `cdd7632`.
+- **Ruled out — job timeout.** The ubuntu legs failed after ~6-7 minutes,
+  well under the 15-minute limit. Only the cancelled windows Py3.10 leg ran
+  the full 15.
+- **Ruled out — the commit itself.** In the same run, `Agent Gates (R3)`
+  **passed** on that exact commit, running the same filtered suite on
+  ubuntu/Py3.11. `CI/CD Pipeline` also passed. Security, Code Quality, Docker
+  and the network job all passed. Only the four matrix legs in that one
+  workflow run failed.
+
+Three legs failing simultaneously across two operating systems and two Python
+versions, while an equivalent single-OS run of the same tests passes, is a
+transient runner-pool problem rather than a code defect. It is re-run to
+confirm rather than assumed resolved.
+
 **One transient red commit, recorded for honesty.** `df4c908` (DOC-7) failed
 CI. I added two new files under `docs/` without regenerating
 `docs/agent/FILE_MANIFEST.md`, which is a generated file. The ledger checker
