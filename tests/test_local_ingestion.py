@@ -7,6 +7,7 @@ Verifies:
 4. Preview proxy necessity detection for incompatible codecs (HEVC, ProRes, AV1, MKV).
 """
 
+import importlib
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -15,6 +16,19 @@ import pytest
 
 from shorts_engine.services.ingestion.watch_folder import is_file_locked
 from shorts_engine.services.ingestion.hotfolder_watcher import HotfolderWatcher
+
+# Import the module object explicitly. hotfolder_watcher.py defines a
+# module-level singleton also named `hotfolder_watcher`, and
+# services/ingestion/__init__.py re-exports it - so the attribute
+# `shorts_engine.services.ingestion.hotfolder_watcher` is that INSTANCE,
+# not the submodule. Patching the dotted string
+# "shorts_engine.services.ingestion.hotfolder_watcher.is_file_locked"
+# therefore resolves through the instance and raises AttributeError on
+# some interpreter/import-order combinations (observed on Python 3.10,
+# clean on 3.11). patch.object on the real module object is unambiguous.
+hotfolder_watcher_module = importlib.import_module(
+    "shorts_engine.services.ingestion.hotfolder_watcher"
+)
 from shorts_engine.services.ingestion.local_loader import (
     LocalVideoIngestionService,
     is_preview_proxy_needed,
@@ -115,7 +129,7 @@ def test_hotfolder_is_file_ready_locked_file(tmp_path):
     file.write_bytes(b"data")
 
     watcher = HotfolderWatcher(folder_path=tmp_path, stability_window_sec=0.01)
-    with patch("shorts_engine.services.ingestion.hotfolder_watcher.is_file_locked", return_value=True):
+    with patch.object(hotfolder_watcher_module, "is_file_locked",  return_value=True):
         assert watcher.is_file_ready(file) is False
 
 
@@ -131,7 +145,7 @@ def test_hotfolder_is_file_ready_unstable_size(tmp_path):
     mock_stat2 = MagicMock(st_size=250, st_mode=real_mode)
 
     with patch.object(Path, "stat", side_effect=[mock_stat1, mock_stat2]):
-        with patch("shorts_engine.services.ingestion.hotfolder_watcher.is_file_locked", return_value=False):
+        with patch.object(hotfolder_watcher_module, "is_file_locked",  return_value=False):
             with patch("time.sleep"):  # Avoid test delay
                 assert watcher.is_file_ready(file) is False
 
@@ -155,7 +169,7 @@ def test_hotfolder_is_file_ready_deleted_during_window(tmp_path):
 
     # First exists() call True, second False
     with patch.object(Path, "exists", side_effect=[True, False]):
-        with patch("shorts_engine.services.ingestion.hotfolder_watcher.is_file_locked", return_value=False):
+        with patch.object(hotfolder_watcher_module, "is_file_locked",  return_value=False):
             with patch("time.sleep"):
                 assert watcher.is_file_ready(file) is False
 
@@ -184,7 +198,7 @@ def test_hotfolder_scan_once_auto_ingest_and_move(tmp_path):
     mock_session_ctx.__enter__.return_value = mock_session
     mock_session_ctx.__exit__.return_value = None
 
-    with patch("shorts_engine.services.ingestion.hotfolder_watcher.SessionLocal", return_value=mock_session_ctx):
+    with patch.object(hotfolder_watcher_module, "SessionLocal",  return_value=mock_session_ctx):
         with patch.object(LocalVideoIngestionService, "ingest_local_path", return_value=mock_sv) as mock_ingest:
             with patch("time.sleep"):
                 ingested = watcher.scan_once()
@@ -236,7 +250,7 @@ def test_hotfolder_scan_once_collision_avoidance(tmp_path):
     mock_session_ctx.__enter__.return_value = MagicMock()
     mock_session_ctx.__exit__.return_value = None
 
-    with patch("shorts_engine.services.ingestion.hotfolder_watcher.SessionLocal", return_value=mock_session_ctx):
+    with patch.object(hotfolder_watcher_module, "SessionLocal",  return_value=mock_session_ctx):
         with patch.object(LocalVideoIngestionService, "ingest_local_path", return_value=mock_sv):
             with patch("time.sleep"):
                 with patch("time.time", return_value=1700000000):
