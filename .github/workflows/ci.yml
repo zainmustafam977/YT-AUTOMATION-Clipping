@@ -117,24 +117,18 @@ jobs:
         # bash on every OS: `set -o pipefail` and `tee` are not PowerShell,
         # and windows-latest defaults to PowerShell. Without this the step
         # fails instantly with exit code 1 and collects no results at all.
+        #
+        # The failure reporting lives in THIS step rather than a second one:
+        # a separate step means a second bash launch, and Git Bash on the
+        # Windows runners intermittently dies during startup with
+        # 0xC0000142 (STATUS_DLL_INIT_FAILED), which failed the job after
+        # the tests had already passed.
         shell: bash
         run: |
           set -o pipefail
           python -m pytest tests -q 2>&1 | tee pytest-output.txt
+          pytest_status=${PIPESTATUS[0]}
 
-      - name: Publish test summary
-        # bash, not the platform default: this step uses POSIX redirection
-        # and `while read`, and windows-latest defaults to PowerShell,
-        # where it fails with exit code 1 and reports nothing.
-        shell: bash
-        # Runner logs are not readable from every caller (the logs endpoint
-        # returns 0 bytes for some tokens and `gh run view --log-failed` is
-        # blocked on restricted networks), so failures are also emitted as
-        # annotations, which have a dedicated read endpoint. The `if: always()`
-        # keeps this reporting on failure, and `set -o pipefail` above stops
-        # the `tee` from swallowing pytest's exit code.
-        if: always()
-        run: |
           {
             echo "### Pytest result"
             echo
@@ -144,7 +138,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
-
           if [ -s failed-lines.txt ]; then
             {
               echo
@@ -159,6 +152,8 @@ jobs:
 
           echo "--- failing tests ---"
           cat failed-lines.txt
+          exit $pytest_status
+
 
   docker-build:
     name: Docker Container Build Verification
