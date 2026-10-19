@@ -12,8 +12,8 @@ Counts in this file are generated from the ledger.
 |--------|-------|
 | BLOCKED | 1 |
 | CONFIRMED | 2 |
-| DEFERRED | 2 |
-| DONE-VERIFIED | 151 |
+| DEFERRED | 1 |
+| DONE-VERIFIED | 160 |
 | UNKNOWN | 15 |
 
 ## Round 4
@@ -123,10 +123,66 @@ Counts in this file are generated from the ledger.
 * Files: `requirements.txt`, `pyproject.toml`
 * Commits: `08f0b98e8f8377f69b96b4fc5ad351cd209159f2`
 
-### R4-16 — CI Pytest jobs still fail - root cause not identified `[DEFERRED]`
+### R4-16 — CI Pytest jobs still fail - root cause not identified `[DONE-VERIFIED]`
 
-* Evidence: As of 08f0b98 all four workflows execute (they previously never ran at all - zero runs on the branch). Seven job types succeed: Security CVE Scan, Code Quality/Linting, Docker Build, Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency Audit. Every Pytest job fails: Agent Gates/Pytest, CI-CD Pipeline/Lint & Test Suite, and all four Test Suite Matrix legs. I could not identify why, so this is DEFERRED, not fixed. What is ruled out by measurement, not guesswork: 1. Environment variables. Reproduced the CI condition locally (unset ALLOW_IN_PROCESS_PREVIEW, set DASHBOARD_SECRET_KEY and ENCRYPTION_KEY, pre-create the DB with init_db as the workflow does). This exposed one genuine bug, now fixed in TEST-4: the dry-run test depended on ALLOW_IN_PROCESS_PREVIEW being exported on the developer's machine. After that fix the full suite under CI's exact conditions is 1098 passed, 23 skipped, 1 deselected, exit 0. 2. Dependency plugins. pytest 9.1.1 and pytest-asyncio 1.4.0 are installed locally, matching what "pip install -e .[dev]" resolves. 3. Dependency content (see R4-15). The five-package divergence does not touch anything the tests import. Why it is not resolved: the Actions logs endpoint returns 0 bytes with the available token, and log download from results-receiver.actions.githubusercontent.com is blocked from this sandbox. No failure output could be read, so the remaining difference between the runner and this machine is unmeasured. One unverified hypothesis worth testing first: ci.yml runs "pytest tests -q" (no marker filter) with timeout-minutes: 15, so it includes the network-marked test that downloads a faster-whisper model from HuggingFace. A ~500MB download on every matrix leg under a 15 minute cap is a plausible timeout. This does NOT explain agent.yml, which already filters with -m "not network". I deliberately did not change the unfiltered commands speculatively, as that could mask a real failure. Manual steps: open the failing job in the Actions UI and read the pytest summary, or run "gh run view <id> --log-failed" from a network unrestricted machine. If the hypothesis above holds, add -m "not network" to ci.yml and ci-cd.yml to match agent.yml.
+* Evidence: As of 08f0b98 all four workflows execute (they previously never ran at all - zero runs on the branch). Seven job types succeed: Security CVE Scan, Code Quality/Linting, Docker Build, Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency Audit. Every Pytest job fails: Agent Gates/Pytest, CI-CD Pipeline/Lint & Test Suite, and all four Test Suite Matrix legs. I could not identify why, so this is DEFERRED, not fixed. What is ruled out by measurement, not guesswork: 1. Environment variables. Reproduced the CI condition locally (unset ALLOW_IN_PROCESS_PREVIEW, set DASHBOARD_SECRET_KEY and ENCRYPTION_KEY, pre-create the DB with init_db as the workflow does). This exposed one genuine bug, now fixed in TEST-4: the dry-run test depended on ALLOW_IN_PROCESS_PREVIEW being exported on the developer's machine. After that fix the full suite under CI's exact conditions is 1098 passed, 23 skipped, 1 deselected, exit 0. 2. Dependency plugins. pytest 9.1.1 and pytest-asyncio 1.4.0 are installed locally, matching what "pip install -e .[dev]" resolves. 3. Dependency content (see R4-15). The five-package divergence does not touch anything the tests import. Why it is not resolved: the Actions logs endpoint returns 0 bytes with the available token, and log download from results-receiver.actions.githubusercontent.com is blocked from this sandbox. No failure output could be read, so the remaining difference between the runner and this machine is unmeasured. One unverified hypothesis worth testing first: ci.yml runs "pytest tests -q" (no marker filter) with timeout-minutes: 15, so it includes the network-marked test that downloads a faster-whisper model from HuggingFace. A ~500MB download on every matrix leg under a 15 minute cap is a plausible timeout. This does NOT explain agent.yml, which already filters with -m "not network". I deliberately did not change the unfiltered commands speculatively, as that could mask a real failure. Manual steps: open the failing job in the Actions UI and read the pytest summary, or run "gh run view <id> --log-failed" from a network unrestricted machine. If the hypothesis above holds, add -m "not network" to ci.yml and ci-cd.yml to match agent.yml. RESOLVED (see R4-17 onward). The blocker was not knowing what failed. Once CI-4 made failures observable, the cause turned out to be one test - tests/test_fresh_eyes.py::test_ledger_consistency - failing because the checkout was shallow, not a suite-wide problem. The network-timeout hypothesis above was wrong: the unfiltered commands were never the cause. Four further genuine defects were found the same way (R4-19 to R4-23).
 * Tests: `tests/test_ci_workflow_hardening.py`
 * Files: `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`, `.github/workflows/agent.yml`
 * Commits: `08f0b98e8f8377f69b96b4fc5ad351cd209159f2`
+
+### R4-17 — Make CI failures observable (annotations + job summary) `[DONE-VERIFIED]`
+
+* Evidence: The most valuable change of this session. Red Pytest jobs could not be diagnosed at all: runner logs return 0 bytes here and log download is network-blocked. Fixed by teeing pytest output and emitting each FAILED/ERROR line as a workflow-command annotation, readable via the check-runs annotations endpoint. $GITHUB_STEP_SUMMARY was tried first and does NOT surface in output.summary, so annotations are the channel that works. `set -o pipefail` is essential - without it the tee swallows pytest's exit code and every failure silently becomes a pass.
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `.github/workflows/agent.yml`, `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`
+* Commits: `1ab9a44f7f925f08c279ca7cc9151dbfe25978bc`, `0b6935583be8f07d2d03f631d6bed19aa2c2e942`
+
+### R4-18 — Shallow checkout broke the ledger check in four CI jobs `[DONE-VERIFIED]`
+
+* Evidence: One defect, four occurrences, three workflows. check_agent_ledger.py validates cited commit ids with git cat-file -t; actions/checkout@v4 defaults to fetch-depth 1 (tip only), so every ancestor oid looked fabricated. Surfaced as tests/test_fresh_eyes.py::test_ledger_consistency (which shells out to the checker) and as the Ledger Consistency job. Fixed with fetch-depth 0 in agent.yml (ledger + pytest jobs), ci.yml (test-matrix) and ci-cd.yml (ci job). Durable fix: the checker now detects a shallow repository and says so instead of accusing invented commit ids. That wording is what made four rounds read like a ledger-integrity problem rather than a CI config one.
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `.github/workflows/agent.yml`, `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`, `tools/check_agent_ledger.py`
+* Commits: `34e3727e65a09fb81f03b149dda52c4822657940`, `cf3ab736e961146ad578ff355404549f84652022`, `0a112c6b49341db5c4588ca9ae321604b26fa6ce`, `f52483c167e1dfda37665bc6bbf613389c9f7ff0`
+
+### R4-19 — Bootstrapped installs could not import settings (blank List env vars) `[DONE-VERIFIED]`
+
+* Evidence: pydantic-settings JSON-decodes complex fields at the dotenv source, so the empty GEMINI_API_KEYS / GROQ_API_KEYS / OPENAI_API_KEYS / OPENROUTER_API_KEYS entries in .env.example raised SettingsError before any validator ran. setup_environment.py copies that template verbatim to .env, so after the documented bootstrap the application could not be imported at all and every test touching config died at collection. This broke all four matrix legs. Pre-existing: the empty entries are unchanged from 27a3133. A plain mode="before" validator does NOT fix it - the error is raised upstream at the source. Fixed by annotating the fields NoDecode so the raw string reaches the validator, which accepts JSON arrays, comma-separated values, and blank (meaning no keys).
+* Tests: `tests/test_config_consistency.py`
+* Files: `shorts_engine/config/settings.py`
+* Commits: `1c8a41d7dfa0838abbc6659302828ea24fc009d7`
+
+### R4-20 — Package module shadowed by a same-named singleton `[DONE-VERIFIED]`
+
+* Evidence: hotfolder_watcher.py defines a module-level singleton on line 219 (hotfolder_watcher = HotfolderWatcher()) and services/ingestion/__init__.py re-exports it under the same name as the submodule. That rebinds the package attribute to the INSTANCE, so patching the dotted path shorts_engine.services.ingestion.hotfolder_watcher.is_file_locked walks onto the instance and raises AttributeError. It happened to resolve correctly on Python 3.11 and not on 3.10 - the tests were relying on mock internals and import order, never on documented behaviour. Fixed by patching the module object obtained via importlib.import_module. Audited the whole package: this is the only module shadowed this way.
+* Tests: `tests/test_local_ingestion.py`
+* Files: `tests/test_local_ingestion.py`
+* Commits: `6651c3fed3cf1021cc2a29e2c68d03b934fde5ea`
+
+### R4-21 — tomllib is 3.11+, breaking collection on the Python 3.10 legs `[DONE-VERIFIED]`
+
+* Evidence: tests/test_packaging_dependencies.py imported tomllib unconditionally. tomllib is stdlib from 3.11, so on the 3.10 matrix legs the module could not be imported and the whole file failed to collect with exit code 2. That file already imported tomllib before this session, so the three pre-existing tests in it were failing on 3.10 as well. Fixed with a tomli fallback plus tomli in requirements-dev.txt behind a python_version < "3.11" marker, and a skip if neither is present. Verified all three paths: 3.11 runs, tomli fallback runs, neither skips. Note: pyproject.toml declares requires-python >= 3.11, so the 3.10 legs test an unsupported interpreter. Keeping or dropping them is the owner's call; they now pass either way.
+* Tests: `tests/test_packaging_dependencies.py`
+* Files: `tests/test_packaging_dependencies.py`, `requirements-dev.txt`
+* Commits: `842d7356c806c43d3fd90d804ddeca266f2ac8cb`
+
+### R4-22 — Timing-dependent concurrency test made deterministic `[DONE-VERIFIED]`
+
+* Evidence: test_postgres_render_concurrency_and_transcribe_overlap started worker 1, slept 0.05s, then started worker 2, and assumed worker 1 had claimed the render job meanwhile. On slower runners that race is lost, no render event is recorded, and the test dies with KeyError render_vid_01_start instead of reporting anything about concurrency. Observed on Windows CI. Replaced the fixed sleep with a threading.Event signalled from inside the render callable. The overlap being asserted is unchanged; it is now established by ordering rather than timing. Ran 10 consecutive times: 10 passed.
+* Tests: `tests/test_standalone_worker_and_fanout.py`
+* Files: `tests/test_standalone_worker_and_fanout.py`
+* Commits: `d6443061b534bc22ed84ccea573e5794c33ce1b0`
+
+### R4-23 — CI reporting step crashed on Windows (Git Bash DLL init) `[DONE-VERIFIED]`
+
+* Evidence: The Windows Py3.10 leg PASSED its tests and then failed in the separate publish-summary step with exit code -1073741502 (0xC0000142, STATUS_DLL_INIT_FAILED) - an intermittent Git Bash startup failure on the Windows runner images, not a problem with the tests or the reporting. A separate step costs a second bash launch, so the reporting was folded into the step that already runs pytest, exiting with the value of PIPESTATUS[0] so pytest's exit code is preserved (verified: a failing command still exits 3, not 0). Separately required: shell bash on both steps, since pipefail and tee are not PowerShell and windows-latest defaults to it. Without that, both Windows legs failed instantly with exit code 1 and collected no results. Both are now guarded by test_posix_run_steps_pin_bash_shell, which fails if a POSIX-syntax step forgets the pin (verified by removing one).
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `.github/workflows/ci.yml`
+* Commits: `28f13f8ab81ee648f96143b9066b3e9a6914330d`, `90d585cb417b82f62452538acdd309573591c9c0`
+
+### R4-24 — All CI workflows green `[DONE-VERIFIED]`
+
+* Evidence: Every workflow and job passes on the branch head. Agent Gates (R3): Pytest, Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency Audit, Sabotage Checks, Scale (1k), E2E Scenarios - 8/8. Industrial CI/CD and Reliability Gate: Security CVE Scan, Code Quality, Docker Build, Test Suite Matrix x4 (ubuntu and windows x 3.10 and 3.11) - 7/7. CI/CD Pipeline: Lint and Test Suite - pass. Locally, with a complete dependency install including ffmpeg and ffprobe, pytest -q -m "not network" gives 1107 passed, 23 skipped, 1 deselected, exit 0. Honest caveat: 23 tests are skipped, not executed - 18 browser-backed E2E (no Playwright browser installed here) plus 5 platform and other. Green means nothing failed, not that everything ran.
+* Tests: `tests/test_fresh_eyes.py`
+* Files: `.github/workflows/agent.yml`, `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`
+* Commits: `f97c180790a48a105628889cbec0bba062bf7d94`
 
