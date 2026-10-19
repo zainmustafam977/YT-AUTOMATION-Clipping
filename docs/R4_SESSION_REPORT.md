@@ -1,7 +1,7 @@
 # R4 Session Report — YT-AUTOMATION-Clipping
 
 **Branch:** `arena/c08e735f-yt-automation-clipping`
-**Head:** `68a23ca` (DOC-6) — 36 commits on branch
+**Head:** `204ced5` (DOC-8) — 38 commits on branch
 **Base:** `27a3133ed47f99481342e1f483161970f16e26be`
 **Date:** 2026-10-19
 
@@ -227,8 +227,24 @@ altered to accommodate them.
 | Industrial CI/CD & Reliability Gate — Security CVE Scan, Code Quality, Docker Build, Test Suite Matrix ×4 (ubuntu/windows × 3.10/3.11), Network Tests (skipped on push) | **success** |
 | CI/CD Pipeline — Lint & Test Suite | **success** |
 
-Full clean runs on both `c714e8e` (CI-14) and `68a23ca` (DOC-6), including all
-four matrix legs.
+Full clean runs on `c714e8e` (CI-14), `68a23ca` (DOC-6) and `204ced5`
+(DOC-8), including all four matrix legs.
+
+**One transient red commit, recorded for honesty.** `df4c908` (DOC-7) failed
+CI. I added two new files under `docs/` without regenerating
+`docs/agent/FILE_MANIFEST.md`, which is a generated file. The ledger checker
+requires it to be in sync, so `test_fresh_eyes.py::test_ledger_consistency`
+failed and both Agent Gates and CI/CD Pipeline went red:
+
+```
+FAILED tests/test_fresh_eyes.py::test_ledger_consistency - AssertionError: Loading ledger ...
+```
+
+`204ced5` regenerated the manifest and everything returned to green. This is
+worth recording rather than hiding: I pushed a commit in a knowingly
+inconsistent state, and the gate caught it — which is precisely what the gate
+is for. The branch therefore contains one red commit in its history; the head
+is green.
 
 ### Other gates
 
@@ -333,7 +349,7 @@ reversible options, owner's call:
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | 1 | Branch clean except documented untracked artifacts | **DONE-VERIFIED** | `git status --short` empty |
-| 2 | CI runs with actual successful results | **DONE-VERIFIED** | Full clean runs on `c714e8e` and `68a23ca`: 7/7, 8/8, 1/1 — §5 |
+| 2 | CI runs with actual successful results | **DONE-VERIFIED** | Full clean runs on `c714e8e`, `68a23ca`, `204ced5`: 7/7, 8/8, 1/1 — §5 (one transient red commit, disclosed) |
 | 3 | ruff + dep-audit fail-closed | **DONE-VERIFIED** | §2; both sabotage-verified |
 | 4 | Ledger validation strict, docs reproducible | **DONE-VERIFIED** | 180 rows OK; md5-identical regeneration |
 | 5 | Stable collection, fresh reproducible results | **DONE-VERIFIED** | 1111 passed / 23 skipped / 1 deselected; 23 skips declared |
@@ -478,7 +494,9 @@ f97c180  TEST-6  guard the POSIX shell pin
 dc5fa60  DOC-5   record the intermittent failure and the reporting gap
 c714e8e  CI-14   quarantine the network test; fix the intermittent matrix leg
 68a23ca  DOC-6   record the root cause (R4-25 DONE-VERIFIED)
+df4c908  DOC-7   move the report + corrected Windows procedure into docs/
+204ced5  DOC-8   regenerate FILE_MANIFEST (fixes the red DOC-7 commit)
 ```
 
-36 commits total on the branch. All pushed to
+38 commits total on the branch. All pushed to
 `arena/c08e735f-yt-automation-clipping` only.
