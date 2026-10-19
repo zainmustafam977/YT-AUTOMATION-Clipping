@@ -15,6 +15,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from shorts_engine.config.settings import settings
+from shorts_engine.db.security import mask_secret
+from shorts_engine.services.llm.quota_tracker import mask_api_key
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import User, UserRole
 from shorts_engine.dashboard.app import create_dashboard_app
@@ -388,7 +390,24 @@ def test_settings_page_multi_provider_persistence(tmp_path):
             assert resp_view.status_code == 200
             html = resp_view.text
             assert "Multi-Provider LLM & Rate-Limit Failover" in html
-            assert "1234" in html  # Last 4 chars visible
+
+            # Assert the exact masked rendering, not a bare "1234".
+            #
+            # This previously asserted `"1234" in html`, which passed for the
+            # wrong reason: the settings page also rendered the shipped default
+            # credential AdminPass12345!, and that string contains "1234". The
+            # test therefore never checked the API key was masked - removing
+            # the leaked credential made it fail, which is how the false
+            # positive was found. Compare against the real masked form.
+            # The page renders item.masked, which is mask_api_key
+            # (first 8 + ... + last 4), not mask_secret (first 4 + ... + last 4).
+            expected_masked = mask_api_key("sk-super-secret-backup-key-1234")
+            assert expected_masked in html, (
+                f"expected the masked key {expected_masked!r} on the settings page"
+            )
+            # The looser masking must also be absent of the full value.
+            assert mask_secret("sk-super-secret-backup-key-1234") != "sk-super-secret-backup-key-1234"
+            assert "sk-super-secret-backup-key-1234" not in html  # never rendered in full
             assert "sk-super-secret-backup-key" not in html  # Secret prefix masked
     finally:
         # Restore settings

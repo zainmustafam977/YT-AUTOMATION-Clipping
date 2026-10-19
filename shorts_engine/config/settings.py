@@ -539,12 +539,26 @@ class PipelineSettings(BaseSettings):
     DASHBOARD_PORT: int = 8080
     DASHBOARD_SECRET_KEY: str = Field(default="change-me-in-prod", description="Session signing key")
     DASHBOARD_USERNAME: str = Field(default="admin", description="Operator dashboard username")
+    # Deliberately empty, not LEGACY_DEFAULT_DASHBOARD_PASSWORD.
+    #
+    # The shipped literal was a working admin credential committed to source, so
+    # it must never be usable again - not even as a development convenience.
+    # Both seeding sites (dashboard/auth.py and
+    # services/storage/reset_service.py) already replace an empty or legacy
+    # value with a freshly generated random password and log it once, so an
+    # unset value still yields a reachable admin account without shipping a
+    # known credential. Staging/production/strict mode require an explicit
+    # value and refuse to boot otherwise.
+    #
+    # ROTATE THIS SECRET: if any deployment ever used AdminPass12345!, change
+    # it everywhere. Treat it as permanently burned.
     DASHBOARD_PASSWORD: str = Field(
-        default=LEGACY_DEFAULT_DASHBOARD_PASSWORD,
+        default="",
         description=(
-            "Operator dashboard password. Development convenience default only; "
-            "staging/production/STRICT_MODE require an explicit, non-default value "
-            "supplied through the environment."
+            "Operator dashboard password, used only to seed the initial admin "
+            "account. Empty means 'generate a random password at boot and log "
+            "it once'. Staging/production/STRICT_MODE require an explicit, "
+            "strong value supplied through the environment."
         ),
     )
 
@@ -662,6 +676,18 @@ class PipelineSettings(BaseSettings):
                 LEGACY_DEFAULT_DASHBOARD_PASSWORD.lower(),
             }
             mode = self.ENV if self.ENV in ("staging", "production") else "ENFORCE_SECRET_ENTROPY"
+            # Order matters: the most actionable message must win.
+            #
+            # The field default is now the empty string, so an unconfigured
+            # deployment trips the length rule. Reporting that as "Insecure
+            # DASHBOARD_PASSWORD" is true but useless - the operator's actual
+            # mistake is that they never set one. Ask for the explicit value
+            # first, then check whether what they supplied is any good.
+            if "DASHBOARD_PASSWORD" not in self.model_fields_set:
+                raise ValueError(
+                    f"DASHBOARD_PASSWORD must be explicitly provided via the environment "
+                    f"for '{mode}'. Falling back to the built-in default is not permitted."
+                )
             if self.DASHBOARD_PASSWORD == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
                 raise ValueError(
                     f"DASHBOARD_PASSWORD is still the shipped default for '{mode}'. "
@@ -672,15 +698,6 @@ class PipelineSettings(BaseSettings):
                 raise ValueError(
                     f"Insecure DASHBOARD_PASSWORD for '{mode}' environment. "
                     "Password must not be a common default and must be at least 12 characters long."
-                )
-            # The built-in default is a development convenience only. Staging,
-            # production and strict mode must receive the value explicitly from
-            # the environment (or an explicit constructor argument), never from
-            # the field default.
-            if "DASHBOARD_PASSWORD" not in self.model_fields_set:
-                raise ValueError(
-                    f"DASHBOARD_PASSWORD must be explicitly provided via the environment "
-                    f"for '{mode}'. Falling back to the built-in default is not permitted."
                 )
             if self.DASHBOARD_SECRET_KEY in ("change-me-in-prod", "") or len(self.DASHBOARD_SECRET_KEY) < 32:
                 raise ValueError(

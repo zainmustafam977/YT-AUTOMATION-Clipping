@@ -758,7 +758,10 @@ function Step-Summary {
   2. Start the Operator Dashboard (web UI on http://127.0.0.1:8000):
        python run.py dashboard
 
-     Default login -> Username: admin   Password: AdminPass12345!
+     First login   -> Username: admin   Password: generated at first boot,
+                      written to storage\logs. Set DASHBOARD_PASSWORD in .env
+                      to choose your own. Never reuse the credential that was
+                      previously committed to this repository.
 
   3. Start the Background Worker (separate terminal window):
        python run.py worker

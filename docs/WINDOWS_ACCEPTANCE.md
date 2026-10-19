@@ -1,24 +1,43 @@
-# Windows Acceptance Procedure — CORRECTED
+# Windows Acceptance Procedure
 
-> **STATUS: BLOCKED — NOT VERIFIED BY EXECUTION.**
+**Status: BLOCKED — NOT VERIFIED BY EXECUTION.**
+**Owner action required before this can be marked DONE-VERIFIED.**
+
+---
+
+## Status header (R4.1)
+
+> **R4.1 — how this project labels work that a CI runner cannot verify.**
 >
-> Two things to know before reading further.
+> An item whose acceptance requires an environment the runner does not have
+> (a Windows VM, a browser binary, a GPU, a live third-party service) must be
+> labelled with its real status, never inferred as passing. Specifically:
 >
-> 1. **This procedure has never been run.** It was reviewed and corrected on
->    paper only, because running it requires a disposable Windows VM and none
->    was available. Every change below is reasoned, not observed. Treat the
->    corrected steps as **reviewed, not proven**.
-> 2. **This file was reconstructed.** The original corrected version was lost
->    when the sandbox home directory was reset mid-session (twice), and the
->    source document it corrects (`docs/WINDOWS_ACCEPTANCE.md`) **does not
->    exist in the repository** — it was supplied in-session, not committed.
->    This document was rebuilt from the defect list recorded in
->    `docs/agent/ledger.yaml` and `docs/R4_SESSION_REPORT.md`. **Section
->    numbering and wording will not match the original; the four hazards and
->    their corrections are preserved.**
+> 1. State the status explicitly: `BLOCKED` if it needs an environment nobody
+>    has provisioned yet, `DEFERRED` if an attempt was made and exhausted.
+> 2. Record **exactly what was executed** and **exactly what was not**. A
+>    review, a static check, or a successful run on a different platform does
+>    **not** count as execution.
+> 3. Give the precise manual steps a human must perform to unblock it, and
+>    what evidence to capture.
+> 4. Do not mark it `DONE-VERIFIED` until someone has actually run it and
+>    recorded the output.
 >
-> **DO NOT RUN THIS ON YOUR EVERYDAY MACHINE.** Use a disposable VM with a
-> snapshot taken beforehand.
+> *This interpretation is recorded here because the rule was given in-session
+> and is not otherwise defined in the repository. Correct this section if the
+> intended wording differs.*
+
+Applied to this document:
+
+| | |
+|---|---|
+| **Executed** | Nothing. No step in this procedure has been run. |
+| **Performed instead** | Static review of the original procedure; four hazards identified and corrected on paper. |
+| **Environment needed** | A disposable Windows 10/11 VM with a pre-taken snapshot. |
+| **Why not run here** | Standing instruction: never run this procedure on the user's everyday machine. No VM was available. |
+| **Current status** | **BLOCKED** |
+
+**DO NOT RUN THIS ON YOUR EVERYDAY MACHINE.**
 
 ---
 
@@ -26,9 +45,17 @@
 
 The original procedure contained four defects that could destroy data or kill
 unrelated processes on the machine running it. It was never safe to execute as
-written. The standing instruction for this work was explicit: do not run it on
-the user's everyday machine, use a disposable VM only. Since no VM was
-available, the procedure is delivered **corrected but unexecuted**.
+written. Because running it requires a disposable VM, it is delivered here
+**corrected but unexecuted** — reviewed, not proven.
+
+### Provenance
+
+The source document this corrects was supplied in-session and was **not**
+committed to the repository, so it cannot be diffed against. This file was
+rebuilt from the hazard list recorded in `docs/agent/ledger.yaml`. Section
+numbering and wording will therefore not line up with the original; the four
+hazards and their corrections are preserved. If you have the original, compare
+it against the hazards below rather than trusting this file's numbering.
 
 ---
 
@@ -39,8 +66,8 @@ available, the procedure is delivered **corrected but unexecuted**.
 **Original problem:** the procedure wrote to `HKLM` (HKEY_LOCAL_MACHINE).
 
 **Why it is dangerous:** `HKLM` is machine-wide. A wrong write there affects
-every user account and every application on the machine, and cannot be undone
-by logging out. On a shared or work machine this can break unrelated software.
+every user account and every application on the machine and cannot be undone by
+logging out. On a shared or work machine this can break unrelated software.
 
 **Correction:**
 
@@ -75,9 +102,9 @@ by logging out. On a shared or work machine this can break unrelated software.
 
 **Original problem:** the procedure killed processes without prompting.
 
-**Why it is dangerous:** on the user's everyday machine the PID occupying a
-port may be a browser, an editor with unsaved work, a database, or a corporate
-agent. Killing it silently destroys unsaved work.
+**Why it is dangerous:** on a developer machine the PID occupying a port may be
+a browser, an editor with unsaved work, a local database, or a corporate agent.
+Killing it silently destroys unsaved work.
 
 **Correction — always prompt, and always default to NO:**
 
@@ -100,15 +127,16 @@ Key points:
 
 - `[y/N]` — capital **N** means no is the default. Pressing Enter must never
   kill anything.
-- The regex is `^[Yy]$`, so `yes` alone is not accidentally accepted; it
-  requires a bare `y` or `Y`.
+- The regex `^[Yy]$` requires a bare `y` or `Y`, so `yes` is not accepted by
+  accident.
 - Always show the process **name**, not just the PID, so the operator can make
   an informed decision.
 - Always offer the non-destructive alternative (change the port) alongside the
   kill.
 
-> Reference implementation: `setup.ps1` lines 628-644 already do this
-> correctly. The acceptance procedure should match that pattern.
+> Reference implementation: `setup.ps1` already does this correctly in its port
+> check (roughly lines 628-644). The acceptance procedure should match that
+> pattern rather than inventing its own.
 
 ---
 
@@ -130,8 +158,8 @@ original procedure.
 **Correction:**
 
 1. **Never delete a path that is a drive root or a well-known system
-   directory.** Do not delete `X:\Program Files`, `X:\Windows`, `X:\Users`, or
-   any parent of them, under any circumstances.
+   directory.** Not `X:\Program Files`, `X:\Windows`, `X:\Users`, or any parent
+   of them, under any circumstances.
 2. **Resolve the real Program Files directory rather than hardcoding a drive
    letter:**
 
@@ -168,7 +196,7 @@ a **scheduled-task or batch job identifier**.
 
 **Why it is dangerous:** job IDs and PIDs are unrelated namespaces. PID 4 is
 `System`; PID 0 is the idle process. Passing a job ID where a PID is expected
-kills an **arbitrary, unrelated process** — or fails with a confusing error and
+kills an **arbitrary, unrelated process** — or fails with a confusing error that
 tempts the operator into retrying with something more destructive.
 
 **Correction — resolve the PID explicitly, and validate it:**
@@ -227,27 +255,21 @@ Before running any part of this procedure:
 
 ---
 
-## How to verify this document
+## How to unblock this document
 
-This is what remains to be done, in order:
+Perform these steps in order, then update the status header:
 
 1. Provision a Windows 10/11 VM (Hyper-V, VirtualBox, or a cloud VM).
 2. Take a snapshot.
 3. Run the corrected procedure end to end.
-4. Record the actual output.
-5. Fix whatever the run reveals — **expect corrections to be needed**, because
-   this has never been executed.
+4. **Capture the actual console output** for each step.
+5. Fix whatever the run reveals. **Expect corrections to be needed** — this has
+   never been executed, so the review above is unproven.
 6. Revert the snapshot.
-7. Only then mark this **DONE-VERIFIED**. Until step 6, it stays **BLOCKED**.
+7. Replace the status header with `DONE-VERIFIED`, recording the VM image, the
+   date, and where the captured output is stored.
 
-**Do not commit acceptance logs.** Run output from this procedure is evidence,
-not source; keep it out of the repository.
+Until step 6 is complete this stays **BLOCKED**.
 
----
-
-## If you need the original
-
-The source document being corrected is not in this repository. It was supplied
-in-session during the R4 work and was never committed. If you have a copy,
-compare it against the four hazards above rather than trusting this file's
-section numbering, which was reconstructed and will not line up.
+**Do not commit acceptance logs.** Run output is evidence, not source. Keep it
+out of the repository.

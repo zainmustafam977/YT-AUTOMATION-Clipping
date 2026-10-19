@@ -269,3 +269,50 @@ def test_ci_cd_pipeline_excludes_network_tests():
             f"pipeline stays hermetic. Job '{job_name}' step '{step_name}' ran:\n"
             f"  {line}"
         )
+
+
+def test_matrix_python_versions_satisfy_requires_python():
+    """CI must not test an interpreter the package refuses to install on.
+
+    pyproject.toml declares `requires-python`. pip will not install a
+    distribution onto an interpreter excluded by that constraint, so a matrix
+    leg below the floor tests a configuration no user can actually have.
+
+    The previous matrix ran ["3.10", "3.11"] against requires-python ">=3.11".
+    The 3.10 legs consumed runner time and produced misleading signal - most
+    notably a collection failure from an unconditional `import tomllib`, which
+    is 3.11+ only.
+
+    Regression guard: dropping a leg back below the declared floor, or raising
+    the floor above what CI tests, fails this test.
+    """
+    pyproject = Path("pyproject.toml")
+    requires = pyproject.read_text(encoding="utf-8")
+    assert 'requires-python' in requires, "pyproject.toml must declare requires-python"
+
+    import re
+
+    m = re.search(r'^requires-python\s*=\s*"([^"]+)"', requires, re.M)
+    assert m, "could not parse requires-python"
+
+    # Parse the floor out of the specifier, e.g. ">=3.11" -> (3, 11)
+    floor_m = re.search(r">=\s*(\d+)\.(\d+)", m.group(1))
+    assert floor_m, f"no >= floor found in requires-python {m.group(1)!r}"
+    floor = (int(floor_m.group(1)), int(floor_m.group(2)))
+
+    ci_file = Path(".github/workflows/ci.yml")
+    data = yaml.safe_load(ci_file.read_text(encoding="utf-8"))
+    versions = data["jobs"]["test-matrix"]["strategy"]["matrix"]["python-version"]
+    assert versions, "the test matrix must declare at least one python-version"
+
+    offenders = []
+    for v in versions:
+        parts = tuple(int(x) for x in str(v).split(".")[:2])
+        if parts < floor:
+            offenders.append(str(v))
+
+    assert not offenders, (
+        f"test matrix tests {offenders} but requires-python is {m.group(1)!r}. "
+        f"Either raise the matrix to >= {floor_m.group(0)[2:]} or lower the "
+        f"declared floor - they must not disagree."
+    )

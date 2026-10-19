@@ -231,3 +231,130 @@ def test_malformed_api_key_pool_raises_clearly():
 
     with pytest.raises(ValidationError, match="not a valid JSON list"):
         PipelineSettings(GEMINI_API_KEYS="[not-json")
+
+
+# ---------------------------------------------------------------------------
+# Shipped-credential eradication (SEV-2 follow-up)
+#
+# AdminPass12345! was a working admin credential committed to source. It is
+# retained only as LEGACY_DEFAULT_DASHBOARD_PASSWORD so startup can refuse it.
+# These tests assert it is never usable again, and that no shipped surface
+# advertises it.
+# ---------------------------------------------------------------------------
+
+LEGACY_PASSWORD = "AdminPass12345!"
+
+# Surfaces that are shipped to a user's machine or rendered in the UI. The
+# credential must not appear in any of them - it no longer works, so printing
+# it is both misleading and an invitation to try it.
+_SHIPPED_SURFACES = (
+    "shorts_engine/dashboard/templates/login.html",
+    "shorts_engine/dashboard/templates/settings.html",
+    "setup.ps1",
+    "setup.bat",
+    "setup_environment.py",
+    ".env.example",
+)
+
+
+@pytest.mark.parametrize("surface", _SHIPPED_SURFACES)
+def test_shipped_surfaces_do_not_advertise_the_legacy_password(surface):
+    """No shipped surface may print the burned credential.
+
+    The credential no longer authenticates anything (seeding generates a random
+    password when the value is unset or legacy), so any surface still showing
+    it is actively harmful: it misleads operators and tells an attacker exactly
+    what to try.
+    """
+    from pathlib import Path
+
+    path = Path(surface)
+    if not path.exists():
+        pytest.skip(f"{surface} not present in this checkout")
+
+    assert LEGACY_PASSWORD not in path.read_text(encoding="utf-8"), (
+        f"{surface} still advertises the shipped default credential. It is "
+        f"burned and no longer works - remove it rather than documenting it."
+    )
+
+
+def test_dashboard_password_has_no_credential_default(monkeypatch):
+    """The field default must not be a working credential.
+
+    An empty default means "generate a random password at boot and log it
+    once", which is what dashboard/auth.py and reset_service.py already do.
+    """
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.delenv("ENFORCE_SECRET_ENTROPY", raising=False)
+
+    dev = PipelineSettings(ENV="development", _env_file=None)
+    assert dev.DASHBOARD_PASSWORD != LEGACY_PASSWORD
+    assert dev.DASHBOARD_PASSWORD == ""
+
+
+def test_legacy_password_constant_is_retained_for_refusal():
+    """The literal must survive only as a detection constant.
+
+    Startup compares against it to refuse to boot, and it is in the placeholder
+    blocklist. Removing the constant would silently disable that check, so this
+    test pins its presence and its non-use as a default.
+    """
+    from shorts_engine.config.settings import LEGACY_DEFAULT_DASHBOARD_PASSWORD
+
+    assert LEGACY_DEFAULT_DASHBOARD_PASSWORD == LEGACY_PASSWORD
+    assert PipelineSettings.model_fields["DASHBOARD_PASSWORD"].default != LEGACY_PASSWORD
+
+
+def test_seeding_never_uses_the_legacy_password():
+    """Both seeding sites must replace an unset/legacy value with a random one."""
+    import inspect
+
+    from shorts_engine.dashboard import auth
+    from shorts_engine.services.storage import reset_service
+
+    for module, label in ((auth, "dashboard/auth.py"), (reset_service, "reset_service.py")):
+        src = inspect.getsource(module)
+        assert "LEGACY_DEFAULT_DASHBOARD_PASSWORD" in src, (
+            f"{label} no longer references the legacy constant - it may be "
+            f"seeding the shipped credential again"
+        )
+        assert "token_urlsafe" in src, (
+            f"{label} no longer generates a random password, so an unset value "
+            f"could fall back to a known credential"
+        )
+
+
+def test_sensitive_runtime_updates_apply_in_memory_but_never_reach_disk(tmp_path):
+    """Secrets must take effect without being written to disk.
+
+    save_runtime_settings deliberately excludes sensitive keys from
+    runtime_settings.json. It must still apply them to the live settings
+    singleton, otherwise an operator can save an API key in the dashboard,
+    be told "Settings saved and applied", and have the value silently
+    discarded - because the reload only reads back what was persisted.
+
+    This test pins both halves: the value is applied, and the file stays
+    free of it.
+    """
+    import json
+
+    from shorts_engine.config import logging_config
+
+    secret = "sk-runtime-secret-key-9999"
+    cfg = tmp_path / "runtime_settings.json"
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(logging_config, "RUNTIME_CONFIG_PATH", cfg)
+        applied = logging_config.save_runtime_settings(
+            {"LLM_MODEL_NAME": "gemini-3.8-flash", "OPENAI_API_KEY": secret}
+        )
+
+    assert applied.get("OPENAI_API_KEY") == secret, (
+        "a sensitive runtime update must still be applied to settings"
+    )
+
+    on_disk = json.loads(cfg.read_text(encoding="utf-8"))
+    assert "OPENAI_API_KEY" not in on_disk, "the secret must not be persisted"
+    assert secret not in cfg.read_text(encoding="utf-8")
+    # The non-sensitive half of the same update must still persist.
+    assert on_disk.get("LLM_MODEL_NAME") == "gemini-3.8-flash"

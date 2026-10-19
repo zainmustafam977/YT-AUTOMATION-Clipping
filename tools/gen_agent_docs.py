@@ -156,7 +156,7 @@ def render_state(rows: List[Dict[str, Any]]) -> str:
     lines = [
         "# STATE — Autonomous Hardening Working Tracker",
         "",
-        "Branch: `arena/1bfe7f4c-yt-automation-clipping`",
+        "Branch: `arena/c08e735f-yt-automation-clipping`",
         "Working dir: `/home/user/YT-AUTOMATION-Clipping`",
         "",
         "**Single source of truth: `docs/agent/ledger.yaml`.**",
@@ -215,7 +215,7 @@ def render_final_report(rows: List[Dict[str, Any]]) -> str:
     lines = [
         "# FINAL REPORT",
         "",
-        "**Branch**: `arena/1bfe7f4c-yt-automation-clipping`",
+        "**Branch**: `arena/c08e735f-yt-automation-clipping`",
         "**Single source of truth**: `docs/agent/ledger.yaml`",
         "",
         "This file is generated. Hand-editing is forbidden; edit the ledger.",

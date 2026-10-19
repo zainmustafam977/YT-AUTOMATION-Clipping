@@ -1,6 +1,6 @@
 # FINAL REPORT
 
-**Branch**: `arena/1bfe7f4c-yt-automation-clipping`
+**Branch**: `arena/c08e735f-yt-automation-clipping`
 **Single source of truth**: `docs/agent/ledger.yaml`
 
 This file is generated. Hand-editing is forbidden; edit the ledger.
@@ -31,8 +31,8 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 |--------|-------|
 | BLOCKED | 1 |
 | CONFIRMED | 2 |
-| DEFERRED | 1 |
-| DONE-VERIFIED | 161 |
+| DEFERRED | 2 |
+| DONE-VERIFIED | 162 |
 | UNKNOWN | 15 |
 
 ## F-01..F-24 (audit findings, titles verbatim)
@@ -94,8 +94,8 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 
 ## Ledger facts (computed by this generator at run time)
 
-* Ledger rows loaded: 180
-* Status counts: BLOCKED=1, CONFIRMED=2, DEFERRED=1, DONE-VERIFIED=161, UNKNOWN=15
+* Ledger rows loaded: 182
+* Status counts: BLOCKED=1, CONFIRMED=2, DEFERRED=2, DONE-VERIFIED=162, UNKNOWN=15
 * Rows with TODO/void cells: 0
 
 ## External gates - NOT measured by this generator
@@ -112,5 +112,5 @@ this file.
 
 ## Anything NOT done
 
-Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 2 PARTIAL/BLOCKED/DEFERRED.
+Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 3 PARTIAL/BLOCKED/DEFERRED.
 

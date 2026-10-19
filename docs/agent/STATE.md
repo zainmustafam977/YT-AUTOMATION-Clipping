@@ -1,6 +1,6 @@
 # STATE — Autonomous Hardening Working Tracker
 
-Branch: `arena/1bfe7f4c-yt-automation-clipping`
+Branch: `arena/c08e735f-yt-automation-clipping`
 Working dir: `/home/user/YT-AUTOMATION-Clipping`
 
 **Single source of truth: `docs/agent/ledger.yaml`.**
@@ -12,8 +12,8 @@ Counts in this file are generated from the ledger.
 |--------|-------|
 | BLOCKED | 1 |
 | CONFIRMED | 2 |
-| DEFERRED | 1 |
-| DONE-VERIFIED | 161 |
+| DEFERRED | 2 |
+| DONE-VERIFIED | 162 |
 | UNKNOWN | 15 |
 
 ## Round 4
@@ -192,4 +192,18 @@ Counts in this file are generated from the ledger.
 * Tests: `tests/test_ci_workflow_hardening.py`
 * Files: `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`
 * Commits: `7d433f757a97b491eb970a1f34f432c57827cb2d`, `c714e8e27c1527ed1079449a06f815d53a8abec3`
+
+### R4-26 — Completion scorecard and externally-verified CI evidence `[DONE-VERIFIED]`
+
+* Evidence: LEDGER FACT versus CI FACT. This row is the only place the two are mixed, so they are labelled explicitly. LEDGER FACT = a status recorded in docs/agent/ledger.yaml and reproduced by tools/gen_agent_docs.py. The generator does not run any gate; it only reflects what is written here. CI FACT = a workflow run observed through the GitHub Actions API, cited below with its run id, branch and commit sha so it can be re-checked. Nothing below is inferred. Where a gate did not run, it says so. CI FACTS - all three workflows, branch arena/c08e735f-yt-automation-clipping, commit dbaa05951cea977d422260dbf6148d8e7572c58a: Agent Gates (R3), run 39201025435, pull_request, success. 8/8 jobs: Pytest, Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency Audit, Sabotage Checks, Scale (1k), E2E Scenarios. Industrial CI/CD and Reliability Gate, run 39201025438, pull_request, success. Jobs: Code Quality and Linting, Docker Container Build Verification, Security and CVE Vulnerability Scan, and Test Suite Matrix x4 (ubuntu-latest and windows-latest on Python 3.11). The Network Tests job reported SKIPPED on a push or pull_request event, which is correct - it is gated to schedule and dispatch. CI/CD Pipeline, run 39201025450, pull_request, success. Job: Lint and Test Suite. Deploy to Staging and Deploy to Production skipped, as expected for a branch run. LEDGER FACTS at dbaa059: 180 rows, tools/check_agent_ledger.py returns OK. ruff clean, mypy ratchet 0 <= baseline 0, git diff --check clean. LOCAL TEST RUN - not a substitute for CI. In this sandbox, at commit dbaa059, with ffmpeg and ffprobe present: pytest -q -m "not network" -> 1119 passed, 23 skipped, 1 deselected. Caveat carried forward: 23 tests are SKIPPED, not executed - 18 browser-backed E2E plus 5 platform/other. Green means nothing failed, not that everything ran. The environment was destroyed twice by sandbox resets and rebuilt from requirements.txt and requirements-dev.txt. NOT RUN - the network-marked test. The `network-tests` job has never executed: zero schedule-triggered runs exist for the workflow, and workflow_dispatch is refused with HTTP 403 because the available token is a GitHub App installation token without the workflows scope. See R4-27 for the exact manual steps. NINE-ROW COMPLETION SCORECARD (reconciles the earlier "8 of 9"): 1 Branch clean except documented artifacts - DONE-VERIFIED. 2 CI runs with actual successful results - DONE-VERIFIED, the three run ids above. Two earlier red commits are disclosed in R4-24 and R4-25: one genuine (a stale generated manifest) and one infrastructure-only. 3 ruff and dependency audit fail closed - DONE-VERIFIED. 4 Ledger validation strict, generated docs reproducible - DONE-VERIFIED, consecutive generator runs are md5-identical. 5 Stable collection with fresh reproducible results - DONE-VERIFIED. 6 Windows acceptance procedure safe and honestly labelled - BLOCKED. Corrected in place at docs/WINDOWS_ACCEPTANCE.md but never executed; it requires a disposable Windows VM. Nothing was run. 7 No secrets or protected artifacts staged - DONE-VERIFIED. 8 git diff --check clean and an accurate report - DONE-VERIFIED. 9 main untouched and PR 6 unmerged - DONE-VERIFIED. Net: 8 of 9 DONE-VERIFIED, 1 BLOCKED. No criterion is claimed on the basis of a review, a static check, or a run on a different platform.
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `docs/agent/ledger.yaml`, `.github/workflows/ci.yml`
+* Commits: `dbaa05951cea977d422260dbf6148d8e7572c58a`
+
+### R4-27 — network-tests job cannot be dispatched from this environment `[DEFERRED]`
+
+* Evidence: The `network-tests` job was quarantined behind `if: github.event_name == "schedule" || github.event_name == "workflow_dispatch"` so that third-party outages stop red-denying pull requests. The consequence is that it does not run on push, so it has produced no signal at all and its pass state is UNKNOWN, not passing. Two approaches were tried to execute it and both failed: 1. `gh workflow run "Industrial CI/CD & Reliability Gate" --ref arena/c08e735f-yt-automation-clipping` returns HTTP 403: Resource not accessible by integration. 2. `gh api -X POST repos/zainmustafam977/YT-AUTOMATION-Clipping/actions/ workflows/380432637/dispatches -f ref=...` returns the same 403. Root cause: the available token is a GitHub App installation token without the `workflows` scope. This is an environment limitation, not a repository or workflow defect. A third approach was not attempted, since the user caps each problem at three. Verified state: the workflow has ZERO schedule-triggered runs in its entire history. Its cron is `17 3 * * *` UTC. MANUAL STEPS to close this: 1. Wait for the next scheduled fire at 03:17 UTC, or 2. Run it yourself from the Actions tab: open "Industrial CI/CD & Reliability Gate", click Run workflow, select branch arena/c08e735f-yt-automation-clipping. A user session has the scope this token lacks. Do not mark this DONE-VERIFIED until the job has actually completed and its conclusion has been read back. A URL that renders is not evidence that a run succeeded.
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `.github/workflows/ci.yml`, `tests/test_ci_workflow_hardening.py`
+* Commits: `dbaa05951cea977d422260dbf6148d8e7572c58a`
 

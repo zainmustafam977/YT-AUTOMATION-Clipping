@@ -70,7 +70,17 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11"]
+        # Aligned with pyproject.toml requires-python = ">=3.11".
+        #
+        # A 3.10 leg previously ran here. It contradicted the packaging
+        # metadata: pip refuses to install a distribution whose requires-python
+        # excludes the running interpreter, so 3.10 was never a supported
+        # target regardless of whether the code happened to import. The 3.10
+        # legs also produced actionable-but-wasted signal, most notably a
+        # collection failure from an unconditional `import tomllib` (3.11+).
+        # The README badge claiming "3.10 | 3.11" was stale and has been
+        # corrected to match.
+        python-version: ["3.11"]
 
     steps:
       - name: Checkout Source Code

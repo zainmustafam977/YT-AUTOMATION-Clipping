@@ -143,6 +143,42 @@ def setup_logging(level: int = logging.INFO) -> None:
         log_inst.addFilter(sensitive_filter)
 
 
+# Sentinel: distinguishes "key does not exist on settings" from "applied as
+# None", so callers can tell those apart without catching exceptions.
+_NOT_APPLIED = object()
+
+
+def _apply_runtime_override(key: str, val: Any) -> Any:
+    """Coerce `val` to the type settings already uses for `key` and apply it.
+
+    Returns the converted value, or _NOT_APPLIED if the key is unknown or the
+    value could not be coerced. Shared by reload (from disk) and save (for the
+    values deliberately kept off disk) so both paths coerce identically.
+    """
+    if not hasattr(settings, key):
+        return _NOT_APPLIED
+
+    current_attr = getattr(settings, key)
+    target_type = type(current_attr) if current_attr is not None else str
+    try:
+        if val is None:
+            converted_val = None
+        elif target_type is bool and isinstance(val, str):
+            converted_val = val.lower() in ("true", "1", "yes", "on")
+        elif isinstance(val, list):
+            converted_val = [str(x) for x in val]
+        elif current_attr is None:
+            converted_val = val
+        else:
+            converted_val = target_type(val)
+    except (ValueError, TypeError):
+        logger.warning("Could not convert runtime setting %s to type %s", key, target_type)
+        return _NOT_APPLIED
+
+    setattr(settings, key, converted_val)
+    return converted_val
+
+
 def reload_runtime_settings() -> Dict[str, Any]:
     """
     Reads persistent settings from storage/config/runtime_settings.json and
@@ -162,24 +198,9 @@ def reload_runtime_settings() -> Dict[str, Any]:
 
         applied = {}
         for key, val in overrides.items():
-            if hasattr(settings, key):
-                current_attr = getattr(settings, key)
-                target_type = type(current_attr) if current_attr is not None else str
-                try:
-                    if val is None:
-                        converted_val = None
-                    elif target_type is bool and isinstance(val, str):
-                        converted_val = val.lower() in ("true", "1", "yes", "on")
-                    elif isinstance(val, list):
-                        converted_val = [str(x) for x in val]
-                    elif current_attr is None:
-                        converted_val = val
-                    else:
-                        converted_val = target_type(val)
-                    setattr(settings, key, converted_val)
-                    applied[key] = converted_val
-                except (ValueError, TypeError):
-                    logger.warning("Could not convert runtime setting %s to type %s", key, target_type)
+            converted = _apply_runtime_override(key, val)
+            if converted is not _NOT_APPLIED:
+                applied[key] = converted
         return applied
     except Exception as e:
         logger.warning("Failed to reload runtime settings from %s: %e", RUNTIME_CONFIG_PATH, e)
@@ -213,5 +234,17 @@ def save_runtime_settings(updates: Dict[str, Any]) -> Dict[str, Any]:
     atomic_write_json(RUNTIME_CONFIG_PATH, current, indent=2)
 
     applied = reload_runtime_settings()
+
+    # Sensitive values are deliberately excluded from disk above, but they must
+    # still take effect for this process. Previously they were dropped entirely:
+    # an operator could save an API key in the dashboard, see "Settings saved
+    # and applied", and the value would never reach settings because the reload
+    # only reads back what was written. Keep them off disk, apply them here.
+    for key, val in updates.items():
+        if is_sensitive_key(key):
+            converted = _apply_runtime_override(key, val)
+            if converted is not _NOT_APPLIED:
+                applied[key] = converted
+
     logger.info("Saved and applied %d runtime settings overrides to %s", len(applied), RUNTIME_CONFIG_PATH)
     return applied
