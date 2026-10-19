@@ -1,7 +1,20 @@
 import re
 
-import tomllib
+import pytest
 from pathlib import Path
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 and older
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
+
+pytestmark = pytest.mark.skipif(
+    tomllib is None,
+    reason="no TOML parser available (needs Python 3.11+ or the tomli backport)",
+)
 
 
 def test_pyproject_toml_contains_all_core_requirements():
