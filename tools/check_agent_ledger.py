@@ -228,8 +228,38 @@ def check_placeholders(rows: List[Dict[str, Any]]) -> None:
                 )
 
 
+def _is_shallow_clone() -> bool:
+    """True when the checkout has truncated history (actions/checkout default)."""
+    if (REPO_ROOT / ".git" / "shallow").exists():
+        return True
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        ).stdout.strip()
+    except OSError:
+        return False
+    return out == "true"
+
+
 def check_commit_ids(rows: List[Dict[str, Any]]) -> None:
-    """Every cited commit id must look like a git oid AND exist in this repo."""
+    """Every cited commit id must look like a git oid AND exist in this repo.
+
+    Requires full history. Under a shallow checkout every ancestor oid is
+    missing, which used to be reported as "commit ... does not exist in this
+    repository (never invent commit ids)" - a false accusation of
+    fabrication that cost several CI rounds to diagnose. Detect it up front
+    and say what to do instead.
+    """
+    if _is_shallow_clone():
+        fail(
+            "this is a shallow clone, so cited commit ids cannot be verified. "
+            "Re-run with full history, e.g. "
+            "`git fetch --unshallow`, or for GitHub Actions "
+            "`uses: actions/checkout@v4` with `with: fetch-depth: 0`. "
+            "The missing ids below are a truncated-history artefact, not "
+            "invented commit ids."
+        )
     cited: Dict[str, str] = {}
     for r in rows:
         commits = r.get("commits")
