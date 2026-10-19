@@ -119,6 +119,10 @@ jobs:
           python -m pytest tests -q 2>&1 | tee pytest-output.txt
 
       - name: Publish test summary
+        # bash, not the platform default: this step uses POSIX redirection
+        # and `while read`, and windows-latest defaults to PowerShell,
+        # where it fails with exit code 1 and reports nothing.
+        shell: bash
         # Runner logs are not readable from every caller (the logs endpoint
         # returns 0 bytes for some tokens and `gh run view --log-failed` is
         # blocked on restricted networks), so failures are also emitted as

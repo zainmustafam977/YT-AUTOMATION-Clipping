@@ -161,6 +161,10 @@ jobs:
           pytest -m "not network" --tb=short -q tests/ 2>&1 | tee pytest-output.txt
 
       - name: Publish test summary
+        # bash, not the platform default: this step uses POSIX redirection
+        # and `while read`, and windows-latest defaults to PowerShell,
+        # where it fails with exit code 1 and reports nothing.
+        shell: bash
         # Runner logs cannot be read from this environment: the logs
         # endpoint returns 0 bytes with the available token and
         # `gh run view --log-failed` is blocked at the network level. The
