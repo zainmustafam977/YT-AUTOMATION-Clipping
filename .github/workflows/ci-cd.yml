@@ -20,7 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
+        # fetch-depth: 0 - this job runs the whole suite, which includes
+        # tests/test_fresh_eyes.py::test_ledger_consistency. That test shells
+        # out to tools/check_agent_ledger.py, which validates every cited
+        # commit id with `git cat-file -t`; under the default fetch-depth: 1
+        # (tip commit only) it fails on "commit ... does not exist in this
+        # repository".
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
