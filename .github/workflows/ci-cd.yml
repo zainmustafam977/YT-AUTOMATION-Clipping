@@ -60,7 +60,12 @@ jobs:
           KMP_DUPLICATE_LIB_OK: "TRUE"
         run: |
           set -o pipefail
-          pytest -v tests/ 2>&1 | tee pytest-output.txt
+          # Same reasoning as ci.yml: the one test marked `network` downloads
+          # a faster-whisper model from the HuggingFace Hub, so its result
+          # tracks a third party's availability rather than the code under
+          # test. Excluded here so this pipeline stays hermetic; the
+          # `network-tests` job in ci.yml still runs it nightly.
+          pytest -v tests/ -m "not network" 2>&1 | tee pytest-output.txt
 
       - name: Publish test summary
         # Runner logs are not readable from every caller, so failures are

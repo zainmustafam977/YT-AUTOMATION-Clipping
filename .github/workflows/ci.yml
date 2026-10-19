@@ -5,6 +5,12 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Nightly: the only time the network-dependent tests run (see the
+  # `network-tests` job). Running them on every push made the matrix
+  # intermittent, because they fetch an ML model from a third-party hub.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
 jobs:
   lint-and-format:
@@ -126,7 +132,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest tests -q 2>&1 | tee pytest-output.txt
+          # -m "not network": keeps this job hermetic. The one test marked
+          # `network` (test_pipeline_runner_processes_local_ingested_video)
+          # downloads a faster-whisper model from the HuggingFace Hub at test
+          # time, so its outcome depends on a third party's availability and
+          # rate limiting rather than on the code under test. That made this
+          # matrix fail intermittently on unrelated commits. agent.yml already
+          # excludes network tests by design; the dedicated `network-tests`
+          # job below still runs them.
+          python -m pytest tests -q -m "not network" 2>&1 | tee pytest-output.txt
           pytest_status=${PIPESTATUS[0]}
 
           {
@@ -194,3 +208,81 @@ jobs:
           context: .
           push: false
           tags: shorts-engine:ci-test
+
+  # Network-dependent tests, quarantined to nightly + manual dispatch.
+  #
+  # These are not run on push/PR: the suite marked `network` downloads a
+  # faster-whisper model from the HuggingFace Hub, so its result tracks that
+  # hub's availability and rate limiting rather than the code under test. On
+  # every push it made the matrix fail intermittently on unrelated commits
+  # (windows Py3.10 on one run, ubuntu Py3.10 on the next).
+  #
+  # Quarantining is not suppression: this job is a real gate that fails the
+  # workflow when it breaks. It just runs on a cadence where an external
+  # outage is distinguishable from a regression.
+  network-tests:
+    name: Network Tests (nightly / manual)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 15 to match the repo-wide policy enforced by
+    # test_ci_workflow_has_timeout_minutes_on_all_jobs. One test plus a model
+    # download fits comfortably; the other matrix legs run 1131 tests in
+    # less than this.
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Automated Environment Bootstrap
+        run: python setup_environment.py
+
+      - name: Run Network-Marked Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest tests -q -m network 2>&1 | tee pytest-output.txt
+          pytest_status=${PIPESTATUS[0]}
+
+          {
+            echo "### Network tests result"
+            echo
+            echo '```'
+            tail -n 60 pytest-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
+          if [ -s failed-lines.txt ]; then
+            while IFS= read -r line; do
+              echo "::error title=Network test failure::$line"
+            done < failed-lines.txt
+          fi
+
+          if [ "$pytest_status" -ne 0 ] && [ ! -s failed-lines.txt ]; then
+            echo "::error title=Network tests exited $pytest_status with no FAILED or ERROR line::Annotating the raw output tail."
+            tail -n 40 pytest-output.txt > pytest-tail.txt
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=network-output-tail::$line"
+            done < pytest-tail.txt
+          fi
+
+          exit $pytest_status

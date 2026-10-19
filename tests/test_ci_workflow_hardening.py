@@ -159,3 +159,113 @@ def test_posix_run_steps_pin_bash_shell():
         "Steps using POSIX shell syntax must pin `shell: bash` "
         "(windows-latest defaults to PowerShell):\n  " + "\n  ".join(offenders)
     )
+
+
+def test_matrix_job_excludes_network_tests():
+    """The blocking matrix must not run network-dependent tests.
+
+    Exactly one test is marked `network`:
+    test_pipeline_runner_processes_local_ingested_video. It downloads a
+    faster-whisper model from the HuggingFace Hub at test time, so whether it
+    passes tracks that hub's availability and rate limiting rather than the
+    code under test. Left in the blocking matrix it failed intermittently on
+    unrelated commits - windows Py3.10 on one run, ubuntu Py3.10 on the next,
+    while the other leg passed - which is unactionable noise.
+
+    agent.yml already excludes these by design; ci.yml did not, and ci-cd.yml
+    does not. The quarantined `network-tests` job in ci.yml still runs them
+    nightly and still fails the workflow when they genuinely break.
+
+    Regression guard: removing `-m "not network"` from the matrix step
+    silently reintroduces the intermittency.
+    """
+    ci_file = Path(".github/workflows/ci.yml")
+    data = yaml.safe_load(ci_file.read_text(encoding="utf-8"))
+
+    job = data["jobs"]["test-matrix"]
+    steps = job.get("steps", []) or []
+
+    # Strip shell comments before asserting. The run block carries a comment
+    # explaining this very flag, and matching against the raw block lets that
+    # comment satisfy the assertion after the flag itself is deleted - a
+    # guard that goes green on the exact regression it exists to catch.
+    def command_lines(script: str):
+        return [
+            ln for ln in script.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+
+    invocations = []
+    for step in steps:
+        for line in command_lines(step.get("run") or ""):
+            if "pytest tests" in line:
+                invocations.append((step.get("name", "<unnamed>"), line))
+
+    assert invocations, "No pytest invocation found in the test-matrix job"
+
+    for step_name, line in invocations:
+        assert '-m "not network"' in line, (
+            "The test-matrix pytest invocation must pass -m \"not network\" so "
+            "the blocking matrix stays hermetic. Network-dependent tests belong "
+            f"in the quarantined `network-tests` job. Step '{step_name}' ran:\n"
+            f"  {line}"
+        )
+
+
+def test_network_tests_are_quarantined_not_dropped():
+    """The network tests must still run somewhere, on a non-blocking cadence.
+
+    Excluding them from the matrix is not allowed to become quietly deleting
+    them. They must have a job that (a) selects `-m network` and (b) is gated
+    to schedule or manual dispatch, so an external outage cannot block a PR
+    but a genuine breakage still fails the workflow.
+    """
+    ci_file = Path(".github/workflows/ci.yml")
+    data = yaml.safe_load(ci_file.read_text(encoding="utf-8"))
+
+    job = data["jobs"].get("network-tests")
+    assert job is not None, (
+        "A `network-tests` job must exist so the network-marked tests are "
+        "quarantined rather than dropped"
+    )
+
+    runs = "\n".join((s.get("run") or "") for s in job.get("steps", []) or [])
+    assert "-m network" in runs, "The network-tests job must select -m network"
+
+    gate = job.get("if") or ""
+    assert "schedule" in gate or "workflow_dispatch" in gate, (
+        "The network-tests job must be gated to schedule/workflow_dispatch, "
+        "not run on every push"
+    )
+
+
+def test_ci_cd_pipeline_excludes_network_tests():
+    """The CI/CD Pipeline must not run network-dependent tests either.
+
+    Same defect class as the test-matrix job: ci-cd.yml ran `pytest -v tests/`
+    unfiltered, so the HuggingFace-backed test could fail this pipeline too.
+    """
+    ci_file = Path(".github/workflows/ci-cd.yml")
+    data = yaml.safe_load(ci_file.read_text(encoding="utf-8"))
+
+    def command_lines(script: str):
+        return [
+            ln for ln in script.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+
+    invocations = []
+    for job_name, job in data.get("jobs", {}).items():
+        for step in job.get("steps", []) or []:
+            for line in command_lines(step.get("run") or ""):
+                if "pytest" in line and "tests/" in line:
+                    invocations.append((job_name, step.get("name", "<unnamed>"), line))
+
+    assert invocations, "No pytest invocation found in ci-cd.yml"
+
+    for job_name, step_name, line in invocations:
+        assert '-m "not network"' in line, (
+            "The ci-cd.yml pytest invocation must pass -m \"not network\" so the "
+            f"pipeline stays hermetic. Job '{job_name}' step '{step_name}' ran:\n"
+            f"  {line}"
+        )
