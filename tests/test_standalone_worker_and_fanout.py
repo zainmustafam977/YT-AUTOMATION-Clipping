@@ -347,10 +347,18 @@ def test_postgres_render_concurrency_and_transcribe_overlap(test_env):
 
     timeline: List[Tuple[str, str, float]] = []
     timeline_lock = threading.Lock()
+    # Signalled once worker 1 has actually claimed and entered the render
+    # job. The test used to sleep 0.05s and hope, which lost the race on
+    # slower runners (observed: Windows CI) - worker 2 then started before
+    # worker 1 held the render slot, no render event was ever recorded, and
+    # the assertion failed with KeyError: 'render_vid_01_start'. Waiting on
+    # this event makes the ordering explicit instead of time-dependent.
+    render_started = threading.Event()
 
     def mock_render_call(ctx):
         with timeline_lock:
             timeline.append(("render_vid_01", "start", time.time()))
+        render_started.set()
         logger.info("[TIMELINE] Render vid_01 started")
         time.sleep(0.3)
         with timeline_lock:
@@ -399,7 +407,13 @@ def test_postgres_render_concurrency_and_transcribe_overlap(test_env):
 
         # Launch Worker 1 (starts render)
         t1.start()
-        time.sleep(0.05)  # ensure render job is RUNNING and holding render slot
+
+        # Wait until the render job is genuinely RUNNING and holding the
+        # render slot, rather than guessing with a fixed sleep.
+        assert render_started.wait(timeout=10), (
+            "worker 1 did not claim the render job within 10s - the "
+            "concurrency scenario under test never started"
+        )
 
         # Launch Worker 2 concurrently (picks transcribe because render concurrency = 1)
         t2.start()
