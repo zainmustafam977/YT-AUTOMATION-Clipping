@@ -32,7 +32,7 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 | BLOCKED | 1 |
 | CONFIRMED | 2 |
 | DEFERRED | 3 |
-| DONE-VERIFIED | 164 |
+| DONE-VERIFIED | 165 |
 | UNKNOWN | 15 |
 
 ## F-01..F-24 (audit findings, titles verbatim)
@@ -94,8 +94,8 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 
 ## Ledger facts (computed by this generator at run time)
 
-* Ledger rows loaded: 185
-* Status counts: BLOCKED=1, CONFIRMED=2, DEFERRED=3, DONE-VERIFIED=164, UNKNOWN=15
+* Ledger rows loaded: 186
+* Status counts: BLOCKED=1, CONFIRMED=2, DEFERRED=3, DONE-VERIFIED=165, UNKNOWN=15
 * Rows with TODO/void cells: 0
 
 ## External gates - NOT measured by this generator

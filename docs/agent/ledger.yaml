@@ -2276,7 +2276,9 @@
       CI FACT = a workflow run observed through the GitHub Actions API, cited
         below with its run id, branch and commit sha so it can be re-checked.
     Nothing below is inferred. Where a gate did not run, it says so.
-    CI FACTS - all four workflows, branch
+    CI FACTS - superseded. These were measured at 0255141, which is no
+      longer the head. Current results are in R4-31. Retained for
+      provenance only; do not cite these as the current state. Branch
       arena/c08e735f-yt-automation-clipping, commit
       02551413030ff289dbe68c5e82cefd3c084b694f (FIX-15):
         Agent Gates (R3), run 39320322145, success. 8/8 jobs: Pytest,
@@ -2503,3 +2505,84 @@
     - .github/workflows/ci.yml
   commits:
     - dbaa05951cea977d422260dbf6148d8e7572c58a
+
+- id: R4-31
+  type: round4
+  title: Re-verification of remote state and the eight-item scorecard
+  status: DONE-VERIFIED
+  evidence: >-
+    The previous report was not assumed current; every claim in it was
+    re-measured. One claim turned out to be wrong and is corrected in R4-28.
+    RE-MEASURED AND CONFIRMED: local HEAD and origin/HEAD both
+      4d92b38b3339fbafdacb8969c721088ff3e68225, working tree clean.
+      main = 82ecaa34dfd55bfe6ca543536c9f2b0db2c76519 (untouched).
+      r4-hardening = c7a47ce8fc5b5c9bdaa81418dfa3e85ef85ed157 (intact).
+      PR #6 OPEN, base=main, head=r4-hardening, mergeable=CONFLICTING,
+      mergeCommit=null. Still open and unmerged.
+    CI FACT - the prior report cited runs at 0255141 but the branch had since
+      advanced to d36af7c, so the cited runs were not for the head commit.
+      Re-pulled by head_sha; each run echoes its own head_sha, so this is not
+      inferred. At d36af7c, four runs, all success:
+        Agent Gates (R3) 39322185915 (pull_request) and 39322180052 (push)
+        CI/CD Pipeline 39322185905
+        Industrial CI/CD and Reliability Gate 39322186014
+      Jobs at d36af7c: Agent Gates 8/8 success with zero skips. Industrial:
+        Code Quality and Linting, Security and CVE Scan, Docker Build,
+        Test Suite Matrix x2 (ubuntu and windows, both Py3.11) all success;
+        Network Tests skipped by design. CI/CD Pipeline: Lint and Test Suite
+        success; Deploy to Staging and Production skipped, expected on a
+        branch run.
+      At 4d92b38 (the head at the time of writing), four runs, all success:
+        Agent Gates (R3) 39328422790 and 39328415798, CI/CD Pipeline
+        39328422792, Industrial 39328422721. The new Browser E2E job appears
+        there as skipped, confirming the gate holds and it stays off the
+        pull-request path.
+    LEDGER FACT: 184 rows, check_agent_ledger.py OK, consecutive
+      gen_agent_docs.py runs md5-identical, 26 distinct commit shas all
+      verified with git cat-file -e.
+    LOCAL TEST RUN - not a substitute for CI. At 4d92b38, venv rebuilt from
+      requirements.txt and requirements-dev.txt, ffmpeg and ffprobe present:
+        pytest -q -m "not network" -> 1123 passed, 23 skipped, 1 deselected,
+        zero failures, in 261.76s.
+      Caveat that does not go away: 23 tests are SKIPPED, not executed - 18
+      browser-backed E2E plus 5 platform/other. Green means nothing failed,
+      not that everything ran.
+    ONE CLAIM CORRECTED: the prior report said production and staging already
+    failed closed on DASHBOARD_PASSWORD. False - see R4-28. The verification
+    used APP_ENV instead of ENV.
+    EIGHT-ITEM SCORECARD for this round:
+      1 Final commit and CI verified - DONE-VERIFIED. Runs re-pulled by
+        head_sha for d36af7c and 4d92b38, not assumed.
+      2 network-tests - DEFERRED. Never executed. Token has no workflows
+        scope (x-oauth-scopes empty). Three approaches tried: workflow name,
+        numeric id, filename. All HTTP 403. A skipped job is not a pass.
+      3 Windows acceptance - BLOCKED. Single canonical
+        docs/WINDOWS_ACCEPTANCE.md, no parallel copy. Reviewed, never
+        executed; needs a disposable Windows VM, which was unavailable.
+      4 Playwright - DEFERRED. Browser download blocked by the sandbox
+        network allowlist. A gated CI job was added but has not run.
+      5 Dashboard password - DONE-VERIFIED, after closing a real gap. The
+        burned literal is now rejected in all three environments; production
+        and staging fail closed; strong values accepted; secrets applied in
+        memory only and never written to disk.
+      6 Font and Python policy - DONE-VERIFIED. Font untracked with the local
+        copy byte-identical. pyproject, CI matrix and setup_environment.py
+        all say 3.11; no stale 3.10 claim remains.
+      7 Branch separation - DONE-VERIFIED. Consolidation not attempted: the
+        fixes live only on arena/c08e735f..., and moving them into
+        r4-hardening or main is excluded by the session rules. PR #6 open
+        and unmerged.
+      8 Hygiene and reporting - DONE-VERIFIED. ruff clean, mypy ratchet
+        0 <= baseline 0, git diff --check clean, no protected artifacts
+        staged, generated docs regenerated from the ledger.
+    Net: 6 DONE-VERIFIED, 2 DEFERRED, 1 BLOCKED.
+  tests:
+    - tests/test_fresh_eyes.py
+    - tests/test_config_consistency.py
+    - tests/test_ci_workflow_hardening.py
+  files:
+    - docs/agent/ledger.yaml
+    - .github/workflows/ci.yml
+  commits:
+    - dbaa05951cea977d422260dbf6148d8e7572c58a
+    - 4d92b38b3339fbafdacb8969c721088ff3e68225
