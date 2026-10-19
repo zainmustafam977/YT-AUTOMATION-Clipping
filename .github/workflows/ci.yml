@@ -152,6 +152,21 @@ jobs:
 
           echo "--- failing tests ---"
           cat failed-lines.txt
+
+          # Blind-spot guard: a non-zero exit with no parseable FAILED/ERROR
+          # line is otherwise completely undiagnosable (runner logs are not
+          # readable from every environment). That happens when pytest dies
+          # in a way that never reaches per-test reporting - a crash, a
+          # teardown kill, an interrupted run. Emit the raw tail as
+          # annotations so the failure is at least visible.
+          if [ "$pytest_status" -ne 0 ] && [ ! -s failed-lines.txt ]; then
+            echo "::error title=Pytest exited $pytest_status with no FAILED or ERROR line::Annotating the raw output tail; the usual per-test reporting did not run."
+            tail -n 40 pytest-output.txt > pytest-tail.txt
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=pytest-output-tail::$line"
+            done < pytest-tail.txt
+          fi
+
           exit $pytest_status
 
 
