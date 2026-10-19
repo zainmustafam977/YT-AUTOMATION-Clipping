@@ -188,3 +188,17 @@ htmlcov/
 .hypothesis/
 test_run_output.txt
 scratch_queue.html
+# ------------------------------------------------------------------------------
+# Bundled fonts
+# ------------------------------------------------------------------------------
+# setup.ps1 copies C:\Windows\Fonts\seguiemj.ttf here on Windows. Segoe UI Emoji
+# is a Microsoft font and is not ours to redistribute, and at 12.9 MB it does
+# not belong in git history. It must never be committed.
+#
+# Nothing breaks without the bundled binary:
+#   - setup.ps1 re-copies it from the system Fonts directory when present.
+#   - tests reference the font by NAME (DEFAULT_EMOJI_FONT), never by this file.
+# Note the file is currently tracked from an earlier commit; untracking it is
+# left to the owner (see FINAL_REPORT_R4.md) because removing a tracked asset
+# is a product decision, not a cleanup.
+assets/fonts/seguiemj.ttf
