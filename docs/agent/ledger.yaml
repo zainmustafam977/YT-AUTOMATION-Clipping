@@ -2268,26 +2268,38 @@
       CI FACT = a workflow run observed through the GitHub Actions API, cited
         below with its run id, branch and commit sha so it can be re-checked.
     Nothing below is inferred. Where a gate did not run, it says so.
-    CI FACTS - all three workflows, branch
+    CI FACTS - all four workflows, branch
       arena/c08e735f-yt-automation-clipping, commit
-      dbaa05951cea977d422260dbf6148d8e7572c58a:
-        Agent Gates (R3), run 39201025435, pull_request, success. 8/8 jobs:
-          Pytest, Ruff Lint, mypy Ratchet, Ledger Consistency,
-          Dependency Audit, Sabotage Checks, Scale (1k), E2E Scenarios.
-        Industrial CI/CD and Reliability Gate, run 39201025438, pull_request,
-          success. Jobs: Code Quality and Linting, Docker Container Build
-          Verification, Security and CVE Vulnerability Scan, and Test Suite
-          Matrix x4 (ubuntu-latest and windows-latest on Python 3.11).
-          The Network Tests job reported SKIPPED on a push or pull_request
-          event, which is correct - it is gated to schedule and dispatch.
-        CI/CD Pipeline, run 39201025450, pull_request, success.
-          Job: Lint and Test Suite. Deploy to Staging and Deploy to
-          Production skipped, as expected for a branch run.
+      02551413030ff289dbe68c5e82cefd3c084b694f (FIX-15):
+        Agent Gates (R3), run 39320322145, success. 8/8 jobs: Pytest,
+          Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency Audit,
+          Sabotage Checks, Scale (1k), E2E Scenarios.
+        Industrial CI/CD and Reliability Gate, run 39320322151, success.
+          Jobs: Code Quality and Linting, Docker Container Build
+          Verification, Security and CVE Vulnerability Scan, and Test
+          Suite Matrix x2 - ubuntu-latest and windows-latest, both Py3.11.
+          The matrix is 2 legs, not 4: the Py3.10 legs were removed in this
+          commit because requires-python is ">=3.11", so pip cannot install
+          on 3.10 and 3.10 was never a supported target.
+          The Network Tests job reported SKIPPED on a push event, which is
+          correct - it is gated to schedule and dispatch. See R4-27.
+        CI/CD Pipeline, run 39320322176, success. Job: Lint and Test
+          Suite. Deploy to Staging and Deploy to Production skipped, as
+          expected for a branch run.
+      Superseded: runs 39201025435, 39201025438 and 39201025450 verified the
+      same three workflows at the parent commit
+      dbaa05951cea977d422260dbf6148d8e7572c58a, also all success. They are
+      listed for provenance only; the 0255141 runs above are the current ones.
     LEDGER FACTS at dbaa059: 180 rows, tools/check_agent_ledger.py returns OK.
       ruff clean, mypy ratchet 0 <= baseline 0, git diff --check clean.
     LOCAL TEST RUN - not a substitute for CI. In this sandbox, at commit
-      dbaa059, with ffmpeg and ffprobe present:
-        pytest -q -m "not network" -> 1119 passed, 23 skipped, 1 deselected.
+      0255141, with ffmpeg and ffprobe present:
+        pytest -q -m "not network" -> 1122 passed, 23 skipped, 1 deselected,
+        zero failures.
+      Earlier counts on this branch: 1119 passed / 1 failed at dbaa059 (the
+      false-passing test, fixed in FIX-15), and 1121 passed / 1 failed
+      mid-change (a stale generated FILE_MANIFEST.md, fixed by regenerating).
+      Only the 1122 figure is current.
       Caveat carried forward: 23 tests are SKIPPED, not executed - 18
       browser-backed E2E plus 5 platform/other. Green means nothing failed,
       not that everything ran. The environment was destroyed twice by sandbox
@@ -2321,6 +2333,7 @@
     - .github/workflows/ci.yml
   commits:
     - dbaa05951cea977d422260dbf6148d8e7572c58a
+    - 02551413030ff289dbe68c5e82cefd3c084b694f
 
 - id: R4-27
   type: round4
@@ -2359,4 +2372,5 @@
   tests:
     - tests/test_ci_workflow_hardening.py
   commits:
-    - dbaa05951cea977d422260dbf6148d8e7572c58a
+    - c714e8e27c1527ed1079449a06f815d53a8abec3
+    - 02551413030ff289dbe68c5e82cefd3c084b694f
