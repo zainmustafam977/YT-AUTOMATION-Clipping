@@ -114,6 +114,10 @@ jobs:
           VECLIB_MAXIMUM_THREADS: "1"
           NUMEXPR_NUM_THREADS: "1"
           KMP_DUPLICATE_LIB_OK: "TRUE"
+        # bash on every OS: `set -o pipefail` and `tee` are not PowerShell,
+        # and windows-latest defaults to PowerShell. Without this the step
+        # fails instantly with exit code 1 and collects no results at all.
+        shell: bash
         run: |
           set -o pipefail
           python -m pytest tests -q 2>&1 | tee pytest-output.txt
