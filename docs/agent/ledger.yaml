@@ -2196,7 +2196,7 @@
 - id: R4-25
   type: round4
   title: Intermittent matrix-leg failure, and the blind spot that hid it
-  status: IN-PROGRESS
+  status: DONE-VERIFIED
   evidence: >-
     Two matrix legs failed non-reproducibly, each in a way that produced no
     test-level information:
@@ -2222,9 +2222,35 @@
     still unknown. On that same run the windows Py3.11 leg was CANCELLED by
     GitHub (infrastructure, not a test outcome), so it is unverified for that
     head; the available token cannot re-run jobs or dispatch workflows (403).
+
+    ROOT CAUSE FOUND (CI-14). Exactly one test is marked `network`:
+    test_pipeline_runner_processes_local_ingested_video. It calls
+    PipelineRunner.run_pipeline_for_video, which initialises
+    TranscriptionService and DOWNLOADS A FASTER-WHISPER MODEL FROM THE
+    HUGGINGFACE HUB AT TEST TIME. Reproduced locally: the run log shows
+    "Initializing TranscriptionService (model=base, device=cpu,
+    compute_type=int8)" followed by "Failed to load faster-whisper model:
+    ConnectError: TLS/SSL connection has been closed" - it reaches for the
+    network, so its outcome tracks a third party's availability and rate
+    limiting rather than the code under test.
+    The correlation is what identified it, and it is clean:
+      agent.yml   uses -m "not network"  ->  never flaked, across every run
+      ci.yml      no filter              ->  failed twice
+      ci-cd.yml   no filter              ->  same exposure, now closed
+    The failures moved between legs and operating systems between runs, and
+    neither commit touched product or test code - the signature of an external
+    dependency, not a regression.
+    Fixed by adding -m "not network" to ci.yml and ci-cd.yml to match
+    agent.yml, and by quarantining rather than dropping the network tests:
+    a new `network-tests` job runs -m network nightly and on manual dispatch.
+    It is a real gate that fails the workflow when it breaks - it simply runs
+    on a cadence where a third-party outage is distinguishable from a
+    regression.
   tests:
     - tests/test_ci_workflow_hardening.py
   files:
     - .github/workflows/ci.yml
+    - .github/workflows/ci-cd.yml
   commits:
     - 7d433f757a97b491eb970a1f34f432c57827cb2d
+    - c714e8e27c1527ed1079449a06f815d53a8abec3
