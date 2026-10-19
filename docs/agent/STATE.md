@@ -14,6 +14,7 @@ Counts in this file are generated from the ledger.
 | CONFIRMED | 2 |
 | DEFERRED | 1 |
 | DONE-VERIFIED | 160 |
+| IN-PROGRESS | 1 |
 | UNKNOWN | 15 |
 
 ## Round 4
@@ -185,4 +186,11 @@ Counts in this file are generated from the ledger.
 * Tests: `tests/test_fresh_eyes.py`
 * Files: `.github/workflows/agent.yml`, `.github/workflows/ci.yml`, `.github/workflows/ci-cd.yml`
 * Commits: `f97c180790a48a105628889cbec0bba062bf7d94`
+
+### R4-25 — Intermittent matrix-leg failure, and the blind spot that hid it `[IN-PROGRESS]`
+
+* Evidence: Two matrix legs failed non-reproducibly, each in a way that produced no test-level information: 23f5d97 -> Test Suite Matrix (windows-latest - Py3.10): failure 5b9754e -> Test Suite Matrix (ubuntu-latest - Py3.10): failure Crucially, ubuntu Py3.10 SUCCEEDED on 23f5d97 and failed on 5b9754e, while windows Py3.10 did the opposite. Different legs, different commits, no overlap - the signature of an intermittent failure, not of either commit. Neither commit touches product or test code (one is a ledger and generated docs change, the other a .gitignore rule). Why it was undiagnosable: CI-4's reporting only annotates lines matching FAILED or ERROR. When pytest exits non-zero WITHOUT reaching per-test reporting - a crash, a teardown kill, an interrupted run - nothing is emitted and the job reads as a bare "Process completed with exit code 1". Runner logs are not readable from a restricted environment (the logs endpoint redirects to a blocked blob host), so the failure had no channel. CI-13 closes the blind spot: on a non-zero exit with no FAILED or ERROR line, it annotates the raw tail of the pytest output. Verified in isolation across three cases (normal failure, crash with no FAILED line, and success). Current state: on 7d433f7 (CI-13) ubuntu Py3.10 passed, confirming the failure is intermittent rather than caused by 5b9754e. The root cause is still unknown. On that same run the windows Py3.11 leg was CANCELLED by GitHub (infrastructure, not a test outcome), so it is unverified for that head; the available token cannot re-run jobs or dispatch workflows (403).
+* Tests: `tests/test_ci_workflow_hardening.py`
+* Files: `.github/workflows/ci.yml`
+* Commits: `7d433f757a97b491eb970a1f34f432c57827cb2d`
 
