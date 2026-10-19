@@ -51,7 +51,41 @@ jobs:
           NUMEXPR_NUM_THREADS: "1"
           KMP_DUPLICATE_LIB_OK: "TRUE"
         run: |
-          pytest -v tests/
+          set -o pipefail
+          pytest -v tests/ 2>&1 | tee pytest-output.txt
+
+      - name: Publish test summary
+        # Runner logs are not readable from every caller, so failures are
+        # also emitted as annotations, which have a dedicated read endpoint.
+        # `if: always()` keeps this reporting on failure, and `set -o
+        # pipefail` above stops the `tee` from masking pytest's exit code.
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Pytest result"
+            echo
+            echo '```'
+            tail -n 60 pytest-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
+
+          if [ -s failed-lines.txt ]; then
+            {
+              echo
+              echo "### Failing tests"
+              echo
+              cat failed-lines.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r line; do
+              echo "::error title=Pytest failure::$line"
+            done < failed-lines.txt
+          fi
+
+          echo "--- failing tests ---"
+          cat failed-lines.txt
 
   # ==========================================
   # CD Staging: Deploy on Push to Main
