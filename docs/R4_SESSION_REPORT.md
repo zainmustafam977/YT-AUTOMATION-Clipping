@@ -1,7 +1,7 @@
 # R4 Session Report — YT-AUTOMATION-Clipping
 
 **Branch:** `arena/c08e735f-yt-automation-clipping`
-**Head:** `204ced5` (DOC-8) — 38 commits on branch
+**Head:** `a8b7277` (DOC-10) — 40 commits on branch. All three workflows green, including all four matrix legs.
 **Base:** `27a3133ed47f99481342e1f483161970f16e26be`
 **Date:** 2026-10-19
 
@@ -249,8 +249,11 @@ failing matrix legs plus one cancelled. Investigated rather than assumed:
 
 Three legs failing simultaneously across two operating systems and two Python
 versions, while an equivalent single-OS run of the same tests passes, is a
-transient runner-pool problem rather than a code defect. It is re-run to
-confirm rather than assumed resolved.
+transient runner-pool problem rather than a code defect.
+
+**CONFIRMED by re-run.** `a8b7277` (same content, re-triggered) came back
+fully green — all four matrix legs plus every other job. The `cdd7632`
+failure was infrastructure, not the commit.
 
 **One transient red commit, recorded for honesty.** `df4c908` (DOC-7) failed
 CI. I added two new files under `docs/` without regenerating
@@ -371,7 +374,7 @@ reversible options, owner's call:
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | 1 | Branch clean except documented untracked artifacts | **DONE-VERIFIED** | `git status --short` empty |
-| 2 | CI runs with actual successful results | **DONE-VERIFIED** | Full clean runs on `c714e8e`, `68a23ca`, `204ced5`: 7/7, 8/8, 1/1 — §5 (one transient red commit, disclosed) |
+| 2 | CI runs with actual successful results | **DONE-VERIFIED** | Full clean runs on `c714e8e`, `68a23ca`, `204ced5`, `a8b7277`: 7/7, 8/8, 1/1 — §5 (one genuine red commit and one infra-only red run, both disclosed) |
 | 3 | ruff + dep-audit fail-closed | **DONE-VERIFIED** | §2; both sabotage-verified |
 | 4 | Ledger validation strict, docs reproducible | **DONE-VERIFIED** | 180 rows OK; md5-identical regeneration |
 | 5 | Stable collection, fresh reproducible results | **DONE-VERIFIED** | 1111 passed / 23 skipped / 1 deselected; 23 skips declared |
@@ -518,7 +521,9 @@ c714e8e  CI-14   quarantine the network test; fix the intermittent matrix leg
 68a23ca  DOC-6   record the root cause (R4-25 DONE-VERIFIED)
 df4c908  DOC-7   move the report + corrected Windows procedure into docs/
 204ced5  DOC-8   regenerate FILE_MANIFEST (fixes the red DOC-7 commit)
+cdd7632  DOC-9   disclose the transient red DOC-7 commit
+a8b7277  DOC-10  record the cdd7632 investigation; re-trigger CI
 ```
 
-38 commits total on the branch. All pushed to
+40 commits total on the branch. All pushed to
 `arena/c08e735f-yt-automation-clipping` only.
