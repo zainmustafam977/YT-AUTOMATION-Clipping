@@ -668,6 +668,25 @@ class PipelineSettings(BaseSettings):
                 f"TARGET_DURATION_MIN_SEC ({self.TARGET_DURATION_MIN_SEC}) cannot exceed "
                 f"TARGET_DURATION_MAX_SEC ({self.TARGET_DURATION_MAX_SEC})"
             )
+        # The shipped credential is burned and must never work anywhere.
+        #
+        # AdminPass12345! is in git history, so it is public. Rejecting it only
+        # in production leaves a known admin password live in any development
+        # or staging-ish deployment that someone exposes - and development is
+        # the default ENV, so that is the common case, not an edge case. This
+        # check therefore runs in every environment, before the
+        # production-only guard below, and is not gated behind
+        # ENFORCE_SECRET_ENTROPY: an optional flag is not a control for a real
+        # credential committed to source.
+        if self.DASHBOARD_PASSWORD == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+            raise ValueError(
+                "DASHBOARD_PASSWORD is still the shipped default "
+                "(AdminPass12345!). This value is in git history and must be "
+                "considered permanently compromised. ROTATE THIS SECRET: set a "
+                "unique value through the environment (DASHBOARD_PASSWORD=...) "
+                "before starting."
+            )
+
         # Production & Staging security guard: disallow default credentials & enforce minimum entropy
         if self.ENV in ("staging", "production") or self.ENFORCE_SECRET_ENTROPY:
             insecure_passwords = {

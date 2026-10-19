@@ -2108,9 +2108,17 @@
     Fixed with a tomli fallback plus tomli in requirements-dev.txt behind a
     python_version < "3.11" marker, and a skip if neither is present.
     Verified all three paths: 3.11 runs, tomli fallback runs, neither skips.
-    Note: pyproject.toml declares requires-python >= 3.11, so the 3.10 legs
-    test an unsupported interpreter. Keeping or dropping them is the owner's
-    call; they now pass either way.
+    Resolved (FIX-15): pyproject.toml declares requires-python >= 3.11, so
+    pip refuses to install the distribution on 3.10 and 3.10 was never a
+    supported target. The 3.10 matrix legs were therefore removed, leaving
+    two legs (ubuntu-latest and windows-latest, both Py3.11), and the
+    README badge that advertised "3.10 | 3.11" was corrected. No repository
+    evidence establishes official 3.10 support: the only 3.10 claims were the
+    README badge and a MIN_PYTHON_VERSION floor of (3, 10) in
+    setup_environment.py, both of which contradicted the packaging metadata
+    and have been aligned to 3.11. A guard test
+    (test_matrix_python_versions_satisfy_requires_python) now fails if the
+    matrix and requires-python ever disagree again.
   tests:
     - tests/test_packaging_dependencies.py
   files:
@@ -2351,10 +2359,17 @@
          HTTP 403: Resource not accessible by integration.
       2. `gh api -X POST repos/zainmustafam977/YT-AUTOMATION-Clipping/actions/
          workflows/380432637/dispatches -f ref=...` returns the same 403.
-    Root cause: the available token is a GitHub App installation token without
-    the `workflows` scope. This is an environment limitation, not a
-    repository or workflow defect. A third approach was not attempted, since
-    the user caps each problem at three.
+    Root cause: the available token carries no `workflows` scope. Confirmed
+    directly: `curl -sSI https://api.github.com` returns an empty
+    `x-oauth-scopes` header, and `gh auth status` reports the identity as a
+    GH_TOKEN installation token. This is an environment limitation, not a
+    repository or workflow defect.
+    A third approach was tried and failed the same way:
+      3. `gh workflow run ci.yml --ref arena/c08e735f-yt-automation-clipping`
+         (dispatching by workflow filename rather than numeric id) returns
+         the same HTTP 403 against .../actions/workflows/380432637/dispatches.
+    Three approaches are now exhausted, so this stays DEFERRED rather than
+    being attempted a fourth time.
     Verified state: the workflow has ZERO schedule-triggered runs in its
     entire history. Its cron is `17 3 * * *` UTC.
     MANUAL STEPS to close this:
@@ -2374,3 +2389,117 @@
   commits:
     - c714e8e27c1527ed1079449a06f815d53a8abec3
     - 02551413030ff289dbe68c5e82cefd3c084b694f
+
+- id: R4-28
+  type: round4
+  title: Burned AdminPass12345! now rejected in every environment
+  status: DONE-VERIFIED
+  evidence: >-
+    Follow-up to the DASHBOARD_PASSWORD default change (itself carried in
+    FIX-15). Verification found the fix was incomplete.
+    Measured with no .env present, from a directory outside the repo, so the
+    Field default applies rather than a bootstrap-generated value:
+      production, unset                    -> REJECTED (must be explicitly provided)
+      staging, unset                       -> REJECTED (must be explicitly provided)
+      production, strong explicit value    -> ACCEPTED
+      production, AdminPass12345!          -> REJECTED (shipped default)
+      production, too short                -> REJECTED (insecure)
+    So production and staging DO fail closed. An earlier claim that they did
+    was verified with the wrong environment variable (APP_ENV instead of ENV),
+    which silently left the process in development mode; that claim is
+    corrected here.
+    THE GAP THAT WAS FOUND AND CLOSED: before this change the legacy-literal
+    check sat inside the `ENV in (staging, production) or
+    ENFORCE_SECRET_ENTROPY` guard. Development - the default ENV - therefore
+    still accepted AdminPass12345! outright. Since the value is in git
+    history it is public, and any development deployment that gets exposed
+    ships a known admin password. The check was moved above the
+    environment guard so it fires unconditionally, in all three environments,
+    and is not gated behind the optional entropy flag.
+    Verified after the fix: development + AdminPass12345! now REJECTED.
+    development + empty is still ACCEPTED, which is intended - both seeding
+    sites (dashboard/auth.py:43 and services/storage/reset_service.py:488)
+    replace an empty or legacy value with secrets.token_urlsafe(24) and log it
+    once, and storage is PBKDF2-HMAC-SHA256 hashed, never plaintext.
+    ROTATE THIS SECRET is preserved in settings.py and in the error text. If
+    any deployment ever used AdminPass12345!, treat it as permanently
+    compromised and rotate it everywhere.
+    New test: test_burned_default_password_rejected_in_every_environment.
+    Sabotage-verified: neutering the unconditional check (short-circuiting it
+    with `if False and`) fails exactly that test.
+  tests:
+    - tests/test_config_consistency.py
+  files:
+    - shorts_engine/config/settings.py
+    - tests/test_config_consistency.py
+  commits:
+    - dbaa05951cea977d422260dbf6148d8e7572c58a
+
+- id: R4-29
+  type: round4
+  title: seguiemj.ttf untracked from the authorized branch
+  status: DONE-VERIFIED
+  evidence: >-
+    Microsoft's Segoe UI Emoji font (12,934,920 bytes) was tracked on this
+    branch before this session. It is third-party Microsoft IP and a large
+    unrelated binary, so it must not be in git.
+    Action: `git rm --cached assets/fonts/seguiemj.ttf`. This removes it from
+    the index only.
+    Verified the working copy survived the untracking:
+      sha256 before = 451df9bb5546055af625ff86aa72695df43e8e170b4c6c1316fe44e9c7a22f7c
+      sha256 after  = 451df9bb5546055af625ff86aa72695df43e8e170b4c6c1316fe44e9c7a22f7c
+      identical, 12,934,920 bytes still on disk.
+    The ignore rule at .gitignore:204 (assets/fonts/seguiemj.ttf) keeps it out
+    of future commits. Verified with `git check-ignore -v --no-index` and by
+    simulating `git add -A --dry-run`, which does not re-add it.
+    Note on method: `git check-ignore` silently skips TRACKED files, so
+    confirming the rule requires either --no-index or untracking first.
+    setup.ps1 copies the font from C:\Windows\Fonts at setup time, so Windows
+    users get it back locally without it being committed.
+  files:
+    - .gitignore
+    - assets/fonts/seguiemj.ttf
+  tests:
+    - tests/test_config_consistency.py
+  commits:
+    - 5b9754ecd397a4c5372cc7a228be46113cf7ee49
+
+- id: R4-30
+  type: round4
+  title: Playwright browser E2E cannot run locally; CI job added and gated
+  status: DEFERRED
+  evidence: >-
+    18 of the 23 skipped tests are browser-backed E2E under tests/e2e/. They
+    have never produced signal in this environment.
+    WHY IT CANNOT RUN HERE: `python -m playwright install chromium` fails with
+    "Failed to download Chrome for Testing ... Download failure, code=1". The
+    Chrome for Testing CDN is outside this sandbox's network allowlist (only
+    github.com, codeload.github.com, api.github.com, registry.npmjs.org,
+    pypi.org and files.pythonhosted.org are reachable). This is an environment
+    restriction, not a product defect. Three download routes were tried across
+    earlier rounds (CDN, apt package, cached browser) and all failed.
+    WHAT WAS DONE INSTEAD: a `browser-tests` job was added to ci.yml that
+    installs Chromium with `playwright install --with-deps chromium` and runs
+    `pytest tests/e2e`. GitHub-hosted runners have no such network
+    restriction, so the download succeeds there.
+      It is gated to `schedule || workflow_dispatch`, exactly like
+      network-tests, so a browser download or a flaky UI assertion cannot turn
+      a routine pull request red. It is a real gate - it fails the workflow
+      when it runs - it just runs off the pull-request path.
+      timeout-minutes 15, matching the repo-wide policy guard.
+      It includes a no-silent-skip guard: if pytest exits 0 but no test
+      actually ran, the step fails rather than reporting a pass, because a
+      browser that silently fails to launch would otherwise look green.
+    WHY IT IS STILL DEFERRED: the job has not been executed. The same token
+    limitation as R4-27 prevents dispatching it - see that row. The job
+    therefore exists and is ready, but no run has been observed.
+    MANUAL STEPS: Actions tab -> "Industrial CI/CD & Reliability Gate" ->
+    Run workflow -> branch arena/c08e735f-yt-automation-clipping. A user
+    session has the workflows scope this token lacks.
+  tests:
+    - tests/e2e/test_ui_comprehensive.py
+    - tests/e2e/test_realtime_user_journey.py
+  files:
+    - .github/workflows/ci.yml
+  commits:
+    - dbaa05951cea977d422260dbf6148d8e7572c58a

@@ -18,7 +18,7 @@ import secrets
 from pathlib import Path
 
 # Minimum Python version requirement
-MIN_PYTHON_VERSION = (3, 10)
+MIN_PYTHON_VERSION = (3, 11)
 RECOMMENDED_PYTHON_VERSION = (3, 11)
 
 
@@ -43,7 +43,7 @@ def check_python_version():
     if current == RECOMMENDED_PYTHON_VERSION:
         print(f"  [OK] Python {sys.version.split()[0]} (Recommended version)")
     else:
-        print(f"  [OK] Python {sys.version.split()[0]} (Meets minimum >= 3.10 requirement)")
+        print(f"  [OK] Python {sys.version.split()[0]} (Meets minimum >= 3.11 requirement)")
 
 
 def check_ffmpeg():

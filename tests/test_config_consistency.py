@@ -121,9 +121,10 @@ def test_production_requires_explicitly_provided_password(monkeypatch):
     monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
     monkeypatch.delenv("ENFORCE_SECRET_ENTROPY", raising=False)
 
-    # The default *is* the shipped credential, so the more actionable
-    # "shipped default" error fires first. Either rejection is acceptable here;
-    # what matters is that production never boots on an inherited default.
+    # The default is now the empty string, so an unconfigured production
+    # deployment trips the "explicitly provided" rule. Either rejection is
+    # acceptable here; what matters is that production never boots on an
+    # inherited default.
     with pytest.raises(ValidationError, match="shipped default|explicitly provided"):
         PipelineSettings(
             ENV="production",
@@ -358,3 +359,28 @@ def test_sensitive_runtime_updates_apply_in_memory_but_never_reach_disk(tmp_path
     assert secret not in cfg.read_text(encoding="utf-8")
     # The non-sensitive half of the same update must still persist.
     assert on_disk.get("LLM_MODEL_NAME") == "gemini-3.8-flash"
+
+
+def test_burned_default_password_rejected_in_every_environment(monkeypatch):
+    """AdminPass12345! is in git history, so it is public.
+
+    Rejecting it only in production left a known admin password live in any
+    development deployment that gets exposed - and development is the default
+    ENV, so that is the common case rather than an edge case. The check must
+    therefore fire in every environment, including development with entropy
+    enforcement switched off.
+
+    Deliberately not gated behind ENFORCE_SECRET_ENTROPY: an optional flag is
+    not a control for a real credential committed to source.
+    """
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("ENFORCE_SECRET_ENTROPY", "0")
+
+    for env in ("development", "staging", "production"):
+        with pytest.raises(ValidationError, match="shipped default"):
+            PipelineSettings(
+                ENV=env,
+                DASHBOARD_PASSWORD="AdminPass12345!",
+                DASHBOARD_SECRET_KEY=STRONG_SECRET_KEY,
+                _env_file=None,
+            )

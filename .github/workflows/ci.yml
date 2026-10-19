@@ -296,3 +296,91 @@ jobs:
           fi
 
           exit $pytest_status
+
+  # Playwright browser-backed E2E.
+  #
+  # These 18 tests are SKIPPED everywhere else, so they have never produced
+  # signal. The Chromium download is unreachable from a restricted network
+  # (the Chrome for Testing CDN), which is why they cannot run in this
+  # sandbox; GitHub-hosted runners have no such restriction.
+  #
+  # Gated to schedule and manual dispatch, exactly like network-tests, for the
+  # same reason: a browser download or a flaky UI assertion must not turn a
+  # routine pull request red. It is a real gate that fails the workflow when
+  # it runs - it just runs off the pull-request path.
+  browser-tests:
+    name: Browser E2E (nightly / manual)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # 15 to match the repo-wide policy enforced by
+    # test_ci_workflow_has_timeout_minutes_on_all_jobs.
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Run Browser-Backed E2E
+        shell: bash
+        env:
+          DASHBOARD_SECRET_KEY: "test-key-for-ci-only-not-a-real-secret-1234"
+          ENCRYPTION_KEY: "test-fernet-key-for-ci-only"
+        run: |
+          set -o pipefail
+          python -m pytest tests/e2e -q --tb=short 2>&1 | tee pytest-output.txt
+          pytest_status=${PIPESTATUS[0]}
+
+          {
+            echo "### Browser E2E result"
+            echo
+            echo '```'
+            tail -n 60 pytest-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
+          if [ -s failed-lines.txt ]; then
+            while IFS= read -r line; do
+              echo "::error title=Browser E2E failure::$line"
+            done < failed-lines.txt
+          fi
+
+          if [ "$pytest_status" -ne 0 ] && [ ! -s failed-lines.txt ]; then
+            echo "::error title=Browser E2E exited $pytest_status with no FAILED or ERROR line::Annotating the raw output tail."
+            tail -n 40 pytest-output.txt > pytest-tail.txt
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=browser-output-tail::$line"
+            done < pytest-tail.txt
+          fi
+
+          # Guard against the silent-skip failure mode: if the browser is
+          # somehow still unavailable the suite would report 0 collected and
+          # exit 0, which reads as a pass. Require that tests actually ran.
+          if [ "$pytest_status" -eq 0 ] && ! grep -qE '^[0-9]+ (passed|failed)|passed' pytest-output.txt; then
+            echo "::error title=Browser E2E collected nothing::No tests ran; refusing to report a pass."
+            exit 1
+          fi
+
+          exit $pytest_status
