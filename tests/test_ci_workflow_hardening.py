@@ -111,3 +111,51 @@ def test_jobs_running_the_ledger_checker_check_out_full_history():
             "tools/check_agent_ledger.py, either directly or via "
             "tests/test_fresh_eyes.py."
         )
+
+
+# POSIX-only shell syntax. If any of these appear in a `run:` block, the step
+# must pin `shell: bash`, because windows-latest defaults to PowerShell and
+# will fail immediately on every one of them.
+_POSIX_MARKERS = (
+    "set -o pipefail",
+    "PIPESTATUS",
+    "2>&1",
+    "tee ",
+    "$((",
+    "exit $",
+)
+
+
+def test_posix_run_steps_pin_bash_shell():
+    """Steps using POSIX shell syntax must pin `shell: bash`.
+
+    windows-latest runs `shell: pwsh` by default. In January 2026 both Windows
+    matrix legs failed instantly with exit code 1 and collected no test results
+    at all, because a reporting step used `set -o pipefail` and `tee`. The
+    failure looked like broken tests; it was a shell dialect mismatch.
+
+    Regression guard: any step in ci.yml whose script uses POSIX syntax must
+    declare `shell: bash`.
+    """
+    ci_file = Path(".github/workflows/ci.yml")
+    assert ci_file.exists(), "CI workflow file not found"
+
+    data = yaml.safe_load(ci_file.read_text(encoding="utf-8"))
+    offenders = []
+
+    for job_name, job in data.get("jobs", {}).items():
+        for step in job.get("steps", []) or []:
+            run = step.get("run") or ""
+            if not run:
+                continue
+            if any(marker in run for marker in _POSIX_MARKERS):
+                if step.get("shell") != "bash":
+                    offenders.append(
+                        f"job '{job_name}' step '{step.get('name', '<unnamed>')}' "
+                        f"uses POSIX syntax but shell={step.get('shell', '<default pwsh>')!r}"
+                    )
+
+    assert not offenders, (
+        "Steps using POSIX shell syntax must pin `shell: bash` "
+        "(windows-latest defaults to PowerShell):\n  " + "\n  ".join(offenders)
+    )
