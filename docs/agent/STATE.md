@@ -14,6 +14,7 @@ Counts in this file are generated from the ledger.
 | CONFIRMED | 2 |
 | DEFERRED | 3 |
 | DONE-VERIFIED | 166 |
+| IN-PROGRESS | 1 |
 | UNKNOWN | 15 |
 
 ## Round 4
@@ -241,4 +242,11 @@ Counts in this file are generated from the ledger.
 * Tests: `tests/test_fresh_eyes.py`, `tests/test_config_consistency.py`, `tests/test_ci_workflow_hardening.py`
 * Files: `docs/agent/ledger.yaml`, `.github/workflows/ci.yml`
 * Commits: `9fc15430c52400f8ed6d9be8f5d00a21e14dda63`
+
+### R4-33 — Red Windows matrix leg at 04d5f4e - infra signature, re-run pending `[IN-PROGRESS]`
+
+* Evidence: DISCLOSED RATHER THAN SUPPRESSED. Commit 04d5f4e changed only docs/agent/ledger.yaml and the regenerated STATE.md and FINAL_REPORT.md. No product or test code was touched. Its Industrial run 39418689967 FAILED on one leg: Test Suite Matrix (windows-latest - Py3.11) failure Test Suite Matrix (ubuntu-latest - Py3.11) success WHY THIS LOOKS LIKE INFRASTRUCTURE, NOT A REGRESSION - stated as a reasoned assessment, not a conclusion: 1. The commit is documentation only. Generated docs cannot change Windows rendering behaviour, and the identical commit passed on ubuntu. 2. There is no test-level failure information at all. The step "Run Pytest Test Suite" has conclusion=failure, yet the job carries only 2 annotations: a Node.js 20 deprecation warning and the generic "Process completed with exit code 1". No FAILED line, no ERROR line. 3. The blind-spot fallback at ci.yml:187 - which annotates the raw output tail when pytest exits non-zero with no parseable FAILED or ERROR line - ALSO produced nothing. That means the step died before reaching its own error reporting, which is the signature of the shell or process being killed rather than of a test asserting false. The same class of failure is recorded in R4-23, where Windows legs died with 0xC0000142 (STATUS_DLL_INIT_FAILED). 4. Timing: the Windows leg ran 11:58:03Z to 12:11:30Z (about 13.5 minutes) against ubuntu's 11:58:03Z to 12:03:57Z (about 6 minutes). It completed inside the 15-minute timeout, so this is not a timeout, but the leg was unusually slow. WHAT WOULD CONVERT THIS TO CONFIRMED: a re-run of the same commit. Job rerun and workflow_dispatch are refused with HTTP 403 for the available token (no workflows scope), so the only available mechanism is a new commit - which this row provides. If the next run is green, this is CONFIRMED transient infrastructure. If it fails again with the same no-information signature, it needs deeper investigation and must not be dismissed. NOT DONE: this is deliberately not recorded as DONE-VERIFIED, not retried, and not hidden. A red run is reported as red.
+* Tests: `tests/test_fresh_eyes.py`
+* Files: `.github/workflows/ci.yml`
+* Commits: `04d5f4ea42439cfcaaddd71f1e3dc032b9b02302`
 
