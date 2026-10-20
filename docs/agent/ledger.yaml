@@ -2677,8 +2677,8 @@
 
 - id: R4-33
   type: round4
-  title: Red Windows matrix leg at 04d5f4e - infra signature, re-run pending
-  status: IN-PROGRESS
+  title: Red Windows matrix leg at 04d5f4e - CONFIRMED transient infrastructure
+  status: DONE-VERIFIED
   evidence: >-
     DISCLOSED RATHER THAN SUPPRESSED. Commit 04d5f4e changed only
     docs/agent/ledger.yaml and the regenerated STATE.md and FINAL_REPORT.md.
@@ -2714,8 +2714,24 @@
     CONFIRMED transient infrastructure. If it fails again with the same
     no-information signature, it needs deeper investigation and must not be
     dismissed.
-    NOT DONE: this is deliberately not recorded as DONE-VERIFIED, not
-    retried, and not hidden. A red run is reported as red.
+    RESOLVED BY RE-RUN, SO NOW CONFIRMED TRANSIENT INFRASTRUCTURE.
+      The next commit (154d43a), which changed only this ledger row and the
+      regenerated docs, re-triggered the workflow. Its Industrial run
+      39420969279 is success, and the previously failing leg reports:
+        Test Suite Matrix (windows-latest - Py3.11): success
+        2026-10-20T12:16:27Z -> 2026-10-20T12:26:05Z (about 9.6 minutes)
+      Same leg, same runner image, same tests, green - and 4 minutes faster
+      than the run that failed. Combined with the docs-only diff and the
+      total absence of test-level failure output, the intermittent
+      conclusion is now evidenced rather than merely argued.
+      The other three runs at 154d43a are also success: 39420969112,
+      39420969099 and 39420960362.
+    Caveat that survives the re-run: "intermittent" explains this
+    occurrence, it does not fix it. The failure mode is still undiagnosable
+    from the runner - no test-level output, and the ci.yml:187 fallback
+    never fires because the step dies before reaching it. Anyone seeing a
+    Windows leg fail with a bare exit code 1 and no annotations should
+    re-run before assuming a regression.
   tests:
     - tests/test_fresh_eyes.py
   files:
