@@ -2374,12 +2374,16 @@
     being attempted a fourth time.
     Verified state: the workflow has ZERO schedule-triggered runs in its
     entire history. Its cron is `17 3 * * *` UTC.
-    MANUAL STEPS to close this:
-      1. Wait for the next scheduled fire at 03:17 UTC, or
-      2. Run it yourself from the Actions tab: open
-         "Industrial CI/CD & Reliability Gate", click Run workflow, select
-         branch arena/c08e735f-yt-automation-clipping. A user session has the
-         scope this token lacks.
+    MANUAL STEPS to close this (the workflow declares workflow_dispatch with
+    NO inputs, verified via the API, so there is nothing to fill in):
+      1. Wait for the next scheduled fire at 03:17 UTC (cron "17 3 * * *"), or
+      2. GitHub Actions UI: Actions -> "Industrial CI/CD & Reliability Gate"
+         -> "Run workflow" -> branch
+         arena/c08e735f-yt-automation-clipping -> Run workflow.
+         No input fields appear, because none are declared.
+      A browser session signed in as the repository owner has the workflows
+      scope that this token lacks. Confirm the run by reading its job
+      conclusion back; do not assume it passed.
     Do not mark this DONE-VERIFIED until the job has actually completed and
     its conclusion has been read back. A URL that renders is not evidence that
     a run succeeded.
@@ -2495,9 +2499,13 @@
     WHY IT IS STILL DEFERRED: the job has not been executed. The same token
     limitation as R4-27 prevents dispatching it - see that row. The job
     therefore exists and is ready, but no run has been observed.
-    MANUAL STEPS: Actions tab -> "Industrial CI/CD & Reliability Gate" ->
-    Run workflow -> branch arena/c08e735f-yt-automation-clipping. A user
-    session has the workflows scope this token lacks.
+    MANUAL STEPS: Actions -> "Industrial CI/CD & Reliability Gate" -> Run
+    workflow -> branch arena/c08e735f-yt-automation-clipping -> Run workflow.
+    The workflow declares workflow_dispatch with NO inputs, so no fields need
+    filling. A user session has the workflows scope this token lacks. Both
+    gated jobs (Network Tests and Browser E2E) live in this one workflow, so a
+    single dispatch runs both. Read the job conclusions back afterwards; a
+    skipped job is not a pass and an unrun job has no status at all.
   tests:
     - tests/e2e/test_ui_comprehensive.py
     - tests/e2e/test_realtime_user_journey.py
@@ -2586,3 +2594,83 @@
   commits:
     - dbaa05951cea977d422260dbf6148d8e7572c58a
     - 4d92b38b3339fbafdacb8969c721088ff3e68225
+
+- id: R4-32
+  type: round4
+  title: Final verification at 9fc1543 plus recovery from a fourth sandbox reset
+  status: DONE-VERIFIED
+  evidence: >-
+    SANDBOX RESET, FOURTH OCCURRENCE. On opening this round the local branch
+      pointer had been rewound to 27a3133ed47f99481342e1f483161970f16e26be
+      (the base commit) while origin still held 9fc1543. The working tree
+      still matched 9fc1543 byte for byte - only the ref had moved - so no
+      work was lost. The venv and all untracked files were destroyed.
+    Recovery, deliberately without reset/clean/checkout --/restore:
+        1. Confirmed 9fc1543 was still a reachable local object.
+        2. `git update-ref refs/heads/arena/... 9fc1543` - moves the pointer
+           only, touching neither index nor worktree.
+        3. `git read-tree HEAD` - refreshed the stale index from the new HEAD.
+        4. Verified: 0 dirty files, and every tracked file byte-identical to
+           HEAD (cmp against `git show HEAD:<path>`), 0 mismatches.
+        5. Rebuilt the venv from requirements.txt and requirements-dev.txt.
+    Two post-reset artefacts worth recording, because both cause false
+    failures that look like product defects:
+      (a) SHALLOW CLONE. check_agent_ledger.py failed with "this is a shallow
+          clone, so cited commit ids cannot be verified". Fixed with
+          `git fetch --unshallow`, then
+          `git fetch origin '+refs/heads/*:refs/remotes/origin/*'` because
+          c7a47ce (the r4-hardening tip, cited in the ledger) lives on
+          another branch and was therefore not present. After both fetches
+          all 29 distinct shas in the ledger resolve locally.
+      (b) FFMPEG WITHOUT drawtext. Rebuilding the venv installed
+          imageio-ffmpeg's build, which lacks the drawtext filter. Two
+          rendering tests failed with "No such filter: 'drawtext'". That is
+          an environment defect, not a product one - CI installs ffmpeg from
+          apt. Swapping in the ffmpeg_binaries 6.0-static build restored the
+          filter and both tests pass. Recorded so the failure is not
+          mistaken for a regression if it recurs.
+    CI FACT - all four runs at head_sha 9fc1543, each echoing its own
+    head_sha so the association is read, not inferred. Zero runs in this set
+    carry any other headSha:
+      Agent Gates (R3) 39331156118 pull_request success - 8/8 jobs:
+        Pytest, Ruff Lint, mypy Ratchet, Ledger Consistency, Dependency
+        Audit, Sabotage Checks, Scale (1k), E2E Scenarios. No skips.
+      Agent Gates (R3) 39331151359 push success - same 8/8.
+      CI/CD Pipeline 39331156230 success - Lint and Test Suite; Deploy to
+        Staging and Deploy to Production skipped, expected on a branch run.
+      Industrial CI/CD and Reliability Gate 39331156360 success - Code
+        Quality and Linting, Security and CVE Scan, Docker Build, Test Suite
+        Matrix x2 (ubuntu and windows, both Py3.11).
+    NOT RUN, reported as skipped rather than passed: Network Tests and
+      Browser E2E, both gated to schedule and workflow_dispatch. The
+      dispatch was re-attempted this round and refused again with HTTP 403.
+      The workflow declares workflow_dispatch with NO inputs (confirmed via
+      the API), so there were no input fields to supply; the failure is
+      purely scope. `x-oauth-scopes` is empty. A skipped job is not a pass
+      and an unrun job has no status.
+    LOCAL TEST RUN - not a substitute for CI. At 9fc1543, venv rebuilt,
+      ffmpeg 6.0-static with drawtext and ffprobe present:
+        pytest -q -m "not network" -> 1123 passed, 23 skipped, 1 deselected,
+        zero failures, 225.65s.
+      Caveat that does not go away: 23 tests are SKIPPED, not executed - 18
+      browser-backed E2E plus 5 platform/other.
+    LEDGER FACT. 186 rows, of which 31 are round4. Reported precisely
+      because a 155-row figure circulates for a different branch and a
+      200-row figure for the R4 branch; neither is this branch's count.
+      check_agent_ledger.py OK. Three consecutive gen_agent_docs.py runs are
+      md5-identical. All 29 distinct cited shas verified with
+      git cat-file -e.
+    FONT. Untracked, not staged, ignore rule at .gitignore:204. The local
+      working copy was lost to this reset because it is untracked; that is
+      an environment loss, not a tracking violation - the untrack itself
+      preserved it (sha256 identical before and after). setup.ps1 restores
+      it from C:\Windows\Fonts on Windows.
+  tests:
+    - tests/test_fresh_eyes.py
+    - tests/test_config_consistency.py
+    - tests/test_ci_workflow_hardening.py
+  files:
+    - docs/agent/ledger.yaml
+    - .github/workflows/ci.yml
+  commits:
+    - 9fc15430c52400f8ed6d9be8f5d00a21e14dda63
