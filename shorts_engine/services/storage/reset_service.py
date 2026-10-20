@@ -8,6 +8,7 @@ system stability or requiring server restarts.
 import os
 import shutil
 import logging
+import secrets
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, Union
@@ -15,7 +16,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from shorts_engine.config.settings import settings
+from shorts_engine.config.settings import settings, LEGACY_DEFAULT_DASHBOARD_PASSWORD
 from shorts_engine.db.models import (
     SourceVideo,
     Transcript,
@@ -480,7 +481,12 @@ class ResetService:
                     db.query(User).delete()
                     db.commit()
                     default_user = os.getenv("DASHBOARD_USERNAME", "admin")
-                    default_pass = os.getenv("DASHBOARD_PASSWORD", "AdminPass12345!")
+                    # Fall back to the configured value, never to the shipped
+                    # default. If neither is usable, generate a random password
+                    # instead of re-seeding a publicly known credential.
+                    default_pass = os.getenv("DASHBOARD_PASSWORD") or settings.DASHBOARD_PASSWORD
+                    if not default_pass or default_pass == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+                        default_pass = secrets.token_urlsafe(24)
                     new_admin = User(
                         username=default_user,
                         password_hash=hash_password(default_pass),

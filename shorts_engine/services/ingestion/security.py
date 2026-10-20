@@ -139,7 +139,7 @@ def validate_ingestion_url(url_or_id: str) -> str:
 
     # Check for raw IP literal (IPv4 or IPv6)
     try:
-        ip = ipaddress.ip_address(clean_host)
+        ipaddress.ip_address(clean_host)
         raise SSRFValidationError(
             f"Direct IP address access is strictly forbidden ({clean_host}). "
             "Only official YouTube domain names are accepted."

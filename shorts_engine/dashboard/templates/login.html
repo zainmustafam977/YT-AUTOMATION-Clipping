@@ -28,7 +28,10 @@
                     <button type="submit" class="btn btn-primary w-100" style="background-color: #7c4dff; border-color: #7c4dff;">Sign In</button>
                     <div class="mt-3 text-center text-muted small">
                         <span class="badge bg-dark border border-secondary text-info px-2 py-1" style="font-size: 0.8rem;">
-                            Default: <strong>admin</strong> / <strong>AdminPass12345!</strong>
+                            No default password is shipped. On a fresh install the
+                            generated administrator password is written to
+                            <code>storage/logs</code> at first boot &mdash; set
+                            <code>DASHBOARD_PASSWORD</code> in <code>.env</code> to choose your own.
                         </span>
                     </div>
                 </form>

@@ -14,7 +14,6 @@ import uvicorn
 
 # Suppress insecure key warning for tests
 os.environ.setdefault("TESTING", "1")
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.config.settings import settings
@@ -25,6 +24,18 @@ from shorts_engine.dashboard.auth import (
 )
 from shorts_engine.db.session import SessionLocal, init_db
 from shorts_engine.db.models import User, UserRole
+
+@pytest.fixture(autouse=True)
+def _in_memory_db(request):
+    """Scope this module to a private in-memory DB.
+
+    Previously the URL was set in os.environ at import time, which leaked an
+    empty in-memory engine into every other test module (tests/e2e is
+    collected first). See `in_memory_sqlite` in tests/conftest.py.
+    """
+    return request.getfixturevalue("in_memory_sqlite")
+
+
 
 
 def get_free_port() -> int:

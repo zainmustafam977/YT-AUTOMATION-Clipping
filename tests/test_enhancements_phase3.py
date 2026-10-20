@@ -300,32 +300,31 @@ def test_preflight_channel_discovery_registration(auth_client):
         assert data["channel"]["exists"] is False
 
         # Ingest with register_channel = true
-        with patch("shorts_engine.dashboard.routes.status.threading.Thread"):
-            ingest_resp = client.post(
-                "/process-video",
-                data={
-                    "video_input": fresh_yt_id,
-                    "force": "false",
-                    "register_channel": "true",
-                    "detected_channel_name": channel_name,
-                    "detected_channel_id": channel_handle,
-                    "csrf_token": csrf_token,
-                },
-                headers={"HX-Request": "true"},
-            )
-            assert ingest_resp.status_code == 200
+        ingest_resp = client.post(
+            "/process-video",
+            data={
+                "video_input": fresh_yt_id,
+                "force": "false",
+                "register_channel": "true",
+                "detected_channel_name": channel_name,
+                "detected_channel_id": channel_handle,
+                "csrf_token": csrf_token,
+            },
+            headers={"HX-Request": "true"},
+        )
+        assert ingest_resp.status_code == 200
 
-            # Verify channel registered in DB
-            created_channel = db.query(Channel).filter_by(youtube_channel_id=channel_handle).first()
-            assert created_channel is not None
-            assert created_channel.name == channel_name
+        # Verify channel registered in DB
+        created_channel = db.query(Channel).filter_by(youtube_channel_id=channel_handle).first()
+        assert created_channel is not None
+        assert created_channel.name == channel_name
 
-            # Cleanup
-            try:
-                db.delete(created_channel)
-                db.commit()
-            except Exception:
-                db.rollback()
+        # Cleanup
+        try:
+            db.delete(created_channel)
+            db.commit()
+        except Exception:
+            db.rollback()
 
 
 # ---------------------------------------------------------------------------

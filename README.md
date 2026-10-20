@@ -1,7 +1,7 @@
 # ⚡ YouTube Shorts Autonomous Production & Syndication Engine
 
 [![CI/CD Reliability Gate](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml/badge.svg)](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![Database](https://img.shields.io/badge/database-SQLite%20%7C%20PostgreSQL-blue.svg)](https://www.sqlite.org/)
 [![AI Models](https://img.shields.io/badge/AI-Gemini%203.8%20%7C%20Groq%20%7C%20Whisper-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![Hardware Accel](https://img.shields.io/badge/Hardware-NVENC%20%7C%20QSV%20%7C%20VAAPI-green.svg)](https://ffmpeg.org)
@@ -212,7 +212,7 @@ This repository contains intentional, authorized runtime state, encrypted databa
 ## 💻 System Requirements & Prerequisites
 
 - **Operating System**: Windows 10/11 (x64) or Ubuntu 20.04/22.04 LTS (x64).
-- **Python**: Version `3.10` or `3.11`.
+- **Python**: Version `3.11` or newer (see `requires-python` in `pyproject.toml`).
 - **FFmpeg**: Version `5.0+` with `libx264`, `libass`, and hardware acceleration encoders (`h264_nvenc`, `h264_qsv`).
 - **GPU (Optional, Recommended)**: NVIDIA GTX 1060+ / RTX Series with CUDA 11.8+ for real-time faster-whisper transcription and NVENC rendering.
 - **RAM**: Minimum 8 GB (16 GB recommended for high-resolution processing).
@@ -229,7 +229,7 @@ This repository contains intentional, authorized runtime state, encrypted databa
    .\setup.ps1
    ```
 2. The bootstrapper automatically:
-   - Verifies Python 3.10/3.11 and FFmpeg installation.
+   - Verifies Python 3.11+ and FFmpeg installation.
    - Creates a dedicated virtual environment (`.venv`).
    - Installs all dependencies from `requirements.txt` and `requirements-dev.txt`.
    - Initializes storage directories and verifies database migrations.

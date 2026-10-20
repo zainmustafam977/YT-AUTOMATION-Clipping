@@ -30,6 +30,7 @@ from shorts_engine.services.ingestion.local_loader import LocalVideoIngestionSer
 from shorts_engine.services.ingestion.oauth_flow import YouTubeDeviceOAuth
 from shorts_engine.services.ingestion.session_harvester import SessionHarvester
 from shorts_engine.services.ingestion.proxy_manager import ProxyManager
+from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
 from shorts_engine.services.ingestion.hotfolder_watcher import hotfolder_watcher
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,6 @@ class LocalPathIngestRequest(BaseModel):
 class LocalPathValidateRequest(BaseModel):
     file_path: str = Field(..., description="Path to check and probe")
 
-
-from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
 
 @router.post(
     "/local-path",

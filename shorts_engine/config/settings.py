@@ -6,11 +6,56 @@ Implements unified single source of truth for all pipeline constants.
 import os
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Any, Annotated, Optional, List, Dict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Shipped default operator password (SEV-2 - see docs/audit/VERIFICATION_REPORT.md
+# and docs/audit/findings.yaml). It is a real credential-shaped value that was
+# committed to source, so it must be treated as burned:
+#   ROTATE THIS SECRET - if any deployment ever used it, change it everywhere.
+# The literal is retained ONLY so startup can detect and refuse to boot on it.
+# Do not reintroduce it as a fallback anywhere else in the codebase.
+LEGACY_DEFAULT_DASHBOARD_PASSWORD = "AdminPass12345!"
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_key_pool(value: Any) -> List[str]:
+    """Parse an API-key pool value, tolerating the blank shipped template.
+
+    .env.example ships the pool entries empty (GEMINI_API_KEYS=,
+    GROQ_API_KEYS=, ...) and setup_environment.py copies that template
+    verbatim to .env. Recent pydantic-settings JSON-decodes complex fields
+    at the source and raises
+      SettingsError: error parsing value for field ... from source
+      "DotEnvSettingsSource"
+    on an empty string, so the application cannot even be imported after a
+    bootstrap - every test touching settings then dies during collection.
+
+    The fields are annotated NoDecode so the raw string reaches this
+    validator instead of being rejected upstream. Blank means "no keys",
+    which is the field default. JSON arrays and comma-separated values are
+    both accepted for real key lists.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        try:
+            import json
+
+            parsed = json.loads(text)
+        except ValueError as exc:
+            raise ValueError(f"not a valid JSON list: {text!r}") from exc
+        if not isinstance(parsed, list):
+            raise ValueError(f"expected a JSON list, got {type(parsed).__name__}")
+        return [str(v).strip() for v in parsed if str(v).strip()]
+    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 class PipelineSettings(BaseSettings):
@@ -84,21 +129,41 @@ class PipelineSettings(BaseSettings):
         description="Enable high-speed cloud Whisper transcription via Groq (whisper-large-v3-turbo, 28.8k ASD free)",
     )
     GEMINI_API_KEY: Optional[str] = Field(default=None, description="Google Gemini API Key")
-    GEMINI_API_KEYS: List[str] = Field(default_factory=list, description="Pool of Gemini API keys for load balancing & 429 failover")
+    @field_validator("GEMINI_API_KEYS", mode="before")
+    @classmethod
+    def _validate_gemini_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    GEMINI_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of Gemini API keys for load balancing & 429 failover")
     GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API Key (high-speed LPU inference)")
-    GROQ_API_KEYS: List[str] = Field(default_factory=list, description="Pool of Groq API keys for load balancing & 429 failover")
+    @field_validator("GROQ_API_KEYS", mode="before")
+    @classmethod
+    def _validate_groq_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    GROQ_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of Groq API keys for load balancing & 429 failover")
     GROQ_MODEL_NAME: str = Field(
         default="openai/gpt-oss-120b",
         description="Groq model identifier (e.g. openai/gpt-oss-120b, qwen/qwen3.8-27b)",
     )
     OPENROUTER_API_KEY: Optional[str] = Field(default=None, description="OpenRouter API Key for multi-model fallback")
-    OPENROUTER_API_KEYS: List[str] = Field(default_factory=list, description="Pool of OpenRouter API keys for load balancing & 429 failover")
+    @field_validator("OPENROUTER_API_KEYS", mode="before")
+    @classmethod
+    def _validate_openrouter_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    OPENROUTER_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of OpenRouter API keys for load balancing & 429 failover")
     OPENROUTER_MODEL_NAME: str = Field(
         default="meta-llama/llama-3.3-70b-instruct:free",
         description="OpenRouter model identifier (e.g. meta-llama/llama-3.3-70b-instruct:free, google/gemini-2.0-flash-exp:free)",
     )
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key for backup / failover")
-    OPENAI_API_KEYS: List[str] = Field(default_factory=list, description="Pool of OpenAI API keys for load balancing & 429 failover")
+    @field_validator("OPENAI_API_KEYS", mode="before")
+    @classmethod
+    def _validate_openai_api_keys(cls, v: Any) -> Any:
+        return _parse_key_pool(v)
+
+    OPENAI_API_KEYS: Annotated[List[str], NoDecode] = Field(default_factory=list, description="Pool of OpenAI API keys for load balancing & 429 failover")
     OPENAI_MODEL_NAME: str = Field(
         default="gpt-4o-mini",
         description="OpenAI model identifier (e.g. gpt-4o-mini, gpt-4o)",
@@ -474,7 +539,28 @@ class PipelineSettings(BaseSettings):
     DASHBOARD_PORT: int = 8080
     DASHBOARD_SECRET_KEY: str = Field(default="change-me-in-prod", description="Session signing key")
     DASHBOARD_USERNAME: str = Field(default="admin", description="Operator dashboard username")
-    DASHBOARD_PASSWORD: str = Field(default="AdminPass12345!", description="Operator dashboard password")
+    # Deliberately empty, not LEGACY_DEFAULT_DASHBOARD_PASSWORD.
+    #
+    # The shipped literal was a working admin credential committed to source, so
+    # it must never be usable again - not even as a development convenience.
+    # Both seeding sites (dashboard/auth.py and
+    # services/storage/reset_service.py) already replace an empty or legacy
+    # value with a freshly generated random password and log it once, so an
+    # unset value still yields a reachable admin account without shipping a
+    # known credential. Staging/production/strict mode require an explicit
+    # value and refuse to boot otherwise.
+    #
+    # ROTATE THIS SECRET: if any deployment ever used AdminPass12345!, change
+    # it everywhere. Treat it as permanently burned.
+    DASHBOARD_PASSWORD: str = Field(
+        default="",
+        description=(
+            "Operator dashboard password, used only to seed the initial admin "
+            "account. Empty means 'generate a random password at boot and log "
+            "it once'. Staging/production/STRICT_MODE require an explicit, "
+            "strong value supplied through the environment."
+        ),
+    )
 
     # Video Ingestion & Triple-Tier Authentication (Pillars 1-4)
     YOUTUBE_OAUTH_TOKEN_PATH: Path = Field(
@@ -582,12 +668,54 @@ class PipelineSettings(BaseSettings):
                 f"TARGET_DURATION_MIN_SEC ({self.TARGET_DURATION_MIN_SEC}) cannot exceed "
                 f"TARGET_DURATION_MAX_SEC ({self.TARGET_DURATION_MAX_SEC})"
             )
+        # The shipped credential is burned and must never work anywhere.
+        #
+        # AdminPass12345! is in git history, so it is public. Rejecting it only
+        # in production leaves a known admin password live in any development
+        # or staging-ish deployment that someone exposes - and development is
+        # the default ENV, so that is the common case, not an edge case. This
+        # check therefore runs in every environment, before the
+        # production-only guard below, and is not gated behind
+        # ENFORCE_SECRET_ENTROPY: an optional flag is not a control for a real
+        # credential committed to source.
+        if self.DASHBOARD_PASSWORD == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+            raise ValueError(
+                "DASHBOARD_PASSWORD is still the shipped default "
+                "(AdminPass12345!). This value is in git history and must be "
+                "considered permanently compromised. ROTATE THIS SECRET: set a "
+                "unique value through the environment (DASHBOARD_PASSWORD=...) "
+                "before starting."
+            )
+
         # Production & Staging security guard: disallow default credentials & enforce minimum entropy
-        if self.ENV in ("staging", "production"):
-            insecure_passwords = {"change-me", "admin", "password", "123456", "12345678", "root", "ytpassword_secret_change_me", ""}
+        if self.ENV in ("staging", "production") or self.ENFORCE_SECRET_ENTROPY:
+            insecure_passwords = {
+                "change-me", "admin", "password", "123456", "12345678", "root",
+                "ytpassword_secret_change_me", "",
+                LEGACY_DEFAULT_DASHBOARD_PASSWORD.lower(),
+            }
+            mode = self.ENV if self.ENV in ("staging", "production") else "ENFORCE_SECRET_ENTROPY"
+            # Order matters: the most actionable message must win.
+            #
+            # The field default is now the empty string, so an unconfigured
+            # deployment trips the length rule. Reporting that as "Insecure
+            # DASHBOARD_PASSWORD" is true but useless - the operator's actual
+            # mistake is that they never set one. Ask for the explicit value
+            # first, then check whether what they supplied is any good.
+            if "DASHBOARD_PASSWORD" not in self.model_fields_set:
+                raise ValueError(
+                    f"DASHBOARD_PASSWORD must be explicitly provided via the environment "
+                    f"for '{mode}'. Falling back to the built-in default is not permitted."
+                )
+            if self.DASHBOARD_PASSWORD == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+                raise ValueError(
+                    f"DASHBOARD_PASSWORD is still the shipped default for '{mode}'. "
+                    "ROTATE THIS SECRET: set a unique value through the environment "
+                    "(DASHBOARD_PASSWORD=...) before starting."
+                )
             if self.DASHBOARD_PASSWORD.lower() in insecure_passwords or len(self.DASHBOARD_PASSWORD) < 12:
                 raise ValueError(
-                    f"Insecure DASHBOARD_PASSWORD for '{self.ENV}' environment. "
+                    f"Insecure DASHBOARD_PASSWORD for '{mode}' environment. "
                     "Password must not be a common default and must be at least 12 characters long."
                 )
             if self.DASHBOARD_SECRET_KEY in ("change-me-in-prod", "") or len(self.DASHBOARD_SECRET_KEY) < 32:
@@ -616,12 +744,16 @@ class PipelineSettings(BaseSettings):
             "change-me-in-prod",
             "change-me",
             "ytpassword_secret_change_me",
+            # Shipped default operator password. It is a real credential-shaped
+            # default in source, so it must be covered by this guard.
+            "AdminPass12345!",
         }
         has_placeholders = (
             (self.MASTER_ENCRYPTION_KEY is not None and self.MASTER_ENCRYPTION_KEY in placeholder_keys)
             or (self.SECRETS_MASTER_KEY is not None and self.SECRETS_MASTER_KEY in placeholder_keys)
             or (self.ENCRYPTION_SALT is not None and self.ENCRYPTION_SALT in placeholder_keys)
             or self.DASHBOARD_SECRET_KEY in placeholder_keys
+            or self.DASHBOARD_PASSWORD in placeholder_keys
             or (self.MASTER_ENCRYPTION_KEY is not None and len(self.MASTER_ENCRYPTION_KEY) < 32)
             or (self.SECRETS_MASTER_KEY is not None and len(self.SECRETS_MASTER_KEY) < 32)
             or len(self.DASHBOARD_SECRET_KEY) < 32

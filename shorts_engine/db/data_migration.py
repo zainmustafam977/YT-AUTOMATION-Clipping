@@ -146,6 +146,9 @@ def migrate_sqlite_to_postgres(
             continue
 
         dst_table: Table = dst_metadata.tables[table_name]
+        # Initialised here because the schema_migrations branch below reads it
+        # before the batch loop (which also sets it) is reached.
+        migrated_for_table = 0
         col_types = {c.name: c.type for c in dst_table.columns}
 
         try:

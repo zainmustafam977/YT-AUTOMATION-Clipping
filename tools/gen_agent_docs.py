@@ -156,7 +156,7 @@ def render_state(rows: List[Dict[str, Any]]) -> str:
     lines = [
         "# STATE — Autonomous Hardening Working Tracker",
         "",
-        "Branch: `arena/1bfe7f4c-yt-automation-clipping`",
+        "Branch: `arena/c08e735f-yt-automation-clipping`",
         "Working dir: `/home/user/YT-AUTOMATION-Clipping`",
         "",
         "**Single source of truth: `docs/agent/ledger.yaml`.**",
@@ -169,6 +169,24 @@ def render_state(rows: List[Dict[str, Any]]) -> str:
     ]
     for k in sorted(counts):
         lines.append(f"| {k} | {counts[k]} |")
+
+    r4 = [r for r in rows if r.get("type") == "round4"]
+    if r4:
+        r4.sort(key=lambda r: str(r.get("id", "")))
+        lines.extend(["", "## Round 4", ""])
+        for r in r4:
+            lines.append(f"### {r.get('id')} — {r.get('title')} `[{r.get('status')}]`")
+            lines.append("")
+            ev = " ".join(str(r.get("evidence", "")).split())
+            if ev:
+                lines.append(f"* Evidence: {ev}")
+            for label, key in (("Tests", "tests"), ("Files", "files"), ("Commits", "commits")):
+                vals = r.get(key) or []
+                if vals:
+                    lines.append(f"* {label}: " + ", ".join(f"`{v}`" for v in vals))
+                else:
+                    lines.append(f"* {label}: none")
+            lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -183,10 +201,21 @@ def render_final_report(rows: List[Dict[str, Any]]) -> str:
     batch = [r for r in rows if r.get("type") == "batch_op"]
     ease = [r for r in rows if r.get("type") == "ease_of_use"]
 
+    # Facts this generator can actually establish from the ledger. Anything it
+    # cannot measure is reported as "not measured here" rather than asserted —
+    # see docs/audit/VERIFICATION_REPORT.md finding C27 (claims of completeness
+    # that no gate ever produced).
+    OPEN_STATUSES = ("PARTIAL", "BLOCKED", "DEFERRED")
+    open_count = sum(counts.get(s, 0) for s in OPEN_STATUSES)
+    status_summary = ", ".join(f"{k}={counts[k]}" for k in sorted(counts)) or "none"
+    todo_cells = sum(
+        1 for r in rows for v in r.values() if isinstance(v, str) and "TODO" in v
+    )
+
     lines = [
         "# FINAL REPORT",
         "",
-        "**Branch**: `arena/1bfe7f4c-yt-automation-clipping`",
+        "**Branch**: `arena/c08e735f-yt-automation-clipping`",
         "**Single source of truth**: `docs/agent/ledger.yaml`",
         "",
         "This file is generated. Hand-editing is forbidden; edit the ledger.",
@@ -251,19 +280,28 @@ def render_final_report(rows: List[Dict[str, Any]]) -> str:
         "",
         f"## E2E scenarios (17.2): {len(e2es)}",
         "",
-        "## Real gate output (this run)",
+        "## Ledger facts (computed by this generator at run time)",
         "",
-        "* Ledger: 155 rows loaded, all required keys present, no void/TODO/F-title-mismatch.",
-        "* Mypy: 0 errors (baseline = 0).",
-        "* Ruff: clean on all new code.",
-        "* Sabotage suite: 21/21 passing inline.",
-        "* Scale 1k batch: passing.",
-        "* E2E S3 (batch pipeline) and S7 (A/B lifecycle): passing.",
-        "* Fresh-eyes (R8.5): 4/4 sub-tests passing.",
+        f"* Ledger rows loaded: {len(rows)}",
+        f"* Status counts: {status_summary}",
+        f"* Rows with TODO/void cells: {todo_cells}",
+        "",
+        "## External gates - NOT measured by this generator",
+        "",
+        "This document is generated from `docs/agent/ledger.yaml` only. It does",
+        "not run mypy, ruff, pytest, sabotage, scale, E2E or fresh-eyes, so it",
+        "makes no claim about their results. Authoritative results live in the",
+        "CI workflow `.github/workflows/agent.yml` for the commit that produced",
+        "this file.",
+        "",
+        "* Mypy: `tools/check_mypy_ratchet.py` (CI job `mypy`).",
+        "* Ruff: CI job `ruff`.",
+        "* Pytest / sabotage / scale / E2E / fresh-eyes: CI jobs of the same name.",
         "",
         "## Anything NOT done",
         "",
-        "Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 0 PARTIAL/BLOCKED/DEFERRED.",
+        f"Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently {open_count} "
+        "PARTIAL/BLOCKED/DEFERRED.",
         "",
     ]
     return "\n".join(lines) + "\n"

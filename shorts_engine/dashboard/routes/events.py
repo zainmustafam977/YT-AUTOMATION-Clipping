@@ -6,12 +6,15 @@ and manual publication interface.
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Request, Query, Depends
 from starlette.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from shorts_engine.dashboard.auth import require_viewer, require_operator
-from shorts_engine.db.models import User
+from shorts_engine.db.models import User, EventLog, prune_old_event_logs
+from shorts_engine.db.session import get_db
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent
 
@@ -110,13 +113,6 @@ async def publish_event(
     """Accepts and broadcasts an event to all active SSE subscribers."""
     await global_event_bus.publish(event)
     return {"status": "published", "id": event.id}
-
-
-from datetime import datetime
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from shorts_engine.db.session import get_db
-from shorts_engine.db.models import EventLog, prune_old_event_logs
 
 
 @router.get(

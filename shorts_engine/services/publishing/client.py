@@ -9,12 +9,6 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from shorts_engine.services.publishing.worker import (
-    build_youtube_client,
-    _upload_video as worker_upload_video,
-    set_video_thumbnail,
-)
-
 from shorts_engine.config.settings import settings
 from shorts_engine.db.models import Clip, ClipStatus, PublishLog
 from shorts_engine.db.security import decrypt_secret
@@ -60,6 +54,11 @@ def _build_youtube_client(oauth_token_json: str):
         except Exception:
             pass
 
+    # Imported lazily: worker -> orchestration -> runner -> client is a cycle,
+    # so a module-level import here breaks whenever this module is imported
+    # before worker has finished initialising.
+    from shorts_engine.services.publishing.worker import build_youtube_client
+
     return build_youtube_client(token_data, client_config=cfg)
 
 
@@ -70,6 +69,8 @@ def _upload_video(client, video_path: Path, metadata: "ShortsMetadata",
     Calls YouTube Data API v3 videos.insert() to upload the rendered clip.
     Delegates to shorts_engine.services.publishing.worker._upload_video.
     """
+    from shorts_engine.services.publishing.worker import _upload_video as worker_upload_video
+
     return worker_upload_video(client, video_path, metadata, privacy_status)
 
 
@@ -444,6 +445,8 @@ class YouTubePublisher:
         client = _build_youtube_client(decrypted_token)
 
         try:
+            from shorts_engine.services.publishing.worker import set_video_thumbnail
+
             resp = set_video_thumbnail(client, youtube_video_id, thumb_file)
             logger.info("Successfully updated YouTube video %s thumbnail cover.", youtube_video_id)
             return {

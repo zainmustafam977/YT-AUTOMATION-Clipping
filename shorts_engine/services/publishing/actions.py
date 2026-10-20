@@ -175,12 +175,19 @@ def reject_clip_action(
             "error_type": "NOT_FOUND",
         }
 
-    if clip.status in (ClipStatus.PUBLISHING, ClipStatus.PUBLISHED):
+    # Symmetric with approve_clip_for_publishing(): rejecting an already
+    # rejected clip is a conflict, not a silent no-op. Previously the guard
+    # only blocked PUBLISHING/PUBLISHED, so a second reject returned 200 and
+    # silently overwrote the original rejection metadata.
+    if clip.status in (ClipStatus.PUBLISHING, ClipStatus.PUBLISHED, ClipStatus.REJECTED):
         return {
             "clip_id": clip_id,
             "ok": False,
             "status": clip.status.value,
-            "error": f"Clip is in status {clip.status.value}, cannot reject an in-flight or published clip",
+            "error": (
+                f"Clip is in status {clip.status.value}, cannot reject an "
+                "in-flight, published or already rejected clip"
+            ),
             "error_type": "CONFLICT",
         }
 

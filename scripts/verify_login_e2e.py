@@ -22,7 +22,7 @@ async def run():
         # 2. Test password toggle
         pwd_input = page.locator("#password")
         toggle_btn = page.locator("#togglePasswordBtn")
-        await pwd_input.fill("AdminPass12345!")
+        await pwd_input.fill(os.environ["DASHBOARD_PASSWORD"])
         print("Initial password type:", await pwd_input.get_attribute("type"))
         await toggle_btn.click()
         print("Toggled password type:", await pwd_input.get_attribute("type"))

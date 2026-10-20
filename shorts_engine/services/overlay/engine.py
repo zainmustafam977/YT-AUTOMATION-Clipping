@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
 from .compiler import compile_ffmpeg_filter
-from .spec import OverlaySpec, parse_spec
-from .presets import preset_sha256
+from .spec import parse_spec
 
 
 @dataclass

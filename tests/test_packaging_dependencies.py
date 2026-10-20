@@ -1,5 +1,20 @@
-import tomllib
+import re
+
+import pytest
 from pathlib import Path
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 and older
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
+
+pytestmark = pytest.mark.skipif(
+    tomllib is None,
+    reason="no TOML parser available (needs Python 3.11+ or the tomli backport)",
+)
 
 
 def test_pyproject_toml_contains_all_core_requirements():
@@ -34,3 +49,52 @@ def test_requirements_txt_contains_all_core_requirements():
     assert "groq" in req_names, "groq must be declared in requirements.txt"
     assert "scipy" in req_names, "scipy must be declared in requirements.txt"
     assert "portalocker" in req_names, "portalocker must be declared in requirements.txt"
+
+
+def _req_names():
+    req_path = Path(__file__).parent.parent / "requirements.txt"
+    out = []
+    for line in req_path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#")[0].strip()
+        if not line:
+            continue
+        out.append(re.split(r"[<>=!~\[]", line)[0].strip().lower())
+    return set(out)
+
+
+def _pyproject_names():
+    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    deps = data.get("project", {}).get("dependencies", [])
+    return {re.split(r"[<>=!~]", d)[0].strip().lower() for d in deps}
+
+
+def test_requirements_and_pyproject_declare_the_same_dependencies():
+    """The two dependency sources must not drift.
+
+    The workflows install from different files: ci.yml uses
+    `pip install -r requirements.txt -r requirements-dev.txt`, while
+    agent.yml uses `pip install -e .[dev]` and therefore gets the
+    pyproject set. A package present in only one file is installed in one
+    CI job and missing in the other.
+
+    Known divergence at the time of writing (recorded as ledger row R4-15):
+    only in requirements.txt - asyncpg, psycopg2-binary, starlette, tzdata;
+    only in pyproject - watchdog. None are imported by shorts_engine/ or
+    tests/, but the two files should be reconciled deliberately rather than
+    left to drift, so this asserts the currently-known set.
+    """
+    only_req = _req_names() - _pyproject_names()
+    only_py = _pyproject_names() - _req_names()
+
+    assert only_req == {"asyncpg", "psycopg2-binary", "starlette", "tzdata"}, (
+        f"requirements.txt-only packages changed: {sorted(only_req)}. "
+        "Reconcile requirements.txt with pyproject.toml, or update this "
+        "expected set and the R4-15 ledger row together."
+    )
+    assert only_py == {"watchdog"}, (
+        f"pyproject-only packages changed: {sorted(only_py)}. "
+        "Reconcile requirements.txt with pyproject.toml, or update this "
+        "expected set and the R4-15 ledger row together."
+    )

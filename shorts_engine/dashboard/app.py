@@ -3,6 +3,7 @@ FastAPI application factory for the Shorts Engine operator dashboard.
 Mounts all route groups and configures Jinja2 templating and unauthenticated browser redirects.
 """
 
+import logging
 import urllib.parse
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import RedirectResponse, JSONResponse

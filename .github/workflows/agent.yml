@@ -20,7 +20,13 @@ jobs:
     name: Ledger Consistency
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 is required, not cosmetic. check_agent_ledger.py
+      # validates every cited commit id with `git cat-file -t`, and a default
+      # fetch-depth: 1 checkout only contains the tip commit, so every
+      # ancestor oid cited by a round4 row appears to be an invented id.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -67,8 +73,41 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff
+      # Scope is governed by [tool.ruff] exclude in pyproject.toml. Passing
+      # explicit directory arguments here would BYPASS those exclusions and
+      # silently widen the gate, so the scope stays "." and any change to
+      # coverage must be made in pyproject.toml where it is reviewable.
+      # This step is fail-closed: a finding fails the build.
       - name: Ruff
         run: ruff check .
+
+  # ----------------------------------------------------------------
+  # Gate 2b — dependency audit (fail-closed)
+  #
+  # Scoped to the project's DECLARED dependencies via -r, not to whatever
+  # happens to be installed in the runner image. Auditing the ambient
+  # environment reports advisories for pip/setuptools/virtualenv that this
+  # project does not ship, which is noise rather than signal.
+  #
+  # Runs on push and pull_request (NOT schedule-only) and has no `|| true`:
+  # a real advisory fails the build.
+  # ----------------------------------------------------------------
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+      - name: Audit declared runtime dependencies
+        run: pip-audit -r requirements.txt
+      - name: Audit declared development dependencies
+        run: pip-audit -r requirements-dev.txt
 
   # ----------------------------------------------------------------
   # Gate 3 — pytest (not network, not e2e, not slow markers)
@@ -77,7 +116,17 @@ jobs:
     name: Pytest
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 for the same reason as the `ledger` job: this job runs
+      # the whole suite, which includes
+      # tests/test_fresh_eyes.py::test_ledger_consistency, and that test
+      # shells out to tools/check_agent_ledger.py. That script validates every
+      # cited commit id with `git cat-file -t`, so under the default
+      # fetch-depth: 1 (tip commit only) it exits 1 on
+      # "commit ... does not exist in this repository" and the test fails -
+      # a false failure that looks like a fabricated commit id.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -108,7 +157,54 @@ jobs:
         run: |
           # Exclude pre-existing e2e tests that need Playwright
           # (those run in a separate workflow).
-          pytest -m "not network" --tb=short -q tests/
+          set -o pipefail
+          pytest -m "not network" --tb=short -q tests/ 2>&1 | tee pytest-output.txt
+
+      - name: Publish test summary
+        # bash, not the platform default: this step uses POSIX redirection
+        # and `while read`, and windows-latest defaults to PowerShell,
+        # where it fails with exit code 1 and reports nothing.
+        shell: bash
+        # Runner logs cannot be read from this environment: the logs
+        # endpoint returns 0 bytes with the available token and
+        # `gh run view --log-failed` is blocked at the network level. The
+        # failure list is therefore surfaced three ways:
+        #   * the job summary (visible on the run page, no log expansion)
+        #   * workflow-command annotations (readable through the
+        #     check-runs annotations endpoint)
+        #   * the console, as a fallback
+        if: always()
+        run: |
+          {
+            echo "### Pytest result"
+            echo
+            echo '```'
+            tail -n 60 pytest-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E '^(FAILED|ERROR) ' pytest-output.txt > failed-lines.txt || true
+
+          if [ -s failed-lines.txt ]; then
+            {
+              echo
+              echo "### Failing tests"
+              echo
+              cat failed-lines.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            # Emit one annotation per failure so they are queryable.
+            while IFS= read -r line; do
+              echo "::error title=Pytest failure::$line"
+            done < failed-lines.txt
+          else
+            echo "### Failing tests" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "(no FAILED/ERROR lines found - see the log tail above)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "--- failing tests ---"
+          cat failed-lines.txt
 
   # ----------------------------------------------------------------
   # Gate 4 — scale-1k

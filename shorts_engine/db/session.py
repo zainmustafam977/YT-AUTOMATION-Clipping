@@ -4,6 +4,8 @@ Supports SQLite (with WAL mode & busy timeout) and PostgreSQL.
 """
 
 import logging
+from datetime import datetime
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 from shorts_engine.config.settings import settings

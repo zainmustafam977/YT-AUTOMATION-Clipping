@@ -108,7 +108,9 @@ def test_queue_approve_transitions_clip_status(tmp_path, monkeypatch):
     clip = _make_waiting_clip(db, rendered_path=str(dummy_video))
 
     resp = client.post(f"/queue/{clip.id}/approve")
-    assert resp.status_code == 200
+    # W3-2 made approval enqueue-only: the request is accepted and the publish
+    # job is queued, so the endpoint answers 202 rather than 200.
+    assert resp.status_code == 202
     assert resp.json()["new_status"] in (ClipStatus.APPROVED.value, ClipStatus.SCHEDULED.value)
 
     db.refresh(clip)

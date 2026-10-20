@@ -18,7 +18,7 @@ import secrets
 from pathlib import Path
 
 # Minimum Python version requirement
-MIN_PYTHON_VERSION = (3, 10)
+MIN_PYTHON_VERSION = (3, 11)
 RECOMMENDED_PYTHON_VERSION = (3, 11)
 
 
@@ -43,7 +43,7 @@ def check_python_version():
     if current == RECOMMENDED_PYTHON_VERSION:
         print(f"  [OK] Python {sys.version.split()[0]} (Recommended version)")
     else:
-        print(f"  [OK] Python {sys.version.split()[0]} (Meets minimum >= 3.10 requirement)")
+        print(f"  [OK] Python {sys.version.split()[0]} (Meets minimum >= 3.11 requirement)")
 
 
 def check_ffmpeg():
@@ -185,9 +185,25 @@ def initialize_database_and_admin(root_dir: Path):
                 print(f"  [OK] Active administrator account found: '{admin_user.username}' (ID: {admin_user.id})")
             else:
                 default_user = os.getenv("DASHBOARD_USERNAME", "admin")
-                default_pass = os.getenv("DASHBOARD_PASSWORD", "AdminPass12345!")
-                if len(default_pass) < 12:
-                    default_pass = "AdminPass12345!"
+                # Never seed a publicly known credential. Prefer the operator's
+                # own value; otherwise generate a fresh random one for this
+                # install rather than falling back to a shipped default.
+                from shorts_engine.config.settings import LEGACY_DEFAULT_DASHBOARD_PASSWORD
+
+                default_pass = os.getenv("DASHBOARD_PASSWORD", "")
+                if not default_pass or default_pass == LEGACY_DEFAULT_DASHBOARD_PASSWORD:
+                    default_pass = secrets.token_urlsafe(24)
+                    print(
+                        "  [WARN] DASHBOARD_PASSWORD is unset or still the shipped default."
+                    )
+                    print(
+                        "         Generated a random administrator password for this install;"
+                    )
+                    print(
+                        "         set DASHBOARD_PASSWORD in .env to control it."
+                    )
+                elif len(default_pass) < 12:
+                    print("  [WARN] DASHBOARD_PASSWORD is shorter than 12 characters.")
 
                 new_admin = User(
                     username=default_user,
@@ -235,7 +251,8 @@ Next Steps to Run the Platform:
      http://127.0.0.1:8000/
    Default Login:
      Username: admin
-     Password: AdminPass12345!
+     Password: the value you set for DASHBOARD_PASSWORD in .env
+               (a random one was generated if you left it unset)
 
 2. Start the Background Rendering Worker (in a separate terminal):
      python run.py worker

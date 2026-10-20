@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 
 from shorts_engine.services.publishing.worker import (
     build_youtube_client,
-    check_channel_recent_uploads_for_clip,
     YouTubePublishWorker,
     DEFAULT_SCOPES,
 )

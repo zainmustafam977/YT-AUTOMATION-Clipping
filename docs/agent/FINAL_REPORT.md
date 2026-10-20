@@ -1,6 +1,6 @@
 # FINAL REPORT
 
-**Branch**: `arena/1bfe7f4c-yt-automation-clipping`
+**Branch**: `arena/c08e735f-yt-automation-clipping`
 **Single source of truth**: `docs/agent/ledger.yaml`
 
 This file is generated. Hand-editing is forbidden; edit the ledger.
@@ -29,8 +29,10 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 
 | Status | Count |
 |--------|-------|
-| CONFIRMED | 1 |
-| DONE-VERIFIED | 139 |
+| BLOCKED | 1 |
+| CONFIRMED | 2 |
+| DEFERRED | 3 |
+| DONE-VERIFIED | 168 |
 | UNKNOWN | 15 |
 
 ## F-01..F-24 (audit findings, titles verbatim)
@@ -90,17 +92,25 @@ This file is generated. Hand-editing is forbidden; edit the ledger.
 
 ## E2E scenarios (17.2): 8
 
-## Real gate output (this run)
+## Ledger facts (computed by this generator at run time)
 
-* Ledger: 155 rows loaded, all required keys present, no void/TODO/F-title-mismatch.
-* Mypy: 0 errors (baseline = 0).
-* Ruff: clean on all new code.
-* Sabotage suite: 21/21 passing inline.
-* Scale 1k batch: passing.
-* E2E S3 (batch pipeline) and S7 (A/B lifecycle): passing.
-* Fresh-eyes (R8.5): 4/4 sub-tests passing.
+* Ledger rows loaded: 189
+* Status counts: BLOCKED=1, CONFIRMED=2, DEFERRED=3, DONE-VERIFIED=168, UNKNOWN=15
+* Rows with TODO/void cells: 0
+
+## External gates - NOT measured by this generator
+
+This document is generated from `docs/agent/ledger.yaml` only. It does
+not run mypy, ruff, pytest, sabotage, scale, E2E or fresh-eyes, so it
+makes no claim about their results. Authoritative results live in the
+CI workflow `.github/workflows/agent.yml` for the commit that produced
+this file.
+
+* Mypy: `tools/check_mypy_ratchet.py` (CI job `mypy`).
+* Ruff: CI job `ruff`.
+* Pytest / sabotage / scale / E2E / fresh-eyes: CI jobs of the same name.
 
 ## Anything NOT done
 
-Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 0 PARTIAL/BLOCKED/DEFERRED.
+Items with status PARTIAL, BLOCKED or DEFERRED are open. Currently 4 PARTIAL/BLOCKED/DEFERRED.
 
