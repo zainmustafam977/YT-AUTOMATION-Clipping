@@ -13,7 +13,7 @@ Counts in this file are generated from the ledger.
 | BLOCKED | 1 |
 | CONFIRMED | 2 |
 | DEFERRED | 3 |
-| DONE-VERIFIED | 167 |
+| DONE-VERIFIED | 168 |
 | UNKNOWN | 15 |
 
 ## Round 4
@@ -248,4 +248,11 @@ Counts in this file are generated from the ledger.
 * Tests: `tests/test_fresh_eyes.py`
 * Files: `.github/workflows/ci.yml`
 * Commits: `04d5f4ea42439cfcaaddd71f1e3dc032b9b02302`
+
+### R4-34 — Fifth sandbox reset - branch recovered and re-verified at ee4eba8 `[DONE-VERIFIED]`
+
+* Evidence: FIFTH OCCURRENCE of the same failure mode. On opening this round the local branch pointer had again been rewound to 27a3133ed47f99481342e1f483161970f16e26be while origin held ee4eba8. The clone was also shallow (1 commit), the venv was destroyed, and all untracked files were gone. The work is safe because every commit is pushed; the reset only desyncs the local checkout. Recovery, again without reset/clean/checkout -- / restore: 1. `git fetch --unshallow`, then `git fetch origin '+refs/heads/*:refs/remotes/origin/*'` - both are needed: the unshallow restores depth, and the full ref fetch is what makes c7a47ce (the r4-hardening tip, cited in the ledger but living on another branch) resolvable again. 2. `git update-ref refs/heads/arena/... ee4eba8` - pointer only. 3. `git read-tree HEAD` - refresh the stale index. 4. Verified: 0 dirty files; 2413 tracked files compared byte for byte against `git show HEAD:<path>` with 0 mismatches; all 32 distinct cited shas resolve; HEAD matches origin. 5. Rebuilt the venv, this time taking ffmpeg from the ffmpeg_binaries 6.0-static build rather than imageio-ffmpeg. POST-RESET RE-VERIFICATION, so the numbers in this ledger are not stale claims carried over from a previous environment: pytest -q -m "not network" -> 1123 passed, 23 skipped, 1 deselected, zero failures, 207.88s. Same counts as at 9fc1543, so the result reproduces after a full environment rebuild. ruff clean. mypy ratchet 0 <= baseline 0. check_agent_ledger.py OK. git diff --check clean. Three consecutive gen_agent_docs.py runs md5-identical. font untracked and unstaged; one canonical docs/WINDOWS_ACCEPTANCE.md with zero parallel copies. CI FACT, re-pulled from the API after the reset and therefore independent of any local state. Four runs at head_sha ee4eba8b390ac12711211c0df858879ec818d0a5, each echoing its own head_sha, with zero runs in the set carrying a different headSha: 39422458832 CI/CD Pipeline success 39422458706 Agent Gates (R3) success 39422458705 Industrial CI/CD and Reliability Gate success 39422450403 Agent Gates (R3) success (push event) LEDGER FACT: 189 rows. Stated precisely each time because the count changes as rows are added and because a 155-row figure circulates for a different branch and a 200-row figure for the R4 branch; neither is this branch's count. STILL OPEN AND UNCHANGED BY THIS RECOVERY: network-tests and Browser E2E remain DEFERRED and have never executed; Windows acceptance remains BLOCKED with no VM available. A recovery restores the local checkout, it does not create signal that was never produced.
+* Tests: `tests/test_fresh_eyes.py`, `tests/test_ci_workflow_hardening.py`
+* Files: `docs/agent/ledger.yaml`
+* Commits: `ee4eba8b390ac12711211c0df858879ec818d0a5`
 
