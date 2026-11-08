@@ -10,6 +10,12 @@ from fastapi.testclient import TestClient
 from shorts_engine.db.session import engine, SessionLocal, Base
 from shorts_engine.db import models  # noqa: F401  (register models)
 from shorts_engine.dashboard.app import app
+from shorts_engine.dashboard.auth import (
+    create_session_token,
+    generate_csrf_token,
+    SESSION_COOKIE_NAME,
+)
+from shorts_engine.db.models import User, UserRole
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -19,9 +25,31 @@ def _setup_db():
     yield
 
 
+@pytest.fixture(scope="module")
+def auth_token():
+    """Session token for an operator account; overlay routes require auth."""
+    db = SessionLocal()
+    user = db.query(User).filter_by(username="overlay_route_test_admin").first()
+    if not user:
+        user = User(
+            username="overlay_route_test_admin",
+            password_hash="dummy_hash",
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    token = create_session_token(user.id)
+    db.close()
+    return token
+
+
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(auth_token):
+    c = TestClient(app, headers={"X-CSRF-Token": generate_csrf_token(auth_token)})
+    c.cookies.set(SESSION_COOKIE_NAME, auth_token)
+    return c
 
 
 def test_list_presets_seeds_builtins(client):
@@ -223,3 +251,18 @@ def test_audit_endpoint(client):
 def test_audit_filtered(client):
     r = client.get("/api/overlays/audit?candidate_id=1")
     assert r.status_code == 200
+
+
+def test_overlay_routes_require_authentication():
+    """All overlay endpoints must reject anonymous callers."""
+    anon = TestClient(app)
+    assert anon.get("/api/overlays/presets").status_code == 401
+    assert anon.get("/api/overlays/audit").status_code == 401
+    assert anon.post("/api/overlays/seed-builtins").status_code == 401
+
+
+def test_overlay_mutations_require_csrf(auth_token):
+    """A session cookie alone must not authorise a state-changing call."""
+    c = TestClient(app)
+    c.cookies.set(SESSION_COOKIE_NAME, auth_token)
+    assert c.post("/api/overlays/seed-builtins").status_code == 403
