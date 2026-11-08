@@ -17,6 +17,7 @@ import logging
 import threading
 from pathlib import Path
 from datetime import datetime
+from typing import List, Tuple
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -337,6 +338,8 @@ def test_postgres_render_concurrency_and_transcribe_overlap(test_env):
     On Postgres: while one video renders (render concurrency = 1), another video's transcription
     proceeds concurrently (demonstrated with overlapping execution timestamps and logs).
     """
+    from typing import List, Tuple
+
     SessionFactory = test_env["SessionFactory"]
     queue = DurableJobQueue(session_factory=SessionFactory)
 

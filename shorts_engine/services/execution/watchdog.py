@@ -15,7 +15,10 @@ import subprocess
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Union, Dict
+from typing import Any, Dict, List, Optional, Union
+
+# NOTE: Dict[str, Any] annotation used in run() below refers to the typing
+# generic Dict/Any already imported here (AUD-003: keep typing imports explicit).
 import psutil
 
 logger = logging.getLogger(__name__)

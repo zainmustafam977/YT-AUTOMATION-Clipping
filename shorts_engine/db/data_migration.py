@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from sqlalchemy import create_engine, inspect, text, Table, MetaData, Boolean, DateTime
 from sqlalchemy.engine import Engine
 
@@ -177,7 +177,9 @@ def migrate_sqlite_to_postgres(
                     if rows_to_insert:
                         with dst_conn.begin():
                             dst_conn.execute(dst_table.insert(), rows_to_insert)
-                        migrated_for_table += len(rows_to_insert)
+                        schema_migrations_inserted = len(rows_to_insert)
+                    else:
+                        schema_migrations_inserted = 0
 
                     dst_count = dst_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
                     summary.tables.append(MigrationTableResult(
@@ -190,7 +192,7 @@ def migrate_sqlite_to_postgres(
 
                 # Insert in batches into destination
                 batch: List[Dict[str, Any]] = []
-                migrated_for_table = 0
+                migrated_count = 0
 
                 for row in cursor:
                     row_dict = dict(zip(cols, row))
@@ -200,21 +202,21 @@ def migrate_sqlite_to_postgres(
                         # Use target table insert
                         with dst_conn.begin():
                             dst_conn.execute(dst_table.insert(), batch)
-                        migrated_for_table += len(batch)
+                        migrated_count += len(batch)
                         batch = []
 
                 if batch:
                     with dst_conn.begin():
                         dst_conn.execute(dst_table.insert(), batch)
-                    migrated_for_table += len(batch)
+                    migrated_count += len(batch)
 
                 # Verify target count
                 dst_count = dst_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
 
                 if dst_count >= src_count:
                     status = "SUCCESS"
-                    summary.total_migrated_rows += migrated_for_table
-                    logger.info("Table '%s': %d rows successfully migrated.", table_name, migrated_for_table)
+                    summary.total_migrated_rows += migrated_count
+                    logger.info("Table '%s': %d rows successfully migrated.", table_name, migrated_count)
                 else:
                     status = "ROW_COUNT_MISMATCH"
                     err = f"Table '{table_name}' row mismatch: source={src_count}, target={dst_count}"

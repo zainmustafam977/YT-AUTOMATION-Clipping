@@ -3,6 +3,7 @@ FastAPI application factory for the Shorts Engine operator dashboard.
 Mounts all route groups and configures Jinja2 templating and unauthenticated browser redirects.
 """
 
+import logging
 import urllib.parse
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -124,6 +125,15 @@ def create_dashboard_app() -> FastAPI:
             headers=getattr(exc, "headers", None),
         )
 
+    # Host header allowlist is configuration, not a hardcoded localhost set: a
+    # reverse proxy (see Caddyfile) forwards the public domain as Host.
+    allowed_hosts = {
+        entry.strip().lower()
+        for entry in getattr(settings, "DASHBOARD_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+        if entry.strip()
+    }
+    allow_any_host = "*" in allowed_hosts
+
     @app.middleware("http")
     async def validate_host_header(request: Request, call_next):
         host_header = request.headers.get("host", "")
@@ -134,11 +144,15 @@ def create_dashboard_app() -> FastAPI:
         elif ":" in raw_host:
             raw_host = raw_host.split(":")[0]
 
-        allowed_hosts = {"127.0.0.1", "localhost", "testserver", "[::1]"}
-        if raw_host and raw_host.lower() not in allowed_hosts:
+        if raw_host and not allow_any_host and raw_host.lower() not in allowed_hosts:
             return JSONResponse(
                 status_code=400,
-                content={"detail": f"Invalid Host header '{host_header}'. Localhost access only."},
+                content={
+                    "detail": (
+                        f"Invalid Host header '{host_header}'. Add the domain to "
+                        "DASHBOARD_ALLOWED_HOSTS to serve this host."
+                    )
+                },
             )
         return await call_next(request)
 

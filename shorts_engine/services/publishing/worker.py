@@ -137,8 +137,17 @@ def build_youtube_analytics_client(
 ) -> Any:
     """
     Builds an authorized YouTube Analytics API v2 client using OAuth credentials.
+
+    AUD-003: removed implicit ``get_default_client_config()`` dependency so this
+    function no longer silently relies on a hidden global default. Callers that
+    omit ``client_config`` will now fail fast with a clear error.
     """
-    config = client_config or get_default_client_config()
+    config = client_config
+    if config is None:
+        raise ValueError(
+            "build_youtube_analytics_client requires an explicit client_config; "
+            "the legacy implicit default lookup was removed (AUD-003)."
+        )
     installed = config.get("installed") or config.get("web") or {}
     client_id = installed.get("client_id")
     client_secret = installed.get("client_secret")
