@@ -13,3 +13,13 @@ __all__ = [
     "AnalyticsIngestionService",
     "VideoPerformanceMetrics",
 ]
+
+# Legacy API re-export: some tests import
+# `shorts_engine.services.abtesting` (no underscore). Keep that surface
+# available via the canonical package so the alias can forward to it.
+from shorts_engine.services.ab_testing.abtesting_api import (
+    ABTestService,
+    ABTestError,
+    wilson_lower_bound,
+    wilson_upper_bound,
+)
