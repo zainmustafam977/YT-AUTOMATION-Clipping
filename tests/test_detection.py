@@ -111,3 +111,11 @@ def test_websub_hmac_validation_rejects_tampered():
     parser = WebSubNotificationParser(secret=secret)
     # Verify against tampered body — must fail
     assert parser.verify_signature(tampered_body, sig) is False
+
+
+def test_websub_unsigned_notification_rejected_without_secret():
+    """Fail-closed: no configured secret means no signature can be verified."""
+    parser = WebSubNotificationParser(secret=None)
+    assert parser.verify_signature(b"<feed>unsigned</feed>", None) is False
+    # A syntactically valid signature is equally untrusted without a secret.
+    assert parser.verify_signature(b"<feed>unsigned</feed>", "sha1=" + "0" * 40) is False
