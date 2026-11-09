@@ -37,7 +37,7 @@
 | What it does | Authenticates inbound YouTube push notifications via HMAC-SHA1 signature verification and extracts `(channel_id, video_id)` from Atom XML feed payloads. |
 | Industrial-grade? | **A** - Employs `hmac.compare_digest()` for timing-attack-resistant cryptographic verification. |
 | Checklist | **Error handling:** Pass (catches XML parse errors defensively). **Timeouts:** N/A. **Retries:** N/A. **Idempotency:** Pass. **Input validation:** Pass (validates `sha1=` prefix and header presence). **Resource cleanup:** N/A. **Concurrency safety:** Pass. **Atomicity:** Pass. **External-dependency:** Pass. **Security:** Pass (timing-safe HMAC comparison prevents signature oracle attacks). **Performance:** Pass (fast C-accelerated HMAC). **Observability:** Pass (warns on signature spoofing). **Config:** Pass (`settings.WEBSUB_SECRET`). **Testability:** Pass. **Readability:** Pass. |
-| Weakness or risk | If `WEBSUB_SECRET` is unset, signature verification is skipped (intended for local dev). In production, `settings.py` enforces secrets in production environments. |
+@STALE since 6e2f7b1. The weakness now described here is mitigated: WebSub HMAC verification is fail-closed when WEBSUB_SECRET is unset. The current contract is in shorts_engine/services/detection/websub.py:verify_signature.
 | Improvement | Keep as is. |
 | Better approach? | Option 1: `hmac.compare_digest` with dev fallback (Recommended). |
 | Priority / Effort | P3 / S |

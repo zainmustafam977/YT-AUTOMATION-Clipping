@@ -123,9 +123,16 @@ Host=my.domain.co.uk     -> 400
 `services/detection/websub.py:147-150`:
 
 ```python
+```python
 if not self.secret:
-    logger.debug("No WEBSUB_SECRET configured — skipping signature verification (dev mode).")
-    return True
+    logger.error(
+        "WEBSUB_SECRET is not configured — rejecting WebSub notification "
+        "(signature verification cannot be performed)."
+    )
+    return False
+```
+    )
+    return False
 ```
 
 `WEBSUB_SECRET` defaults to `None` (`settings.py:467`), and `dashboard/routes/websub.py` is public by design. Reproduced:
