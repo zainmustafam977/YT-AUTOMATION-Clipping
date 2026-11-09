@@ -1,0 +1,279 @@
+# Full Browser-Based QA Verification Protocol
+
+**Scope:** Exhaustive verification of every UI element, every function, every edge case, and every failure path — conducted in a real browser, with the log stream monitored continuously throughout.
+
+**Status:** For vendor execution. Report per-case results, not aggregate claims.
+
+---
+
+## 0. Ground Rules — Read Before Starting
+
+### 0.1 This is a floor, not a ceiling
+
+**You wrote this code. We did not.** Our knowledge of this system is limited to what we can see in the browser and read in the logs. This protocol covers what *we* know to ask about — which is necessarily incomplete.
+
+Therefore, this document is the **minimum** required, not the full scope. You are expected to additionally test:
+
+- Every code path, branch, and error handler you know exists but that is not mentioned anywhere below.
+- Every assumption, shortcut, `TODO`, stub, hardcoded value, or "good enough for now" decision made during implementation across all milestones.
+- Every integration point whose failure mode has never actually been exercised (only mocked in tests).
+- Anything where the automated test suite mocks or stubs something that would behave differently against the real service.
+- Anything you know to be fragile, incomplete, or untested — including things never raised in any review round.
+- Any interaction between features that were built in different phases and may not have been tested together.
+
+**If you know of a weak spot we have never asked about, test it and report it.** Surfacing a problem yourself is the expected behavior here, not a failure. Concealing a known weak area because nobody asked is the failure.
+
+### 0.2 "Expected Result" is our best guess, not the specification
+
+Every "Expected Result" in the tables below is written from outside the system, based on what has been described to us across this project. **You know the actual intended behavior far better than we do** — you wrote it. Where our stated expectation is wrong, incomplete, or doesn't match what the system was actually designed to do, do not just mark it FAIL and stop there:
+
+- Note what the **correct** expected behavior actually is, and why.
+- Test against that correct understanding, not blindly against our possibly-wrong description.
+- Flag the mismatch explicitly so the record is accurate going forward.
+
+We would rather be corrected than have you silently test against a wrong assumption because it's what we wrote down.
+
+### 0.3 Additional changes requested directly, outside this document
+
+Separately from this protocol, we have also communicated a number of enhancement and change requests directly to you in conversation — items we do not have full visibility into ourselves, that are not enumerated here. Those requests are still in scope for this verification pass:
+
+- Confirm every direct request we've made to you — whether or not it appears in this document — has actually been implemented.
+- Verify each one the same way as everything else here: in the browser, with logs monitored, not by assumption.
+- If any such request was ambiguous, was interpreted a particular way, or was only partially implemented, say so explicitly rather than marking it done.
+
+### 0.4 Execution rules
+
+- Keep two things open side by side for the entire session: the dashboard, and a live tail of `storage/logs/shorts_engine.log` (or the `/logs` page).
+- Record log output for **every** action, not just failures. Silence in the log when an action was performed is itself a finding.
+- Note wall-clock time of each action so it can be correlated against log timestamps.
+- If actual behavior differs from "Expected" even slightly, record **FAIL** with the difference described. Do not interpret near-misses as passes.
+- Test in at least two browsers (e.g. Edge and Chrome) for anything involving video playback, modals, or live-update polling.
+- Do not fix issues silently mid-run. Record them, finish the protocol, then report the full list.
+- Do not mark a case as passed based on a code reading, a plausible assumption, or a unit test that exercises the same code path. Browser-verified means browser-verified.
+- If a case cannot be executed (missing credential, missing config, environment limit), say so explicitly and ask for what is needed. **Report untested as untested.**
+
+### 0.5 Log a suggestion for every case, not just failures
+
+For **every single row** in every table below — pass, fail, or not applicable — use the fourth column to note anything worth improving: a better architectural approach, a more robust way to handle that case, a UX refinement, a performance improvement, an edge case adjacent to this one that should also be handled, or a design decision you'd reconsider now that it's built and tested end to end. A row that passes cleanly can still have a "this could be better because..." note. Leave it blank only if there is genuinely nothing to add.
+
+---
+
+## 1. Startup, Authentication & Session Behavior
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 1.1 | Start server via canonical uvicorn command; note startup log lines | Clean startup, no exceptions, Sentry init line appears or is correctly skipped | |
+| 1.2 | Visit `http://127.0.0.1:8000/` while logged out | Redirect or 401 — no dashboard content leaks before auth | |
+| 1.3 | Log in with correct admin credentials | Success; session cookie set `HttpOnly`, `SameSite=Lax`; login logged | |
+| 1.4 | Log in with wrong password | Clean 401, readable UI error — not a stack trace or blank page | |
+| 1.5 | Log in with non-existent username | Same generic message as 1.4 (must not reveal whether user exists) | |
+| 1.6 | Visit `http://localhost:8000` (not 127.0.0.1) and log in | Document behavior. Cookie is host-scoped — confirm whether this works, and that failure is understandable if it fails | |
+| 1.7 | Log in, then Logout | Session invalidated; protected pages re-challenge; logout logged | |
+| 1.8 | After logout, press browser Back to a protected page | Must NOT show cached protected content | |
+| 1.9 | Two tabs logged in simultaneously; act in both | Both work; no session clobbering; CSRF valid in both | |
+| 1.10 | Create an operator user and a viewer user via UI | Both created; passwords hashed; creation logged with admin name | |
+| 1.11 | As viewer: attempt Approve / Reject / channel toggles | All blocked 403; clear UI message, not a silent no-op | |
+| 1.12 | As operator: attempt to access user management | Blocked 403; clear message | |
+| 1.13 | As operator: perform Approve and Reject | Permitted; log attributes action to operator's username | |
+| 1.14 | Let a session sit idle past `SESSION_MAX_AGE_SECONDS` | Expiry behaves as configured; re-challenge is clean, not a broken page | |
+
+---
+
+## 2. Channel Manager — Validation & Edge Cases
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 2.1 | Add channel with valid 24-char UC ID | Accepted; appears in table; logged | |
+| 2.2 | Add channel with an `@handle` | Rejected with actionable guidance on finding the UC ID — not a generic 422 | |
+| 2.3 | Add channel with short invalid ID (e.g. `UC1234567890`) | Rejected (**prior regression** — confirm 22-char rule enforced) | |
+| 2.4 | Add channel with full URL (`youtube.com/channel/UC...`) | UC ID extracted correctly and accepted | |
+| 2.5 | Add channel using a `/watch?v=` video URL by mistake | Rejected clearly, not silently accepted as a channel | |
+| 2.6 | Add empty channel ID / empty display name | Both rejected with field-level validation | |
+| 2.7 | Add the same channel ID twice | Duplicate prevented with clear message — no crash, no duplicate row | |
+| 2.8 | Add 200+ char display name; add emoji/unicode name | Accepted and rendered without breaking layout, or rejected cleanly | |
+| 2.9 | Click Poll Now on a valid channel | Real result reported; a 404 feed surfaces an explicit **error**, not "found 0 new videos" | |
+| 2.10 | Click WebSub Subscribe with `WEBSUB_CALLBACK_URL` unset | Explicit amber warning explaining missing config — not silent `success=False` | |
+| 2.11 | Verify Last Seen Video is a working clickable link | Opens correct video in new tab | |
+| 2.12 | Toggle Watch and Human Review off/on; reload each time | State persists across reloads; each toggle logged | |
+| 2.13 | Delete a channel that has existing processed videos/clips | Confirm prompt appears; document what happens to its clips; no orphans, no crash | |
+| 2.14 | Add a brand-new channel and observe initial-sync behavior | Confirm whether it backfills all existing videos or only new ones, and that this matches the intended default | |
+
+---
+
+## 3. Settings Page — Persistence, Bounds & Hot-Reload
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 3.1 | Confirm all help-text defaults match canonical values | Min 15s / Max 58s / Min segments 3 / Max segments 5. Stale "(default: 1)", "(default: 4)", "(default: 60s)" text must be gone | |
+| 3.2 | Change each field to a valid new value and save | Saved; flash banner confirms; `runtime_settings.json` updated; change logged with operator name | |
+| 3.3 | Reload page after saving | New values persist and display correctly | |
+| 3.4 | Set MIN segments > MAX segments | Rejected with clear validation error | |
+| 3.5 | Set MIN duration > MAX duration | Rejected with clear validation error | |
+| 3.6 | Enter `0`, a negative number, and a non-numeric string in numeric fields | All rejected with readable messages; no 500 | |
+| 3.7 | Set MAX segments above ceiling (e.g. 99) | Rejected per `le=8` constraint | |
+| 3.8 | Set quota warning threshold to `0` and to `1.5` | Out-of-range rejected (valid 0.10–1.00) | |
+| 3.9 | Change `LLM_MODEL_NAME` via dropdown and save | Persists; subsequent runs use the new model (verify in log) | |
+| 3.10 | Change a setting, then immediately start a video process | Confirm in log that the **new** value applied to that run (hot-reload works without restart) | |
+| 3.11 | Toggle `ENABLE_SFX` off, process a clip, inspect audio | No SFX in output; log reflects setting | |
+| 3.12 | Confirm `OPENAI_API_KEY` field is masked | Masked in UI and in page source; never plaintext | |
+| 3.13 | Save settings as operator vs. viewer | Permissions enforced correctly per role | |
+
+---
+
+## 4. Manual Video Processing & Concurrency Guards
+
+> **This section re-tests the `StaleDataError` crash class found previously. Any recurrence is a critical failure.**
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 4.1 | Submit valid video URL, Dry Run ON | Accepted; flash banner; job starts; log shows full stage progression | |
+| 4.2 | **Submit the same video again while still processing** | Rejected with "already being processed". No second render. No `StaleDataError`. **Critical case.** | |
+| 4.3 | Submit a 3rd and 4th time in rapid succession | All rejected cleanly; exactly one pipeline run in log | |
+| 4.4 | Submit a video that already fully completed | Either cleanly skipped with explanation, or deliberately re-processed — document which; no duplicate identical renders | |
+| 4.5 | Submit a bare video ID (no URL) | Processed identically to full URL | |
+| 4.6 | Submit malformed URL, non-YouTube URL, random text | Each rejected with readable error; no crash; no half-created DB row | |
+| 4.7 | Submit private / deleted / age-restricted video ID | Fails gracefully with real reason surfaced to UI and Dead-Letter; no silent hang | |
+| 4.8 | Submit a video that is already a published Short | Detected pre-ingestion and skipped with explanatory note — no download, no slicing, no AI spend | |
+| 4.9 | Submit with Target Channel selected vs. Auto/Default | Both work; clip associated with correct channel in DB and queue | |
+| 4.10 | During an active run, watch Status page without refreshing | Stage/status updates appear automatically; no manual reload needed | |
+| 4.11 | Restart server mid-pipeline, then bring it back up | No corrupted rows; job resumes or is cleanly marked failed/retryable — document actual behavior | |
+| 4.12 | Process two *different* videos simultaneously | Both complete correctly; no cross-contamination of clips, transcripts, or DB rows | |
+
+---
+
+## 5. Review Queue — Player, Badges, Bulk Actions, Undo
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 5.1 | Click Play on a clip | 9:16 modal opens; video plays; audio present; captions visible and legible | |
+| 5.2 | Seek/scrub within the video | Seeking works (HTTP 206 range requests), not just play-from-start | |
+| 5.3 | Close modal mid-playback; reopen | Audio stops on close (no background audio); reopen starts cleanly | |
+| 5.4 | Play several different clips in sequence | Each loads the correct file; verify clip matches its stated timestamp range | |
+| 5.5 | Cross-check a clip's stated Source interval against actual content | Content genuinely corresponds to that range in the source video | |
+| 5.6 | Inspect Quality Gate badges on a passing and a failing clip | Pass = green ✓; fail = red ✗ **with specific reason** — not identical-looking labels | |
+| 5.7 | Confirm all queue-table text is legible on dark background | No near-invisible grey-on-black text anywhere, including muted text and table headers | |
+| 5.8 | Select 3 clips via checkbox → Approve Selected | All 3 transition; one log line per clip; queue refreshes | |
+| 5.9 | Select several → Reject Selected | All move to Rejected tab; each logged | |
+| 5.10 | Select All, deselect two, bulk-approve | Only selected ones affected | |
+| 5.11 | Click a bulk action with nothing selected | Handled gracefully with a message; no crash | |
+| 5.12 | Reject a clip, then use the Undo flash banner immediately | Clip returns to active queue; both actions logged | |
+| 5.13 | Reject a clip, **reload the page**, then restore from Rejected tab | Restore works after reload (this is the durability claim — verify it) | |
+| 5.14 | Confirm rejected clip's `.mp4` still exists on disk | File retained per documented audit-trail behavior | |
+| 5.15 | Approve a clip with `DRY_RUN_PUBLISHING=true` | Simulated publish only; quota incremented; no real upload; clearly labeled dry-run in log and UI | |
+| 5.16 | Attempt to approve the same clip twice | Second blocked with "already published"; no duplicate `publish_log` row | |
+| 5.17 | Test filter tabs (All / High Score / Needs Review) | Each filters correctly; counts match | |
+| 5.18 | Process enough videos to exceed one screen of clips | Layout holds; pagination/scrolling works; no rendering breakage | |
+
+---
+
+## 6. Dead-Letter Queue & Failure Paths
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 6.1 | Deliberately induce a failure (invalid video, or temporarily rename FFmpeg) | Lands in Dead-Letter with a real, complete error message | |
+| 6.2 | Expand diagnostics accordion on a failed item | Full untruncated traceback, formatted readably, no horizontal layout break | |
+| 6.3 | Confirm no secrets appear in displayed traceback | API keys / master key / tokens masked or absent | |
+| 6.4 | Click Retry on a failed clip | Retry executes; `retry_count` increments visibly; logged with attempt number | |
+| 6.5 | Retry repeatedly until `MAX_RETRY_COUNT` reached | Further retries blocked with clear "manual intervention required" | |
+| 6.6 | Confirm a REJECTED clip does NOT appear in Dead-Letter | Dead-Letter shows only genuine FAILED items | |
+| 6.7 | Trigger an alert-worthy failure with a webhook configured | Alert actually **delivers** to the configured channel — confirm receipt, not just the attempt | |
+
+---
+
+## 7. LLM Router — Failover & Quota Visibility
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 7.1 | Run with only a Gemini key configured | Gemini used; on 429/503, waterfall then heuristic fallback — all transitions visible in log | |
+| 7.2 | Add OpenAI key, provider `auto`, then exhaust/block Gemini | Transparent failover to OpenAI; log names the provider actually serving each call | |
+| 7.3 | Force provider to `gemini`, then to `openai` explicitly | Each respected; no silent cross-provider switching when pinned | |
+| 7.4 | Configure an intentionally invalid OpenAI key | Fails gracefully with clear error; falls back rather than crashing pipeline | |
+| 7.5 | Run with **no** LLM keys at all | Heuristic fallback runs end-to-end; pipeline completes; log states clearly that fallback was used | |
+| 7.6 | Check provider quota/health widgets on Status page | Gemini and OpenAI shown separately **and** combined; values track actual usage | |
+| 7.7 | Correlate a full run's log against the quota widget afterward | Displayed counts match calls actually made in the log | |
+
+---
+
+## 8. Logs Page, Live Updates & Storage Monitor
+
+| # | Test Case | Expected Result | Suggested Enhancement / Better Approach |
+|---|---|---|---|
+| 8.1 | Perform an action, watch `/logs` **without refreshing** | New lines appear automatically within polling interval | |
+| 8.2 | Toggle Auto-Refresh off, act, then on | Behaves as labeled in both states | |
+| 8.3 | Click Copy on log viewer | Full visible log copied to clipboard correctly | |
+| 8.4 | Run pytest while server runs, then check production log | Test output goes to `shorts_engine_test.log` only; production log stays clean | |
+| 8.5 | Confirm log rotation is in effect | Rotating handler active (10MB / 5 backups) — verify files, not just config | |
+| 8.6 | Check Storage & Disk monitor against actual disk usage | Reported outputs/raw/temp sizes and free space match reality | |
+| 8.7 | Verify per-video output folder organization on disk | Clips under `storage/outputs/{video_id}/`, not flat in one folder | |
+| 8.8 | Verify content-based filename slugs on rendered files | Filenames include readable slug + timestamps; document fallback naming if LLM slug unavailable | |
+| 8.9 | Watch Status page counters during an active run | Counters update live and stay internally consistent with queue and DB | |
+
+---
+
+## 9. Visual, Layout, Branding & Cross-Cutting UI
+
+For each item, note pass/fail **and** any enhancement worth suggesting, same as the tables above.
+
+- Every page: no invisible or low-contrast text anywhere (muted text, table headers, badges, help text, placeholders, disabled controls).
+- Logo renders in navbar; favicon appears in browser tab on **every** page.
+- Navigation highlights current page correctly on all pages.
+- All flash banners dismissible; do not persist incorrectly after navigation.
+- Resize window to mobile width on every page — no horizontal overflow, no overlapping controls, tables scroll rather than break layout.
+- Long values (long video titles, long filenames, long error strings) do not break table layout anywhere.
+- **Every button in the app clicked at least once** — confirm none are dead, mislabeled, or produce no visible feedback.
+- Tab-key navigation reaches interactive controls sensibly; no keyboard trap in the video modal.
+- Browser console: **zero uncaught JavaScript errors** on any page, during any action.
+- Empty states: with zero channels, zero clips, zero logs — every page renders a sensible empty message, not a blank or broken view.
+
+---
+
+## 10. Live Processing Run — Four Assigned Videos
+
+Process these four through the full pipeline, monitoring the log continuously. Run one at a time first, then note behavior when overlapping runs are attempted.
+
+```
+1. tphyf6Y3OcY  — "How Radical Islam Is Advancing in America"
+2. HErzoaoos_s  — "Iran Just Tightened Its Grip on Global Oil"
+3. 2nw59PPCa1c  — "Steve Bannon's Next Grift Is Here"
+4. DsWqPUWouRc  — "Why All of Ed Sheeran's Openers Just Quit"
+```
+
+### 10.1 Record per video
+
+- Wall-clock duration of **each stage**: download, transcription, forced alignment, clip selection, per-clip render, quality gate.
+- Source video duration and word count, so processing time can be assessed relative to content length.
+- Number of candidates selected; each one's timestamp range, score, and whether it fell inside configured duration bounds.
+- **Whether clip selection used the real LLM or the heuristic fallback** — and for each LLM call, which provider/model actually served it.
+- Every quality-gate outcome with the specific reason for each pass/fail (technical / framing / semantic).
+- Total AI calls, total failures/retries, quota state before and after.
+- Peak disk usage added; total output size per video.
+- Any warning or error line in the log, even if the run ultimately succeeded.
+
+### 10.2 Then assess overall
+
+- **Editorial quality:** watch every generated clip end to end. Does each stand alone, open on a strong hook, end at a sensible point? Flag any clip starting or ending mid-sentence.
+- **Reframing quality:** is the speaker actually kept in frame, or does the crop drift, jitter, or lose the subject?
+- **Caption accuracy and timing:** transcription errors, desync, or text colliding with YouTube UI dead zones.
+- **Audio:** loudness consistency across clips, SFX placement appropriateness, no clipping or abrupt cuts.
+- **Consistency across the four** — note whether quality varies by source content type, and how.
+- **Throughput:** total time from source video to publish-ready clips, and where the real bottleneck is.
+- **Enhancements:** for anything observed in this run — editorial, technical, or architectural — note what could be improved, same as the tables above.
+
+> **Note:** These four include politically charged and news-commentary content. Flag anything where an automatically selected clip strips context in a way that materially changes the meaning of what the speaker said. That is a pipeline quality finding (bad cut-point selection) worth reporting — not an editorial judgment on the source material.
+
+---
+
+## 11. Reporting Format
+
+Report per-case, not summarized:
+
+1. A table of **every** case ID with PASS / FAIL / NOT APPLICABLE, a one-line note, **and** any suggested enhancement (per §0.5) — carry the fourth column through into the report, don't drop it.
+2. For every FAIL: what was done, what was expected (including any correction per §0.2), what actually happened, and the **exact log excerpt** from that moment.
+3. **A separate section confirming every direct request made outside this document (§0.3)** — listed individually, each with its own verification status.
+4. **A separate section for everything you tested beyond this document** (per §0.1) — what you chose to test, why, and what you found.
+5. **A consolidated list of every suggested enhancement/architecture improvement**, pulled together from the fourth column across all tables, so it can be reviewed as its own backlog rather than only buried per-row.
+6. A separate list of anything encountered that this protocol did not anticipate.
+7. The four-video performance data from §10, with stage timings.
+8. The complete verbatim log file from the whole session, committed to disk — not summarized in chat.
+
+> **Standing requirement:** If anything requires input only we can provide (a credential, a config value, a decision, an asset), state it explicitly and ask for it directly. Do not proceed on assumptions or placeholders. Do not report something as working without it being independently demonstrable.
