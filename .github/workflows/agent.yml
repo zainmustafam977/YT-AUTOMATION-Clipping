@@ -48,7 +48,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
-          pip install mypy
+          # Pin mypy: .mypy_baseline.txt is a fixed count, so the measuring
+          # tool must be fixed too. Bumping this requires re-recording the
+          # baseline in the same change.
+          pip install "mypy==2.4.1"
       - name: Run mypy ratchet
         run: python tools/check_mypy_ratchet.py
 
