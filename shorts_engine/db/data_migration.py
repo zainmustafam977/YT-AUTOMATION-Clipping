@@ -177,9 +177,6 @@ def migrate_sqlite_to_postgres(
                     if rows_to_insert:
                         with dst_conn.begin():
                             dst_conn.execute(dst_table.insert(), rows_to_insert)
-                        schema_migrations_inserted = len(rows_to_insert)
-                    else:
-                        schema_migrations_inserted = 0
 
                     dst_count = dst_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
                     summary.tables.append(MigrationTableResult(

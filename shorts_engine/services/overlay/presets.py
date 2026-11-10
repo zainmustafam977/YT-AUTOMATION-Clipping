@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from .spec import OverlaySpec, OverlayLayer, LayerType, TextStyle, StickerStyle, ShapeStyle, parse_spec, serialize_spec
 

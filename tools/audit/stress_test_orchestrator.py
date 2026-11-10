@@ -15,7 +15,6 @@ and parameter combinations across long video sources:
 ==============================================================================
 """
 
-import os
 import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -23,42 +22,32 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
 import json
-import shutil
-import hashlib
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 # Ensure repository root is on PYTHONPATH
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from shorts_engine.config.settings import settings
 from shorts_engine.config.logging_config import setup_logging, reload_runtime_settings
-from shorts_engine.db.session import SessionLocal, init_db
+from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import (
-    Channel,
     SourceVideo,
-    SourceVideoStatus,
     Transcript,
-    ClipCandidate,
     Clip,
-    ClipStatus,
 )
 from shorts_engine.services.storage.path_manager import PathManager
 from shorts_engine.services.llm.router import LLMRouter
-from shorts_engine.services.llm.quota_tracker import APIUsageTracker
 from shorts_engine.services.transcription.formatter import FormattedTranscript, WordSegment
 from shorts_engine.services.clip_selection.selector import ClipSelectionService
-from shorts_engine.services.clip_selection.boundaries import BoundarySnapper
-from shorts_engine.services.captioning.templates import get_caption_template, list_caption_templates
+from shorts_engine.services.captioning.templates import get_caption_template
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
-from shorts_engine.services.reframing.cropper import VideoReframer, CropPlan
+from shorts_engine.services.reframing.cropper import VideoReframer
 from shorts_engine.services.rendering.compositor import VideoCompositor, get_best_video_encoder
 from shorts_engine.services.quality_gate.technical_check import TechnicalVerifier
 from shorts_engine.services.quality_gate.render_inspector import RenderInspector
-from shorts_engine.services.quality_gate.review_queue import QualityGateManager
 from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
 from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer
-from shorts_engine.services.ab_testing.winner_daemon import ABWinnerPromotionDaemon
 from shorts_engine.services.storage.backup_manager import DatabaseBackupManager
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog
 
@@ -232,7 +221,6 @@ def test_03_all_5_caption_presets():
 
 def test_04_full_clip_rendering_and_audio_mastering(source_video, selected_clip, transcript):
     log_step("4. Broadcast Audio Mastering (EBU R128) & High-Quality Vertical Video Rendering")
-    t0 = time.time()
     
     source_mp4 = PathManager.resolve_download_path(source_video)
     if not source_mp4 or not source_mp4.exists():
@@ -248,11 +236,10 @@ def test_04_full_clip_rendering_and_audio_mastering(source_video, selected_clip,
     out_dir = settings.OUTPUT_DIR / "stress_test"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_filename = f"hardcore_clip_{source_video.youtube_video_id}_{c_start}_{c_end}.mp4"
-    out_mp4 = out_dir / out_filename
     
     # 1. Computer Vision Reframing: analyze video face tracking and build crop plan
     reframer = VideoReframer()
-    print(f"[+] Running YuNet Face Detection & Dynamic 9:16 Portrait Cropper...")
+    print("[+] Running YuNet Face Detection & Dynamic 9:16 Portrait Cropper...")
     crop_plan = reframer.compute_crop_plan(
         video_path=source_mp4,
         start_ms=c_start,
@@ -275,12 +262,12 @@ def test_04_full_clip_rendering_and_audio_mastering(source_video, selected_clip,
     )
         
     print(f"[+] Generated Subtitle ASS: {ass_path.name}")
-    print(f"[+] Invoking VideoCompositor.render_short with Broadcast Parameters:")
-    print(f"    - Resolution: 1080x1920 (9:16 vertical canvas)")
-    print(f"    - CRF: 18 (visually lossless broadcast)")
-    print(f"    - Preset: medium (balanced CPU/GPU throughput)")
-    print(f"    - Audio: 320k AAC, 48000 Hz, EBU R128 (-14 LUFS, -1 dBFS peak)")
-    print(f"    - Voice Gate: agate active | HPF: 80Hz rumble filter active")
+    print("[+] Invoking VideoCompositor.render_short with Broadcast Parameters:")
+    print("    - Resolution: 1080x1920 (9:16 vertical canvas)")
+    print("    - CRF: 18 (visually lossless broadcast)")
+    print("    - Preset: medium (balanced CPU/GPU throughput)")
+    print("    - Audio: 320k AAC, 48000 Hz, EBU R128 (-14 LUFS, -1 dBFS peak)")
+    print("    - Voice Gate: agate active | HPF: 80Hz rumble filter active")
     
     compositor = VideoCompositor(output_dir=out_dir)
     render_start = time.time()
@@ -312,7 +299,7 @@ def test_04_full_clip_rendering_and_audio_mastering(source_video, selected_clip,
             REPORT["timings"]["render_sec"] = round(render_elapsed, 2)
             return final_mp4
         else:
-            print(f"[-] Render FAILED! File not created or empty.")
+            print("[-] Render FAILED! File not created or empty.")
             return None
     except Exception as e:
         print(f"[-] Render Exception: {e}")
@@ -433,7 +420,7 @@ def test_07_bayesian_bandit_and_circuit_breaker():
         current_velocity=post_promotion_velocity,
         baseline_velocity=baseline_velocity,
     )
-    print(f"[+] Emergency Circuit Breaker Test:")
+    print("[+] Emergency Circuit Breaker Test:")
     print(f"    - Baseline Velocity: {baseline_velocity:.1f} views/hr")
     print(f"    - Current Velocity: {post_promotion_velocity:.1f} views/hr")
     print(f"    - Measured Drop: {drop_ratio*100:.1f}%")
@@ -461,7 +448,7 @@ def test_08_subprocess_watchdog_and_hot_backup():
     # Test Hot Database Backup
     backup_mgr = DatabaseBackupManager()
     backup_meta = backup_mgr.create_backup(compress=True)
-    print(f"[+] Online Hot Database Backup Created:")
+    print("[+] Online Hot Database Backup Created:")
     print(f"    - Archive: {backup_meta['filename']}")
     print(f"    - Size: {backup_meta['size_mb']} MB")
     print(f"    - SHA-256 Checksum: {backup_meta['sha256'][:16]}...")

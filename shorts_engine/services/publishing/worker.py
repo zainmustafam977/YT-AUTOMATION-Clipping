@@ -476,8 +476,14 @@ def check_channel_recent_uploads_for_clip(
 # ==============================================================================
 # YouTube Publish Worker Engine
 # ==============================================================================
-
-from shorts_engine.orchestration.exceptions import PermanentError, JobCancelledError
+# Deferred deliberately: shorts_engine.orchestration/__init__ pulls in the
+# pipeline runner, which imports publishing.client, which imports this module.
+# Importing it at the top of the file would close that cycle on a partially
+# initialized module, so it must load after the helpers above are defined.
+from shorts_engine.orchestration.exceptions import (  # noqa: E402
+    PermanentError,
+    JobCancelledError,
+)
 
 
 class YouTubePublishWorker:

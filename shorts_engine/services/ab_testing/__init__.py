@@ -7,11 +7,15 @@ from shorts_engine.services.ab_testing.title_generator import TitleGenerator, Ti
 from shorts_engine.services.ab_testing.analytics_ingestion import AnalyticsIngestionService, VideoPerformanceMetrics
 
 __all__ = [
-    "TitleGenerator",
-    "TitleArchetype",
-    "TitleVariantSet",
+    "ABTestError",
+    "ABTestService",
     "AnalyticsIngestionService",
+    "TitleArchetype",
+    "TitleGenerator",
+    "TitleVariantSet",
     "VideoPerformanceMetrics",
+    "wilson_lower_bound",
+    "wilson_upper_bound",
 ]
 
 # Legacy API re-export: some tests import

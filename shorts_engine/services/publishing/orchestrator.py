@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 
 from shorts_engine.services.publishing.worker import (
     build_youtube_client,
-    check_channel_recent_uploads_for_clip,
     YouTubePublishWorker,
     DEFAULT_SCOPES,
 )
@@ -42,40 +41,6 @@ logger = logging.getLogger(__name__)
 def _build_authenticated_youtube_client(refresh_token: str, client_config: Dict[str, Any]):
     """Builds an authenticated YouTube Data API client from a refresh token."""
     return build_youtube_client(refresh_token, client_config=client_config, scopes=DEFAULT_SCOPES)
-
-
-def check_channel_recent_uploads_for_clip(
-    client: Any, channel_youtube_id: str, clip_id: str
-) -> Optional[str]:
-    """Queries the channel's uploads playlist to detect if clip was already uploaded."""
-    try:
-        uploads_playlist_id = None
-        if channel_youtube_id.startswith("UC"):
-            uploads_playlist_id = "UU" + channel_youtube_id[2:]
-        else:
-            res = client.channels().list(part="contentDetails", id=channel_youtube_id).execute()
-            items = res.get("items", [])
-            if items:
-                uploads_playlist_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
-
-        if not uploads_playlist_id:
-            return None
-
-        playlist_res = client.playlistItems().list(
-            part="snippet",
-            playlistId=uploads_playlist_id,
-            maxResults=25,
-        ).execute()
-
-        token = f"[c:{clip_id}]"
-        legacy_token = f"[clip:{clip_id}]"
-        for item in playlist_res.get("items", []):
-            desc = item.get("snippet", {}).get("description", "")
-            if token in desc or legacy_token in desc:
-                return item.get("snippet", {}).get("resourceId", {}).get("videoId")
-    except Exception as e:
-        logger.warning("Could not inspect uploads playlist for clip %s: %s", clip_id, e)
-    return None
 
 
 class PublishOrchestrator:

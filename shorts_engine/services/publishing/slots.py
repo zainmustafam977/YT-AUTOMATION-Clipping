@@ -862,7 +862,6 @@ class PublishSlotService:
 
         for s in slots:
             clip = s.clip
-            cand = clip.candidate if clip else None
             title = clip.generated_title if clip else "Untitled Short"
             ch = s.channel
             thumb_url = f"/api/thumbnails/clip_{clip.id}.jpg" if clip else None
