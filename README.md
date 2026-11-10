@@ -135,7 +135,6 @@ flowchart TD
 ├── CONTRIBUTING.md                  # Contribution guidelines
 ├── Dockerfile                       # Multi-stage production container build
 ├── README.md                        # Project overview and entry point
-├── ROUND_2_RESPONSES.md             # Final resolutions and kickoff confirmation
 ├── SECURITY.md                      # Enterprise security policy and posture
 ├── SETUP_GUIDE.md                   # Complete device setup and deployment guide
 ├── QUICK_START.md                   # Quick start and installation notes
@@ -143,19 +142,26 @@ flowchart TD
 ├── pyproject.toml                   # Python package specifications and tool configuration
 ├── requirements-dev.txt             # Development, testing, and linting dependencies
 ├── requirements.txt                 # Production runtime dependencies
+├── START_HERE.bat                   # Windows one-click launcher for the control center
+├── Shorts_Engine_Control_Center/    # Windows desktop control center (batch operator menus)
 ├── assets/                          # Graphic assets, custom fonts, and audio libraries
 │   ├── fonts/                       # Font files for ASS subtitle rendering
 │   └── sfx_library/                 # Audio effects and transition stems
 ├── cli.py                           # Unified management CLI
-├── docs/                            # Architecture, operations, audit reports, and design documentation
-│   ├── operations/                  # Runbooks, playbooks, and operational notes
-│   ├── architecture/                # Architecture specification and module reference
-│   ├── audit/                       # Remediation logs and technical audits
-│   └── legacy/                      # Superseded or archived documentation
+├── docs/                            # All project documentation
+│   ├── agent/                       # Agent ledger, file manifest, findings, and progress
+│   ├── architecture/                # Architecture specification, module reference, persistence, secrets
+│   ├── audit/                       # Remediation logs, evidence, and per-file assessment cards
+│   ├── decisions/                   # Architecture decision log
+│   ├── legacy/                      # Superseded material (archives and project handover)
+│   ├── operations/                  # Runbooks, playbooks, and channel operations guides
+│   ├── qa/                          # QA verification protocols
+│   └── requirements/                # Clarification questions and requirements capture
 ├── frontend/                        # React + Vite dashboard frontend
 │   ├── src/                         # React components, hooks, and views
 │   └── dist/                        # Production pre-compiled static frontend assets
 ├── migrations/                      # SQL database schema migration scripts
+├── run.py                           # Application entry point
 ├── scripts/                         # Operational scripts (launchers, workers, maintenance)
 ├── shorts_engine/                   # Core Python backend engine
 │   ├── cli/                         # CLI subcommands and ergonomics
@@ -217,7 +223,7 @@ flowchart TD
 │   ├── e2e/                         # End-to-end user journey and UI integration tests
 │   └── conftest.py                  # Pytest fixtures and mock factories
 └── tools/                           # Audit, packaging, and diagnostic tools
-    ├── audit/                       # Code coverage and chunk/ledger scanners
+    ├── audit/                       # Coverage, ledger, code-scan, and drift-check utilities
     └── bin/                         # Binary tooling (for example Gitleaks)
 ```
 

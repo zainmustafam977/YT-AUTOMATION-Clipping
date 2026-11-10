@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "shorts-engine"
 version = "0.1.0"
 description = "Automated YouTube Shorts repurposing platform"
-readme = "CLARIFICATION_QUESTIONS.md"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5.0",
