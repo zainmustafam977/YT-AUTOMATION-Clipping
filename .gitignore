@@ -188,3 +188,5 @@ htmlcov/
 .hypothesis/
 test_run_output.txt
 scratch_queue.html
+# TypeScript incremental build cache
+*.tsbuildinfo
