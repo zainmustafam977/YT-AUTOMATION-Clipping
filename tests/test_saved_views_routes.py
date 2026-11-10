@@ -1,11 +1,23 @@
-"""Tests for EASE-02 saved views HTTP routes."""
+"""Tests for EASE-02 saved views HTTP routes.
+
+Every saved-view endpoint requires authentication, so these tests drive an
+operator-authenticated client: a session cookie plus a matching CSRF token for
+the mutating calls. Anonymous access is covered separately by
+``tests/test_p0_security_hardening.py``.
+"""
 import pytest
 
 from fastapi.testclient import TestClient
 
-from shorts_engine.db.session import engine, Base
+from shorts_engine.db.session import engine, SessionLocal, Base
 from shorts_engine.db import models  # noqa: F401
 from shorts_engine.dashboard.app import app
+from shorts_engine.dashboard.auth import (
+    create_session_token,
+    generate_csrf_token,
+    SESSION_COOKIE_NAME,
+)
+from shorts_engine.db.models import User, UserRole
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -14,9 +26,31 @@ def _setup_db():
     yield
 
 
+@pytest.fixture(scope="module")
+def auth_token():
+    """Session token for an operator account; saved-view routes require auth."""
+    db = SessionLocal()
+    user = db.query(User).filter_by(username="saved_views_test_operator").first()
+    if not user:
+        user = User(
+            username="saved_views_test_operator",
+            password_hash="dummy_hash",
+            role=UserRole.OPERATOR,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    token = create_session_token(user.id)
+    db.close()
+    return token
+
+
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(auth_token):
+    c = TestClient(app, headers={"X-CSRF-Token": generate_csrf_token(auth_token)})
+    c.cookies.set(SESSION_COOKIE_NAME, auth_token)
+    return c
 
 
 def test_create_saved_view(client):
