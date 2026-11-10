@@ -8,6 +8,12 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+# Starlette's TestClient sends "Host: testserver". The dashboard enforces a Host
+# header allowlist and answers 400 for unknown hosts, which would mask the
+# status codes these tests assert on. Allow the test host explicitly instead of
+# disabling the guard, so the allowlist itself stays under test.
+os.environ.setdefault("DASHBOARD_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
+
 import json
 import pytest
 from datetime import date

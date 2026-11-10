@@ -475,6 +475,14 @@ class PipelineSettings(BaseSettings):
     DASHBOARD_SECRET_KEY: str = Field(default="change-me-in-prod", description="Session signing key")
     DASHBOARD_USERNAME: str = Field(default="admin", description="Operator dashboard username")
     DASHBOARD_PASSWORD: str = Field(default="AdminPass12345!", description="Operator dashboard password")
+    DASHBOARD_ALLOWED_HOSTS: str = Field(
+        default="127.0.0.1,localhost",
+        description=(
+            "Comma-separated Host header allowlist enforced by the dashboard. "
+            "Add the public domain served by the reverse proxy. Use '*' only "
+            "when an upstream is already responsible for host validation."
+        ),
+    )
 
     # Video Ingestion & Triple-Tier Authentication (Pillars 1-4)
     YOUTUBE_OAUTH_TOKEN_PATH: Path = Field(
