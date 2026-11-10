@@ -142,6 +142,10 @@ flowchart TD
 ├── pyproject.toml                   # Python package specifications and tool configuration
 ├── requirements-dev.txt             # Development, testing, and linting dependencies
 ├── requirements.txt                 # Production runtime dependencies
+├── setup.bat                        # Windows bootstrap launcher
+├── setup.ps1                        # PowerShell bootstrap launcher
+├── setup.sh                         # POSIX (Linux/macOS) bootstrap launcher
+├── setup_environment.py             # Cross-platform environment bootstrap called by CI and launch scripts
 ├── START_HERE.bat                   # Windows one-click launcher for the control center
 ├── Shorts_Engine_Control_Center/    # Windows desktop control center (batch operator menus)
 ├── assets/                          # Graphic assets, custom fonts, and audio libraries
@@ -161,6 +165,7 @@ flowchart TD
 │   ├── src/                         # React components, hooks, and views
 │   └── dist/                        # Production pre-compiled static frontend assets
 ├── migrations/                      # SQL database schema migration scripts
+├── run.bat                          # Windows one-click self-healing launcher (calls scripts/bootstrap.ps1)
 ├── run.py                           # Application entry point
 ├── scripts/                         # Operational scripts (launchers, workers, maintenance)
 ├── shorts_engine/                   # Core Python backend engine

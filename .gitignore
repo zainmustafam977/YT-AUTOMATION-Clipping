@@ -8,8 +8,6 @@
 .env
 .env.*
 !.env.example
-in progress dev/.env
-in progress dev/.env.*
 *.pem
 *.key
 *.cert

@@ -74,7 +74,6 @@ exclude = [
     "dist",
     "build",
     "*.egg-info",
-    "in progress dev",
     "docs",
     "tests",
     "scripts",
