@@ -323,10 +323,68 @@ def ensure_schema_upgrades(target_engine=None):
                     except Exception as idx_err:
                         logger.warning("Could not create uq_pipeline_jobs_entity_stage index directly: %s", idx_err)
 
+        if "saved_views" in table_names:
+            _upgrade_saved_views_to_user_fk(eng, inspector)
+
     except Exception as e:
         logger.error("Database schema upgrade failed: %s", e, exc_info=True)
         raise RuntimeError(f"Schema upgrade failed: {e}") from e
 
+
+
+def _upgrade_saved_views_to_user_fk(eng, inspector) -> None:
+    """Moves saved-view ownership from a username string to a users.id foreign key.
+
+    Idempotent: adds ``user_id`` and backfills it from the legacy ``owner``
+    username, then removes ``owner`` so the username can no longer drift out of
+    sync with the account.    Rows whose ``owner`` matches no account are kept with
+    a NULL ``user_id``, which the API treats as unclaimed, rather than deleted.
+    """
+    from sqlalchemy import text
+
+    cols = [c["name"] for c in inspector.get_columns("saved_views")]
+
+    if "user_id" not in cols:
+        with eng.connect() as conn:
+            # SQLite permits ADD COLUMN with REFERENCES only when the default is
+            # NULL, which is the case here; PostgreSQL accepts it outright.
+            conn.execute(text("ALTER TABLE saved_views ADD COLUMN user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE"))
+            conn.commit()
+
+    if "owner" in cols:
+        with eng.connect() as conn:
+            # Correlated subquery rather than UPDATE ... FROM, so the same
+            # statement runs on both SQLite and PostgreSQL.
+            conn.execute(text("""
+                UPDATE saved_views
+                   SET user_id = (SELECT users.id FROM users WHERE users.username = saved_views.owner)
+                 WHERE user_id IS NULL
+            """))
+            conn.commit()
+
+    # Index in its own transaction: a column drop that is unsupported by an old
+    # SQLite build must not roll the index back with it.
+    with eng.connect() as conn:
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_saved_views_user_id ON saved_views (user_id)"))
+            conn.commit()
+        except Exception as idx_err:
+            conn.rollback()
+            logger.warning("Could not ensure ix_saved_views_user_id index: %s", idx_err)
+
+    if "owner" in cols:
+        with eng.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE saved_views DROP COLUMN owner"))
+                conn.commit()
+                logger.info("Migrated saved_views.owner to the saved_views.user_id foreign key")
+            except Exception as drop_err:
+                conn.rollback()
+                logger.warning(
+                    "Could not drop the legacy saved_views.owner column; user_id remains "
+                    "authoritative but the stale column is still present: %s",
+                    drop_err,
+                )
 
 
 def init_db(target_engine=None):

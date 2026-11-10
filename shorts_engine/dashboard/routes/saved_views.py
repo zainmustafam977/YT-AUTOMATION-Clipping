@@ -38,12 +38,14 @@ class SavedViewIn(BaseModel):
     expression: str = Field("", description="Filter expression (e.g., 'status=ready')")
 
 
-def _serialize(view: SavedView) -> dict:
+def _serialize(view: SavedView, user: User) -> dict:
     return {
         "id": view.id,
         "name": view.name,
         "expression": view.expression,
-        "owner": view.owner,
+        # Kept as a readable username in the payload while ownership is stored
+        # as a foreign key, so clients do not have to resolve account ids.
+        "owner": user.username,
         "created_at": str(view.created_at),
     }
 
@@ -55,7 +57,7 @@ def _owned_or_404(session, view_id: str, user: User) -> SavedView:
     are indistinguishable from a missing id.
     """
     view = session.query(SavedView).filter(SavedView.id == view_id).first()
-    if view is None or view.owner != user.username:
+    if view is None or view.user_id != user.id:
         raise HTTPException(status_code=404, detail=f"view {view_id} not found")
     return view
 
@@ -76,11 +78,11 @@ def list_views(owner: str | None = None, user: User = Depends(require_viewer)):
     with SessionLocal() as s:
         rows = (
             s.query(SavedView)
-            .filter(SavedView.owner == user.username)
+            .filter(SavedView.user_id == user.id)
             .order_by(SavedView.created_at.desc())
             .all()
         )
-        return {"views": [_serialize(v) for v in rows]}
+        return {"views": [_serialize(v, user) for v in rows]}
 
 
 @router.post("", dependencies=MUTATION_GUARDS)
@@ -89,7 +91,7 @@ def create(body: SavedViewIn, user: User = Depends(require_viewer)):
         # Names are unique per owner, and the owner is always the caller.
         existing = (
             s.query(SavedView)
-            .filter(SavedView.name == body.name, SavedView.owner == user.username)
+            .filter(SavedView.name == body.name, SavedView.user_id == user.id)
             .first()
         )
         if existing is not None:
@@ -97,17 +99,17 @@ def create(body: SavedViewIn, user: User = Depends(require_viewer)):
                 status_code=409,
                 detail=f"view '{body.name}' already exists for owner '{user.username}'",
             )
-        view = SavedView(name=body.name, expression=body.expression, owner=user.username)
+        view = SavedView(name=body.name, expression=body.expression, user_id=user.id)
         s.add(view)
         s.commit()
         s.refresh(view)
-        return _serialize(view)
+        return _serialize(view, user)
 
 
 @router.get("/{view_id}")
 def get_view(view_id: str, user: User = Depends(require_viewer)):
     with SessionLocal() as s:
-        return _serialize(_owned_or_404(s, view_id, user))
+        return _serialize(_owned_or_404(s, view_id, user), user)
 
 
 @router.put("/{view_id}", dependencies=MUTATION_GUARDS)
@@ -118,7 +120,7 @@ def update(view_id: str, body: SavedViewIn, user: User = Depends(require_viewer)
         view.expression = body.expression
         s.commit()
         s.refresh(view)
-        return _serialize(view)
+        return _serialize(view, user)
 
 
 @router.delete("/{view_id}", dependencies=MUTATION_GUARDS)

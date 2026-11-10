@@ -110,6 +110,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Adds CANCELLED status to pipelinejobstatus enum for graceful job cancellation",
         upgrade_fn=lambda conn: _upgrade_011_cancelled_status(conn),
     ),
+    Migration(
+        version="012_saved_views_user_fk",
+        description="Replaces saved_views.owner username with a users.id foreign key (ON DELETE CASCADE)",
+        upgrade_fn=lambda conn: None,  # Handled in ensure_schema_upgrades
+    ),
 ]
 
 

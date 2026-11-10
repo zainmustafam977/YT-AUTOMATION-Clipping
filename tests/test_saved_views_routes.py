@@ -13,7 +13,7 @@ import pytest
 
 from fastapi.testclient import TestClient
 
-from shorts_engine.db.session import engine, SessionLocal, Base
+from shorts_engine.db.session import engine, SessionLocal, Base, ensure_schema_upgrades
 from shorts_engine.db import models  # noqa: F401
 from shorts_engine.dashboard.app import app
 from shorts_engine.dashboard.auth import (
@@ -30,6 +30,9 @@ OWNER_B = "saved_views_test_operator_b"
 @pytest.fixture(scope="module", autouse=True)
 def _setup_db():
     Base.metadata.create_all(engine)
+    # Run the same boot-time upgrade the app performs, which migrates a
+    # pre-existing saved_views table from the legacy owner column.
+    ensure_schema_upgrades(engine)
     yield
 
 
@@ -244,3 +247,61 @@ def test_delete_other_users_view_404(client, other_client):
     assert client.delete(f"/api/saved-views/{vid}").status_code == 404
     # Still there for its owner.
     assert other_client.get(f"/api/saved-views/{vid}").status_code == 200
+
+
+def test_views_survive_username_change(client):
+    """Renaming an account keeps its views, because ownership is a user id."""
+    created = client.post("/api/saved-views", json={
+        "name": _unique("survives-rename"),
+        "expression": "status=ready",
+    })
+    assert created.status_code == 200, created.text
+    vid = created.json()["id"]
+    renamed = f"{OWNER_A}-renamed"
+
+    db = SessionLocal()
+    user = db.query(User).filter_by(username=OWNER_A).first()
+    user.username = renamed
+    db.commit()
+    db.close()
+
+    try:
+        r = client.get(f"/api/saved-views/{vid}")
+        assert r.status_code == 200, r.text
+        assert r.json()["owner"] == renamed
+        listed = client.get("/api/saved-views").json()["views"]
+        assert any(v["id"] == vid for v in listed)
+    finally:
+        db = SessionLocal()
+        user = db.query(User).filter_by(username=renamed).first()
+        if user is not None:
+            user.username = OWNER_A
+            db.commit()
+        db.close()
+
+
+def test_deleting_account_removes_its_views():
+    """Deleting an account takes its views with it instead of leaving orphans."""
+    db = SessionLocal()
+    try:
+        user = User(
+            username=_unique("cascade-probe"),
+            password_hash="dummy_hash",
+            role=UserRole.OPERATOR,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        view = models.SavedView(name=_unique("cascade-view"), expression="", user_id=user.id)
+        db.add(view)
+        db.commit()
+        view_id = view.id
+
+        db.delete(user)
+        db.commit()
+
+        assert db.query(models.SavedView).filter_by(id=view_id).first() is None
+    finally:
+        db.close()

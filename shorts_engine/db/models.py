@@ -1173,7 +1173,16 @@ class SavedView(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(128), nullable=False)
     expression = Column(Text, nullable=False, default="")
-    owner = Column(String(64), nullable=False, default="system")
+    # Ownership is a foreign key to the account, not a free-form username, so a
+    # renamed user keeps their views and a deleted user takes them along.
+    # Nullable only to preserve legacy rows that no longer match any account;
+    # every row written by the API carries a user_id.
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
