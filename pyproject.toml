@@ -39,6 +39,8 @@ dependencies = [
     "scipy>=1.11.0",
     "portalocker>=2.8.0",
     "watchdog>=4.0.0",
+    # Font capability probing (emoji/script coverage) imports fontTools directly.
+    "fonttools>=4.47.0",
 ]
 
 [project.optional-dependencies]

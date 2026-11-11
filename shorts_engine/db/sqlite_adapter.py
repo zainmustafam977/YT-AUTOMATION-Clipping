@@ -272,6 +272,16 @@ class CursorAdapter:
     def keys(self) -> list:
         return list(self._sa_result.keys()) if self._sa_result.keys() else []
 
+    @property
+    def lastrowid(self) -> int:
+        """Row id of the last successful INSERT, like ``sqlite3.Cursor.lastrowid``.
+
+        The owning adapter records it in ``execute`` (from SQLAlchemy's
+        ``inserted_primary_key`` or a ``last_insert_rowid()`` fallback), so
+        callers that read ``cursor.lastrowid`` after an INSERT keep working.
+        """
+        return self._conn._lastrowid
+
     # ---- sqlite3 cursor methods ----
 
     def close(self) -> None:

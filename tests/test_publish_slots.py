@@ -120,9 +120,12 @@ def test_automatic_slot_calculation_and_dst(test_db):
     ch, sv = _seed_channel_and_video(test_db)
     service = PublishSlotService()
 
-    # Given a local time at 08:00 AM NY on 2026-10-15
+    # Given a local time at 08:00 AM NY two days from now. The date is relative
+    # because the service never schedules in the past: start_from is clamped to
+    # now + lead time, so a hard-coded date would silently expire.
     ny_tz = ZoneInfo("America/New_York")
-    morning_time = datetime(2026, 10, 15, 8, 0, 0, tzinfo=ny_tz)
+    future_day = (datetime.now(ny_tz) + timedelta(days=2)).date()
+    morning_time = datetime(future_day.year, future_day.month, future_day.day, 8, 0, 0, tzinfo=ny_tz)
 
     next_slot = service.calculate_next_available_slot(ch, test_db, start_from=morning_time)
 
@@ -133,7 +136,7 @@ def test_automatic_slot_calculation_and_dst(test_db):
     assert slot_ny.date() == morning_time.date()
 
     # Now if current time is 11:00 AM NY, next slot should be 18:00 (6 PM) NY
-    afternoon_time = datetime(2026, 10, 15, 11, 0, 0, tzinfo=ny_tz)
+    afternoon_time = datetime(future_day.year, future_day.month, future_day.day, 11, 0, 0, tzinfo=ny_tz)
     next_slot_pm = service.calculate_next_available_slot(ch, test_db, start_from=afternoon_time)
     slot_pm_ny = next_slot_pm.replace(tzinfo=ZoneInfo("UTC")).astimezone(ny_tz)
     assert slot_pm_ny.hour == 18

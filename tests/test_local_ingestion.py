@@ -7,8 +7,11 @@ Verifies:
 4. Preview proxy necessity detection for incompatible codecs (HEVC, ProRes, AV1, MKV).
 """
 
+import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+import pytest
 
 from shorts_engine.services.ingestion.watch_folder import is_file_locked
 from shorts_engine.services.ingestion.hotfolder_watcher import HotfolderWatcher
@@ -36,6 +39,10 @@ def test_is_file_locked_nonexistent_file(tmp_path):
     assert is_file_locked(missing_file) is True
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="exercises the Win32 path that reads ctypes.windll kernel32 sharing violations",
+)
 def test_is_file_locked_mock_sharing_violation(tmp_path):
     """When OS reports ERROR_SHARING_VIOLATION (32), is_file_locked returns True."""
     test_file = tmp_path / "locked.mp4"

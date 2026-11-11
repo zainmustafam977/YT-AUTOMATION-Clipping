@@ -266,9 +266,13 @@ def test_ass_generator_emoji_font_fallback(tmp_path):
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
 
-    # Segoe UI Emoji tag must wrap emoji characters and revert to Arial Black
-    assert "{\\fnSegoe UI Emoji}😱{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}🔥{\\fnArial Black}" in content
+    # The platform emoji font tag must wrap emoji characters and revert to the
+    # caption font. The emoji font is platform-dependent (Segoe UI Emoji on
+    # Windows, Noto Color Emoji elsewhere), so assert against the generator's
+    # resolved value instead of a hard-coded Windows font name.
+    emoji_font = generator.emoji_font
+    assert f"{{\\fn{emoji_font}}}😱{{\\fnArial Black}}" in content
+    assert f"{{\\fn{emoji_font}}}🔥{{\\fnArial Black}}" in content
     # Normal text should not be wrapped in Segoe UI Emoji
     assert "WAIT" in content
 
@@ -664,10 +668,11 @@ def test_ass_generator_flags_variation_selectors_and_zwj(tmp_path):
     gen.generate_ass(words, 0, 3000, out_file)
     content = out_file.read_text(encoding="utf-8")
 
-    # Full emoji sequences must be enclosed inside emoji font tags
-    assert "{\\fnSegoe UI Emoji}⚠️{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}❤️{\\fnArial Black}" in content
-    assert "{\\fnSegoe UI Emoji}🇺🇸{\\fnArial Black}" in content
+    # Full emoji sequences must be enclosed inside the platform emoji font tags
+    emoji_font = gen.emoji_font
+    assert f"{{\\fn{emoji_font}}}⚠️{{\\fnArial Black}}" in content
+    assert f"{{\\fn{emoji_font}}}❤️{{\\fnArial Black}}" in content
+    assert f"{{\\fn{emoji_font}}}🇺🇸{{\\fnArial Black}}" in content
 
 
 def test_ass_generator_sanitizes_transcript_braces(tmp_path):
