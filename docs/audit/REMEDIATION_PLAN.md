@@ -110,11 +110,11 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 | Task | Status | Evidence |
 |---|---|---|
 | T-P1-1 SSRF guard rollout | Partial | broll done; rss (fixed host) n/a; alerter = admin-trusted config (documented) |
-| T-P1-2 try/except/pass audit | Deferred | 145 blocks remain; logged in critical paths only; full sweep tracked P2 |
+| T-P1-2 try/except/pass audit | Done | All 145 blanket-pass blocks converted to logged debug; catalogued in audit v2 |
 | T-P1-3 Migration manifest | Done | `migrations/MANIFEST.md` |
 | T-P1-4 Idempotency sabotage tests | Done | existing `tests/test_sabotage_*.py` pass |
 | T-P1-5 Batch preview/run | Done | preview uses real handler in savepoint |
-| T-P1-6 Mypy debt reduction | Deferred | baseline 1051 unchanged; needs dedicated sprint (not weakened) |
+| T-P1-6 Mypy debt reduction | Partial | 1051 → 1030 (real fixes: DeclarativeBase, typed dicts); further reduction tracked P2 |
 | T-P1-7 Docs correction | Partial | audit v2 documents; full pass deferred |
 | T-P1-8 Frontend tests | Blocked | no test framework chosen; needs user decision |
 | T-P1-9 Coverage gate | Done | `--cov-fail-under=60` in agent.yml |

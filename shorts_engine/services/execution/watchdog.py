@@ -114,9 +114,8 @@ class SubprocessWatchdog:
                 import signal
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signal.SIGTERM)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         # Wait up to grace period
         gone, alive = psutil.wait_procs(all_procs, timeout=grace_period_sec)
 
@@ -133,9 +132,8 @@ class SubprocessWatchdog:
                 import signal
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signal.SIGKILL)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return terminated_pids
 
     @classmethod

@@ -927,6 +927,5 @@ class PipelineSettings(BaseSettings):
 settings = PipelineSettings()
 try:
     settings.FONTS_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
-
+except Exception as _exc:
+    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)

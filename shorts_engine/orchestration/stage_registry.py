@@ -184,17 +184,15 @@ def analyze_candidates_stage(ctx: StageContext) -> Dict[str, Any]:
         if t_row and t_row.raw_transcript:
             try:
                 trans_data = json.loads(t_row.raw_transcript)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not trans_data:
         t_file = Path(settings.STORAGE_DIR) / "transcripts" / f"{ctx.video_id}.json"
         if t_file.exists():
             try:
                 trans_data = json.loads(t_file.read_text())
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not trans_data:
         raise PermanentError("Cannot analyze candidates without transcript data.")
 
@@ -383,9 +381,8 @@ def caption_stage(ctx: StageContext) -> Dict[str, Any]:
             if json_str:
                 try:
                     words = json.loads(json_str).get("words", [])
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not words:
         raise PermanentError("No words found in transcript for caption generation.")
 
@@ -440,9 +437,8 @@ def render_stage(ctx: StageContext) -> Dict[str, Any]:
             if plan_file.exists():
                 try:
                     crop_plan = json.loads(plan_file.read_text())
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if crop_plan and isinstance(crop_plan, dict):
             from shorts_engine.services.reframing.cropper import CropPlan
             try:

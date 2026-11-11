@@ -8,6 +8,7 @@ storage capacity, and AI provider statuses.
 ==============================================================================
 """
 
+import logging
 import time
 import psutil
 from fastapi import APIRouter, Response, Depends
@@ -53,9 +54,8 @@ def prometheus_metrics():
         lines.append(f'shorts_storage_bytes{{type="total"}} {disk.total}')
         lines.append(f'shorts_storage_bytes{{type="used"}} {disk.used}')
         lines.append(f'shorts_storage_bytes{{type="free"}} {disk.free}')
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # 4. Database Metrics (Clips and Videos)
     try:
         with SessionLocal() as db:
@@ -82,9 +82,8 @@ def prometheus_metrics():
             for v_status, count in video_counts:
                 v_name = v_status.value if hasattr(v_status, "value") else str(v_status)
                 lines.append(f'shorts_source_videos_total{{status="{v_name}"}} {count}')
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # 5. AI API Key Configuration Status
     lines.append("\n# HELP shorts_configured_api_keys Total operational API keys configured per provider")
     lines.append("# TYPE shorts_configured_api_keys gauge")
@@ -106,9 +105,8 @@ def prometheus_metrics():
         lines.append("\n# HELP shorts_youtube_quota_used_percent YouTube Data API v3 percentage of daily quota used")
         lines.append("# TYPE shorts_youtube_quota_used_percent gauge")
         lines.append(f"shorts_youtube_quota_used_percent {quota_metrics.get('pct', 0.0):.1f}")
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # 7. AI Token Consumption & Estimated Cost Telemetry
     try:
         from shorts_engine.services.monitoring.token_tracker import token_tracker
@@ -127,9 +125,8 @@ def prometheus_metrics():
         for prov, p_data in tok_summary.get("providers", {}).items():
             lines.append(f'shorts_ai_tokens_total{{type="provider_total",provider="{prov}"}} {p_data.get("total_tokens", 0)}')
             lines.append(f'shorts_ai_cost_usd_total{{provider="{prov}"}} {p_data.get("estimated_cost_usd", 0.0):.6f}')
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     lines.append("")  # trailing newline required by Prometheus specification
     body = "\n".join(lines)
     return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")

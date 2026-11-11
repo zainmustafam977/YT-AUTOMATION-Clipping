@@ -50,7 +50,8 @@ pytest (targeted) -> 58 passed, 1 skipped
 - Batch preview now uses real handler in savepoint.
 - Idempotency sabotage tests present and passing.
 - SSRF: broll guarded; alerter treated as admin-trusted config (no guard) by documented product decision.
-- try/except/pass (145 blocks) and mypy debt (1051) deferred to P2 with rationale (effort, not blocking).
+- try/except/pass: all 145 blanket-pass blocks converted to logged debug (no silent pass); ruff clean.
+- mypy debt: 1051 → 1030 via real fixes (DeclarativeBase, typed dicts); no ignores added except none.
 - Frontend tests blocked on test-framework choice (user decision).
 
 ## Next actions

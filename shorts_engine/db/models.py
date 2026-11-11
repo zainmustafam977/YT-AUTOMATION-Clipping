@@ -3,6 +3,7 @@ SQLAlchemy ORM models implementing all 7 entities from Section 10 of SRS.
 Incorporates duplicate prevention unique constraints and reconciled ClipStatus enum.
 """
 
+import logging
 import json
 import uuid
 from typing import Optional, Dict, Any
@@ -381,8 +382,8 @@ class Clip(Base):
         if self.variations_json:
             try:
                 return json.loads(self.variations_json)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if self.candidate and self.candidate.variations:
             return self.candidate.variations
         return []
@@ -425,8 +426,8 @@ class Clip(Base):
             try:
                 qr = json.loads(self.quality_check_result)
                 return qr.get("rejection_reason")
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return None
 
     @rejection_reason.setter

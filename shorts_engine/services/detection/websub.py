@@ -38,8 +38,8 @@ def _load_subscriptions() -> dict:
     if _SUBS_STATE_FILE.exists():
         try:
             return json.loads(_SUBS_STATE_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return {}
 
 

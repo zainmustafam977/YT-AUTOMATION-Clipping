@@ -180,9 +180,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -363,9 +362,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return True
         finally:
             if should_close:
@@ -430,9 +428,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -475,9 +472,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -687,8 +683,8 @@ class DurableJobQueue:
                         if job.payload_json:
                             try:
                                 payload = json.loads(job.payload_json)
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         if "file_path" not in payload and video.downloaded_path:
                             payload["file_path"] = str(video.downloaded_path)
                         try:
@@ -734,8 +730,8 @@ class DurableJobQueue:
                         if job.payload_json:
                             try:
                                 payload = json.loads(job.payload_json)
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         try:
                             new_job = self.enqueue(
                                 job_type="select",

@@ -108,9 +108,8 @@ class SessionHarvester:
                     if consent_btn:
                         consent_btn.click(timeout=3000)
                         time.sleep(1.0)
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 cookies = context.cookies(["https://www.youtube.com", "https://youtube.com"])
                 browser.close()
                 if cookies:
@@ -208,15 +207,14 @@ class SessionHarvester:
         if plaintext_legacy.exists() and plaintext_legacy.is_file():
             try:
                 plaintext_legacy.unlink()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         default_leak = settings.STORAGE_DIR / "harvester_cookies.txt"
         if default_leak.exists() and default_leak.is_file():
             try:
                 default_leak.unlink()
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         elapsed = round(time.time() - start_time, 2)
         logger.info("Session harvest completed in %.2fs via %s: %s (%d cookies, encrypted)", elapsed, engine_used, target_path, len(cookies))
 
@@ -260,9 +258,8 @@ class SessionHarvester:
                 clean = line.strip()
                 if clean and not clean.startswith("#"):
                     cookie_count += 1
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         is_fresh = age_sec < 86400 * 7  # Fresh within 7 days
         return {
             "exists": True,

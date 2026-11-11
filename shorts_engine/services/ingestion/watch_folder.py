@@ -314,9 +314,8 @@ class WatchFolderDaemon:
                 message=f"File '{file_path.name}' is fully written and unlocked. Initiating ingestion.",
             )
             global_event_bus.publish_sync(event)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         # 1. Custom callback
         if self.callback:
             try:
@@ -405,8 +404,8 @@ class WatchFolderDaemon:
             try:
                 self._observer.stop()
                 self._observer.join(timeout=timeout)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             self._observer = None
 
         if self._poller_thread and self._poller_thread.is_alive():

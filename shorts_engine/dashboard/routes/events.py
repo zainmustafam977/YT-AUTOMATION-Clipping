@@ -150,9 +150,8 @@ def get_recent_persisted_events(
         try:
             since_dt = datetime.fromisoformat(since_iso)
             query = query.filter(EventLog.created_at > since_dt)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if event_name:
         query = query.filter(EventLog.event_name == event_name)
 

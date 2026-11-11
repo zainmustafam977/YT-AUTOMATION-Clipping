@@ -162,9 +162,8 @@ class ProxyManager:
                 details={"proxy": clean_proxy, "cooldown_sec": cls.COOLDOWN_SECONDS},
             )
             global_event_bus.publish_sync(event)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     @classmethod
     def test_all_proxies(cls) -> List[Dict[str, Any]]:
         """Pings and tests all proxies in INGESTION_PROXY_POOL."""

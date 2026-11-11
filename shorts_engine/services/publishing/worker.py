@@ -224,8 +224,8 @@ def get_channel_refresh_token(channel: Channel, db: Session) -> Optional[str]:
         try:
             token_dict = json.loads(decrypt_secret(channel.encrypted_oauth_token))
             return token_dict.get("refresh_token")
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return None
 
 
@@ -376,15 +376,14 @@ def verify_channel_credentials(
     if cred and cred.encrypted_refresh_token:
         try:
             refresh_token = decrypt_secret(cred.encrypted_refresh_token)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not refresh_token and channel.encrypted_oauth_token:
         try:
             legacy = json.loads(decrypt_secret(channel.encrypted_oauth_token))
             refresh_token = legacy.get("refresh_token")
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not refresh_token:
         if cred:
             cred.status = "needs_auth"
@@ -507,9 +506,8 @@ class YouTubePublishWorker:
         if env_json and env_json.strip().startswith("{"):
             try:
                 return json.loads(env_json.strip())
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         storage_dir = Path(settings.STORAGE_DIR)
         candidates = [
             storage_dir / "client_secret.enc",
@@ -592,9 +590,8 @@ class YouTubePublishWorker:
                 message=f"YouTube daily quota limit reached. Job deferred until Pacific midnight ({reset_iso}).",
                 db=db,
             )
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def _handle_invalid_grant(
         self,
         channel: Channel,
@@ -638,9 +635,8 @@ class YouTubePublishWorker:
                 message="Google OAuth refresh token revoked or expired (invalid_grant). Reconnection required.",
                 action_url="/channels",
             ))
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # ==========================================================================
     # Intent 1: 'publish' Job Execution
     # ==========================================================================
@@ -853,9 +849,8 @@ class YouTubePublishWorker:
                     message=f"[DRY-RUN] Clip '{clean_title}' simulated as {simulated_id}.",
                     db=db,
                 )
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": True,
                 "status": "DRY_RUN",
@@ -930,8 +925,8 @@ class YouTubePublishWorker:
                     message=f"Clip '{clean_title}' reclaimed as {existing_video_id}.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": True,
                 "status": clip.status.value,
@@ -1405,8 +1400,8 @@ class YouTubePublishWorker:
                     message=f"Channel {channel.display_title} requires re-authentication.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": False, "status": "needs_reauth", "error": cred.last_error}
 
         is_dry_run = self.dry_run or payload.get("dry_run", False)
@@ -1424,8 +1419,8 @@ class YouTubePublishWorker:
                     message=f"[DRY-RUN] Channel {channel.display_title} healthy.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": True, "dry_run": True, "channel_id": channel.id}
 
         is_valid, err = verify_channel_credentials(channel, db=db, client_config=self._resolve_client_config())
@@ -1444,8 +1439,8 @@ class YouTubePublishWorker:
                     message=f"Channel {channel.display_title} health check failed: {err}",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": False, "channel_id": channel.id, "error": err}
 
         try:
@@ -1460,8 +1455,8 @@ class YouTubePublishWorker:
                 message=f"Channel {channel.display_title} verified healthy.",
                 db=db,
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return {"healthy": True, "channel_id": channel.id, "verified_at": datetime.utcnow().isoformat()}
 
     # ==========================================================================

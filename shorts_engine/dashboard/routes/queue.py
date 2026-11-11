@@ -1521,9 +1521,8 @@ def re_render_clip_style(
         try:
             qc = json.loads(clip.quality_check_result)
             hook_overlay = qc.get("selected_variation", {}).get("selected_hook_overlay")
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # Invalidate cache if force_re_render
     if force_re_render and target_clip_path.exists():
         try:
@@ -2141,8 +2140,8 @@ async def ingest_external_video(
         if target_path.exists():
             try:
                 target_path.unlink()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         raise HTTPException(
             status_code=400,
             detail=f"Video exceeds YouTube Shorts duration limit (duration: {duration_sec:.1f}s > 60.0s).",
@@ -2151,8 +2150,8 @@ async def ingest_external_video(
         if target_path.exists():
             try:
                 target_path.unlink()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         raise HTTPException(
             status_code=400,
             detail=f"Video is not vertical ({width}x{height}). YouTube Shorts must be vertical (aspect ratio 9:16).",

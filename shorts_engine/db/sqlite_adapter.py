@@ -7,6 +7,7 @@ to direct close() (which causes the _sqlite() segfault under concurrency).
 """
 
 from __future__ import annotations
+import logging
 
 from typing import Any, Optional, Sequence
 
@@ -166,9 +167,8 @@ class SqliteAdapter:
         # Best-effort shim; not all dialects support func_register.
         try:
             self._sa_conn.func_register(name, func, deterministic)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # ---- convenience re-exports of cursor results ----
 
     def fetchone(self, sql: str, params: Optional[Any] = None) -> Optional[Any]:
@@ -232,10 +232,8 @@ class SqliteAdapter:
             self._sa_conn.registry.register_aggregate(
                 name, num_args, aggregate_class
             )
-        except Exception:
-            pass
-
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
 class CursorAdapter:
     """Wraps a SQLAlchemy Result as a sqlite3.Cursor-like object."""
 

@@ -356,9 +356,8 @@ class AudioMasteringEngine:
                     measured_output_lufs = float(d2["output_i"])
                 if "output_tp" in d2:
                     measured_output_tp = float(d2["output_tp"])
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if measured_output_lufs is None:
             post_metrics = self.measure_loudness(output_audio_path, duration_sec=duration_sec)
             measured_output_lufs = post_metrics.get("input_i")

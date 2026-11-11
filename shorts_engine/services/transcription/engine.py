@@ -325,9 +325,8 @@ class TranscriptionService:
                 entity_type="video" if video_id else None,
                 details={"audio_file": audio_path.name, "language": language},
             ))
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         try:
             # Optional cloud whisper acceleration via Groq
             if getattr(settings, "USE_GROQ_WHISPER", False):
@@ -348,8 +347,8 @@ class TranscriptionService:
                         entity_id=video_id,
                         entity_type="video" if video_id else None,
                     ))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 groq_res = self._transcribe_with_groq(audio_path, language=language)
                 if groq_res is not None:
                     if video_id:
@@ -370,8 +369,8 @@ class TranscriptionService:
                             entity_type="video" if video_id else None,
                             details={"words_count": len(groq_res.words), "language": groq_res.language, "provider": "groq"},
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     return groq_res
 
             eff_audio_path = audio_path
@@ -426,9 +425,8 @@ class TranscriptionService:
                                 entity_id=video_id,
                                 entity_type="video" if video_id else None,
                             ))
-                        except Exception:
-                            pass
-
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if video_id:
                 job_progress_tracker.update_progress(
                     video_id=video_id,
@@ -446,9 +444,8 @@ class TranscriptionService:
                     entity_id=video_id,
                     entity_type="video" if video_id else None,
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             # Apply forced alignment pass to eliminate cross-attention drift
             aligned_words = self.aligner.align(audio_path, raw_words)
 
@@ -470,9 +467,8 @@ class TranscriptionService:
                     entity_type="video" if video_id else None,
                     details={"words_count": len(aligned_words), "language": info.language},
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return FormattedTranscript(
                 words=aligned_words,
                 language=info.language or "en",
@@ -488,6 +484,6 @@ class TranscriptionService:
                     entity_id=video_id,
                     entity_type="video" if video_id else None,
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             raise

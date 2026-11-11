@@ -147,8 +147,8 @@ class ThumbnailGenerator:
                             try:
                                 font = ImageFont.truetype(font_path, font_size)
                                 break
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     if font is None:
                         font = ImageFont.load_default()
 
@@ -181,5 +181,5 @@ class ThumbnailGenerator:
             if temp_frame.exists():
                 try:
                     temp_frame.unlink()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)

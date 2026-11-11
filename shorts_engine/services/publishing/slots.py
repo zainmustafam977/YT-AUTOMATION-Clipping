@@ -449,8 +449,8 @@ class PublishSlotService:
                 try:
                     payload_dict = json.loads(job.payload_json)
                     has_session = bool(payload_dict.get("upload_session_uri"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
                 raise HTTPException(
                     status_code=409,
@@ -576,8 +576,8 @@ class PublishSlotService:
                 try:
                     payload_dict = json.loads(job.payload_json)
                     has_session = bool(payload_dict.get("upload_session_uri"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
                 raise HTTPException(
                     status_code=409,

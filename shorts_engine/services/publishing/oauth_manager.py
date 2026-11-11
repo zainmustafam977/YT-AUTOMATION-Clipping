@@ -635,15 +635,14 @@ class ChannelOAuthManager:
         if cred and cred.encrypted_refresh_token:
             try:
                 refresh_token = decrypt_secret(cred.encrypted_refresh_token)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token and channel.encrypted_oauth_token:
             try:
                 legacy_data = json.loads(decrypt_secret(channel.encrypted_oauth_token))
                 refresh_token = legacy_data.get("refresh_token")
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token:
             if cred:
                 cred.status = "needs_auth"
@@ -759,9 +758,8 @@ class ChannelOAuthManager:
                 old_data = json.loads(old_json)
                 if old_data.get("refresh_token"):
                     token_data["refresh_token"] = old_data["refresh_token"]
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         token_json = json.dumps(token_data)
         channel.encrypted_oauth_token = encrypt_secret(token_json)
 
@@ -797,9 +795,8 @@ class ChannelOAuthManager:
             try:
                 refresh_token = decrypt_secret(cred.encrypted_refresh_token)
                 token_dict = {"refresh_token": refresh_token}
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token and channel.encrypted_oauth_token:
             try:
                 raw_token = decrypt_secret(channel.encrypted_oauth_token)

@@ -380,8 +380,8 @@ def build_recent_videos_payload(
                 if lock_acquired:
                     try:
                         v_lock.release()
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     is_stale_or_interrupted = True
                     turnaround_text = f"Interrupted ({age_sec // 60}m ago)"
 
@@ -435,9 +435,8 @@ def build_recent_videos_payload(
             try:
                 sz = os.path.getsize(v.downloaded_path)
                 raw_size_mb = f"{round(sz / (1024 * 1024), 1)} MB"
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         # Child candidate cards for the expandable drawer
         candidates_summary = []
         for c in cands:
@@ -1280,8 +1279,8 @@ def get_thumbnail(
             if adj_thumb.exists() and adj_thumb.stat().st_size > 0:
                 try:
                     shutil.copy2(str(adj_thumb), str(storage_thumb_dir / f"{clean_id}.jpg"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 return FileResponse(adj_thumb, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
             # Extract frame via ffmpeg

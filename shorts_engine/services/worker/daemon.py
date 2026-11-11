@@ -201,16 +201,14 @@ class WorkerDaemon:
                 try:
                     payload_data = json.loads(job.payload_json)
                     video_id = payload_data.get("video_id")
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         payload_dict = {}
         if job.payload_json:
             try:
                 payload_dict = json.loads(job.payload_json)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         def heartbeat_cb():
             durable_job_queue.heartbeat(
                 job_id=job.id,
@@ -380,8 +378,8 @@ class WorkerDaemon:
                 if result and isinstance(result, dict):
                     try:
                         job_db.result_json = json.dumps(result)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 session.commit()
                 is_marked_done = True
 

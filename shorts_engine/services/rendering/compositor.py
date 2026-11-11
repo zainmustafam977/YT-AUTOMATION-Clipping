@@ -709,8 +709,8 @@ class VideoCompositor:
                 stage_progress_pct=20.0,
                 details={"filename": output_filename, "encoder": encoder_name, "duration_sec": duration_sec},
             ))
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         try:
             logger.info("Executing FFmpeg render for %s (encoder: %s, crf: %s, preset: %s, bitrate: %s, fps: %s, timeout: %0.1fs)...", output_filename, encoder_name, eff_crf, eff_preset, eff_audio_br, eff_fps, timeout_limit)
             result = SubprocessWatchdog.run(cmd, timeout_sec=timeout_limit, check=False, artifacts_to_cleanup=[output_path])
@@ -726,8 +726,8 @@ class VideoCompositor:
                             title="Hardware Encoder Fallback",
                             message=f"Encoder {encoder_name} failed. Retrying with CPU libx264 for {output_filename}.",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     if is_multi_input:
                         cmd_fallback = [
                             "ffmpeg",
@@ -787,8 +787,8 @@ class VideoCompositor:
                             title="Compositor Rendering Failed",
                             message=f"FFmpeg render failed for {output_filename}: {result.stderr[-200:].strip()}",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     raise RuntimeError(f"FFmpeg render failed: {result.stderr[-400:]}")
 
             logger.info("Render completed successfully: %s", output_path)
@@ -815,18 +815,16 @@ class VideoCompositor:
                     stage_progress_pct=100.0,
                     details={"output_path": str(output_path)},
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return output_path
         finally:
             for tf in temp_files:
                 if tf and tf.exists():
                     try:
                         tf.unlink()
-                    except Exception:
-                        pass
-
-
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def validate_render(self, video_path: Path) -> RenderValidationResult:
         """
         Validates the rendered video file using ffprobe.

@@ -248,9 +248,8 @@ class PipelineRunner:
                             if oe_title:
                                 video.title = str(oe_title).strip()
                                 self.db.commit()
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if is_video_cancelled(video_id):
                 logger.info("Pipeline processing aborted before Step A for cancelled video %s", video_id)
                 return {
@@ -352,8 +351,8 @@ class PipelineRunner:
                         entity_id=video_id,
                         entity_type="video",
                     ))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 try:
                     if is_local_file:
                         logger.info("Local video %s already present at %s; skipping YouTube download", video_id, video.downloaded_path)
@@ -442,8 +441,8 @@ class PipelineRunner:
                             entity_id=video_id,
                             entity_type="video",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     self.lifecycle.transition_video(video, SourceVideoStatus.TRANSCRIBING)
                 except Exception as e:
                     video.status = SourceVideoStatus.FAILED
@@ -457,8 +456,8 @@ class PipelineRunner:
                                     oe_title = oe_res.json().get("title")
                                     if oe_title:
                                         video.title = str(oe_title).strip()
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     self.db.commit()
                     job_progress_tracker.update_progress(
                         video_id=video_id,
@@ -476,8 +475,8 @@ class PipelineRunner:
                             entity_id=video_id,
                             entity_type="video",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     raise
 
             if is_video_cancelled(video_id):
@@ -611,8 +610,8 @@ class PipelineRunner:
                             entity_id=video_id,
                             entity_type="video",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     selected_clips: List[SelectedClip] = self.clip_selector.select_clips(
                         formatted_transcript,
                         min_clips=eff_min_clips,
@@ -655,8 +654,8 @@ class PipelineRunner:
                             entity_type="video",
                             details={"candidates_count": len(candidates)},
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 except Exception as e:
                     video.status = SourceVideoStatus.FAILED
                     video.error_message = str(e)
@@ -677,8 +676,8 @@ class PipelineRunner:
                             entity_id=video_id,
                             entity_type="video",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     raise
 
             # Step D: Process Each Selected Candidate
@@ -775,9 +774,8 @@ class PipelineRunner:
                                 action_url=f"/queue?clip={clip.id}",
                                 details={"video_id": video_id, "clip_index": cand_idx, "total_clips": total_cands},
                             ))
-                        except Exception:
-                            pass
-
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         # Reframing crop plan
                         crop_plan = self.reframer.compute_crop_plan(
                             source_video_path,
@@ -795,8 +793,8 @@ class PipelineRunner:
                             try:
                                 c_data = json.loads(clip.caption_style)
                                 style_overrides = parse_custom_template(c_data).to_ass_overrides()
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         if not style_overrides:
                             style_overrides = get_caption_template(active_caption_preset).to_ass_overrides()
 
@@ -931,8 +929,8 @@ class PipelineRunner:
                                 action_url=f"/queue?clip={clip.id}",
                                 details={"video_id": video_id, "rendered_path": clip.rendered_path},
                             ))
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     except Exception as e:
                         logger.exception("Rendering failed for clip %s: %s", clip.id, e)
                         clip.status = ClipStatus.FAILED
@@ -949,8 +947,8 @@ class PipelineRunner:
                                 action_url=f"/queue?clip={clip.id}",
                                 details={"video_id": video_id, "error": str(e)},
                             ))
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         continue
 
                 # D2: Quality Gate
@@ -981,8 +979,8 @@ class PipelineRunner:
                                         entity_type="clip",
                                         action_url=f"/queue?clip={clip.id}",
                                     ))
-                                except Exception:
-                                    pass
+                                except Exception as _exc:
+                                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                                 continue
                         except Exception as qa_ex:
                             logger.warning("MediaQAGate skipped on exception: %s", qa_ex)
@@ -1021,9 +1019,8 @@ class PipelineRunner:
                             action_url=f"/queue?clip={clip.id}",
                             details={"video_id": video_id, "status": new_status.value, "quality_report": q_report},
                         ))
-                    except Exception:
-                        pass
-
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 # D3: Publishing (if APPROVED)
                 self.db.refresh(clip)
                 if clip.status == ClipStatus.APPROVED:
@@ -1070,8 +1067,8 @@ class PipelineRunner:
                         entity_type="video",
                         details={"clips_count": len(candidates)},
                     ))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             else:
                 video.status = SourceVideoStatus.SEGMENTS_SELECTED
             self.db.commit()
@@ -1130,9 +1127,8 @@ class PipelineRunner:
             try:
                 t_data = json.loads(transcript_record.word_level_json)
                 words = t_data.get("words", [])
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         recovered = 0
         total_clips = 0
         results = []
@@ -1224,9 +1220,8 @@ class PipelineRunner:
                                 reassigned += 1
                                 logger.info("Reconciled video '%s' (%s) to channel '%s' via oEmbed", v.title, v.youtube_video_id, matched.name)
                                 continue
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             # 2. Fallback: title matching
             for ch in db.query(Channel).filter(Channel.id != default_ch.id).all():
                 if ch.name.lower() in v.title.lower() or (ch.youtube_channel_id and ch.youtube_channel_id.lower() in v.title.lower()):

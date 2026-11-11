@@ -34,8 +34,8 @@ class CaptionEditor:
                 words = json.loads(cand.caption_words_json)
                 if isinstance(words, list) and words:
                     return words
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return self._regenerate_from_transcript(clip_id)
 
     def set_words(

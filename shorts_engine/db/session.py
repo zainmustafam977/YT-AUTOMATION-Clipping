@@ -5,15 +5,16 @@ Supports SQLite (with WAL mode & busy timeout) and PostgreSQL.
 
 import logging
 from datetime import datetime
+from typing import Any
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, scoped_session
 from shorts_engine.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 # Engine configuration
-connect_args = {}
-engine_kwargs = {
+connect_args: dict[str, Any] = {}
+engine_kwargs: dict[str, Any] = {
     "echo": settings.DEBUG,
     "pool_pre_ping": True,
 }
@@ -54,7 +55,8 @@ SessionLocal = scoped_session(
     sessionmaker(autocommit=False, autoflush=False, bind=engine)
 )
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 
 def is_postgres(target_engine=None) -> bool:
@@ -262,8 +264,8 @@ def ensure_schema_upgrades(target_engine=None):
                                         text("UPDATE clips SET rejection_reason_code = 'LEGACY_REJECTION', rejection_note = :note, rejected_at = :ts WHERE id = :cid"),
                                         {"note": str(r_reason), "ts": upd_at or datetime.utcnow(), "cid": cid}
                                     )
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     conn.commit()
                 except Exception as b_err:
                     logger.warning("Could not backfill rejection data: %s", b_err)

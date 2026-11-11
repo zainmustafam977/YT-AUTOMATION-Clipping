@@ -123,8 +123,8 @@ class QuotaTracker:
                             data = json.loads(self.state_file.read_text(encoding="utf-8"))
                             if data.get("date") == today_str:
                                 current_file_used = int(data.get("used_units", 0) or 0)
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     new_used = current_file_used + units
                     atomic_write_json(self.state_file, {"date": today_str, "used_units": new_used}, indent=2)
             except Exception as e:
@@ -255,8 +255,8 @@ class QuotaTracker:
                     today_str = datetime.now(PACIFIC_TZ).date().isoformat()
                     if data.get("date") == today_str:
                         return int(data.get("used_units", 0) or 0)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return 0
 
         start_utc, end_utc, _ = get_pacific_day_bounds()
@@ -281,9 +281,8 @@ class QuotaTracker:
                         PublishLog.status.in_(["SUCCESS", "PUBLISHED"]),
                     ).count()
                     db_units = int(db_pub_count or 0) * UPLOAD_COST_UNITS
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 file_units = 0
                 if self.state_file and self.state_file.exists():
                     try:
@@ -291,9 +290,8 @@ class QuotaTracker:
                         today_str = datetime.now(PACIFIC_TZ).date().isoformat()
                         if data.get("date") == today_str:
                             file_units = int(data.get("used_units", 0) or 0)
-                    except Exception:
-                        pass
-
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 return max(ledger_sum, db_units, file_units)
             except (TypeError, ValueError, Exception):
                 return 0
@@ -329,8 +327,8 @@ class QuotaTracker:
                         PublishLog.published_at < end_utc,
                         PublishLog.status.in_(["SUCCESS", "PUBLISHED"]),
                     ).count()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 return max(int(ledger_uploads or 0), int(db_pub_count or 0))
             except (TypeError, ValueError, Exception):
                 return 0
@@ -402,13 +400,12 @@ class QuotaTracker:
                             data = json.loads(self.state_file.read_text(encoding="utf-8"))
                             if data.get("date") == today_str:
                                 current_file_used = int(data.get("used_units", 0) or 0)
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     effective_used = max(current_file_used, used)
                     atomic_write_json(self.state_file, {"date": today_str, "used_units": effective_used}, indent=2)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return {
             "used_units": used,
             "remaining_units": remaining,

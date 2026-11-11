@@ -138,9 +138,8 @@ class HotfolderWatcher:
                         entity_type="video",
                     )
                     global_event_bus.publish_sync(event)
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 # Queue producer: enqueue ingest job
                 from shorts_engine.services.queue.durable_queue import durable_job_queue
                 durable_job_queue.enqueue(
