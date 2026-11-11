@@ -16,6 +16,7 @@ from shorts_engine.db.models import (
 )
 from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
 from shorts_engine.db.security import encrypt_secret, decrypt_secret
+from tests.oauth_credentials import requires_client_secrets
 
 
 @pytest.fixture
@@ -28,6 +29,7 @@ def test_db():
     session.close()
 
 
+@requires_client_secrets
 def test_oauth_state_opaque_single_use_pkce(test_db):
     mgr = ChannelOAuthManager()
     res = mgr.start_connect(intended_channel_id="chan_intended", expected_handle="@test", db=test_db)
@@ -43,6 +45,7 @@ def test_oauth_state_opaque_single_use_pkce(test_db):
     assert state_row.pkce_verifier is not None
 
 
+@requires_client_secrets
 def test_oauth_state_reuse_fails(test_db):
     mgr = ChannelOAuthManager()
     res = mgr.start_connect(intended_channel_id="chan_intended", db=test_db)
@@ -79,6 +82,7 @@ def test_oauth_state_reuse_fails(test_db):
         assert "invalid" in cb2["error"] or "expired" in cb2["error"]
 
 
+@requires_client_secrets
 def test_oauth_missing_refresh_token_fails_closed(test_db):
     mgr = ChannelOAuthManager()
     res = mgr.start_connect(intended_channel_id="chan_intended", db=test_db)
@@ -106,6 +110,7 @@ def test_oauth_missing_refresh_token_fails_closed(test_db):
         assert audit is not None
 
 
+@requires_client_secrets
 def test_oauth_mismatch_creates_dialog_and_does_not_rebind(test_db):
     mgr = ChannelOAuthManager()
 
@@ -167,6 +172,7 @@ def test_oauth_mismatch_creates_dialog_and_does_not_rebind(test_db):
         assert test_db.query(Channel).filter_by(youtube_channel_id="UC_CHANNEL_B").first() is None
 
 
+@requires_client_secrets
 def test_oauth_mismatch_resolve_connect_authorized(test_db):
     mgr = ChannelOAuthManager()
 
@@ -214,6 +220,7 @@ def test_oauth_mismatch_resolve_connect_authorized(test_db):
         assert chan_a.credential is None
 
 
+@requires_client_secrets
 def test_pre_upload_identity_guard_blocks_mismatch(test_db):
     mgr = ChannelOAuthManager()
 
@@ -259,6 +266,7 @@ def test_pre_upload_identity_guard_blocks_mismatch(test_db):
         assert ledger_entries[0].operation == "youtube.channels.list"
 
 
+@requires_client_secrets
 def test_pre_upload_identity_guard_success(test_db):
     mgr = ChannelOAuthManager()
 

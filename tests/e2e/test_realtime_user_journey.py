@@ -17,6 +17,18 @@ from pathlib import Path
 import pytest
 import uvicorn
 
+# Playwright is an optional extra (``pip install -e .[e2e]``) and its browsers
+# are a separate download, so a checkout without them skips this module instead
+# of failing every test with ModuleNotFoundError.
+try:
+    import playwright.sync_api  # noqa: F401
+except ImportError:  # pragma: no cover - exercised by browser-less runners
+    pytest.skip(
+        "Playwright is not installed; run `pip install -e .[e2e]` and "
+        "`python -m playwright install chromium` to run the browser E2E suite",
+        allow_module_level=True,
+    )
+
 # Test environment configuration
 os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")

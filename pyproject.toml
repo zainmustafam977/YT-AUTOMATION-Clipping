@@ -48,6 +48,13 @@ dev = [
     "ruff>=0.3.0",
     "mypy>=1.8.0",
 ]
+# Browser E2E suite (tests/e2e). Kept out of `dev` so unit-test and mypy
+# environments stay small; the Chromium build is a further separate download:
+#   pip install -e .[e2e] && python -m playwright install chromium
+# Without it, tests/e2e skips itself instead of failing.
+e2e = [
+    "playwright>=1.40.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

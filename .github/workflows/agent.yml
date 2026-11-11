@@ -109,9 +109,13 @@ jobs:
           DASHBOARD_SECRET_KEY: "test-key-for-ci-only-not-a-real-secret-1234"
           ENCRYPTION_KEY: "test-fernet-key-for-ci-only"
         run: |
-          # Exclude pre-existing e2e tests that need Playwright
-          # (those run in a separate workflow).
-          pytest -m "not network" --tb=short -q tests/
+          # Browser E2E lives in tests/e2e (marked `e2e` by its conftest) and
+          # needs Playwright plus a Chromium download, which this unit job does
+          # not install; network tests stay opt-in too. Without these filters
+          # this job fails on a missing browser stack rather than on a real
+          # regression. Run the browser suite with `pip install -e .[e2e]`,
+          # `python -m playwright install chromium`, then `pytest -m e2e`.
+          pytest -m "not network and not e2e" --tb=short -q tests/
 
   # ----------------------------------------------------------------
   # Gate 4 — scale-1k
