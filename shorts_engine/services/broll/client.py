@@ -100,6 +100,13 @@ class BrollClient:
             if not download_url and videos and videos[0].get("video_files"):
                 download_url = videos[0]["video_files"][0].get("link")
 
+            # SSRF guard: only fetch from public hosts.
+            if download_url:
+                from shorts_engine.services.security.url_guard import is_safe_url
+                if not is_safe_url(download_url):
+                    logger.warning("B-roll download URL failed SSRF guard: %s", download_url)
+                    download_url = None
+
             if not download_url:
                 logger.warning("Could not find suitable MP4 link in Pexels results for '%s'", query)
                 return None

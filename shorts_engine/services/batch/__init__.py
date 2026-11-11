@@ -513,14 +513,26 @@ class BatchEngine:
         if operation not in OPERATION_REGISTRY:
             raise BatchError(f"unknown operation: {operation}", code="BATCH_UNKNOWN_OP")
         ctx = _Ctx(self.db, batch_id="preview", actor="preview")
+        handler = OPERATION_REGISTRY[operation]
         result = BatchResult(batch_id="preview", operation=operation)
         for item_id in item_ids:
+            # Run the real handler inside a savepoint so preview never
+            # persists mutations, but reports the same outcome as run().
+            sp = self.db.begin_nested()
             try:
-                # Validate parameters only — no DB writes.
-                r = self._safe_dry_run(ctx, operation, item_id, params or {})
+                r = handler(ctx, item_id, params or {})
                 result.items.append(r)
+                if r.status == "OK":
+                    result.ok += 1
+                elif r.status == "FAILED":
+                    result.failed += 1
+                else:
+                    result.skipped += 1
             except Exception as e:
                 result.items.append(BatchItemResult(item_id, "FAILED", message=str(e)))
+                result.failed += 1
+            finally:
+                sp.rollback()
         return result
 
     def run(

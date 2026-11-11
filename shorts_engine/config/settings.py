@@ -669,7 +669,7 @@ class PipelineSettings(BaseSettings):
             )
         # Production & Staging security guard: disallow default credentials & enforce minimum entropy
         if self.ENV in ("staging", "production"):
-            insecure_passwords = {"change-me", "admin", "password", "123456", "12345678", "root", "ytpassword_secret_change_me", ""}
+            insecure_passwords = {"change-me", "admin", "password", "123456", "12345678", "root", "ytpassword_secret_change_me", "adminpass12345!", ""}
             if self.DASHBOARD_PASSWORD.lower() in insecure_passwords or len(self.DASHBOARD_PASSWORD) < 12:
                 raise ValueError(
                     f"Insecure DASHBOARD_PASSWORD for '{self.ENV}' environment. "
@@ -713,7 +713,8 @@ class PipelineSettings(BaseSettings):
         )
 
         if has_placeholders:
-            if self.ENFORCE_SECRET_ENTROPY:
+            # Always fail-closed in staging/production regardless of the opt-in flag.
+            if self.ENV in ("staging", "production") or self.ENFORCE_SECRET_ENTROPY:
                 raise ValueError(
                     "INSECURE STARTUP: Default placeholder keys or insufficient entropy detected in settings! "
                     "Rotate keys before production."

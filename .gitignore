@@ -79,6 +79,9 @@ storage/api_key_usage.json
 storage/quota_state.json
 storage/deep_audit_dump.json
 storage/detailed_failure_audit.json
+storage/quota_state.json
+tools/bin/*.exe
+tools/bin/gitleaks
 storage/config/runtime_settings.json
 
 # ------------------------------------------------------------------------------

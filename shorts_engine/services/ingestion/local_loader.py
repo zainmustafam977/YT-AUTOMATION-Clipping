@@ -310,6 +310,11 @@ class LocalVideoIngestionService:
         """
         canonical_path = cls.validate_local_file(file_path)
         meta = cls.probe_video_metadata(canonical_path)
+        # Container integrity guard: reject files that do not decode as video.
+        if not (meta.get("duration_sec", 0.0) > 0.0 or (meta.get("width", 0) > 0 and meta.get("height", 0) > 0)):
+            raise ValueError(
+                f"File does not contain a decodable video stream (corrupt or not media): {canonical_path.name}"
+            )
         channel = cls.get_or_create_local_channel(db, channel_id)
 
         norm_disk_path = os.path.normpath(str(canonical_path))
