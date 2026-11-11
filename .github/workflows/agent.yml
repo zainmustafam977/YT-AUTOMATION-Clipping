@@ -115,7 +115,7 @@ jobs:
           # this job fails on a missing browser stack rather than on a real
           # regression. Run the browser suite with `pip install -e .[e2e]`,
           # `python -m playwright install chromium`, then `pytest -m e2e`.
-          pytest -m "not network and not e2e" --tb=short -q tests/
+          pytest -m "not network and not e2e" --tb=short -q tests/ --cov=shorts_engine --cov-report=xml --cov-fail-under=60
 
   # ----------------------------------------------------------------
   # Gate 4 — scale-1k

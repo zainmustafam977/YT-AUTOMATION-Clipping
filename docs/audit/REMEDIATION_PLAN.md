@@ -3,7 +3,7 @@
 **Plan ID:** RP-2026-11-01
 **Source audit:** `docs/audit/INDUSTRY_GRADE_AUDIT.md` (commit `e7b1882`)
 **Owner:** Buffy / Codebuff
-**Status:** Phase 1 (P0) implemented @ fddcd3d; Phase 2 in progress
+**Status:** Phase 1 (P0) + core Phase 2 (P1) implemented @ (latest); remaining P1 items deferred/blocked documented
 **Branch:** `freebuff/6ecfd064db983a192a38a99e` (PR #8)
 
 ## 0. Mission & Success Criteria
@@ -104,6 +104,21 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 - Dependency upgrade (starlette 1.x) may break FastAPI 0.162 APIs → run full test suite; rollback by reverting requirements.txt.
 - Removing tracked runtime state requires `git rm --cached` (history retains blobs; acceptable).
 - Mypy ratchet must not be weakened; only lowered when errors actually decrease.
+
+## 7. P1 Status (2026-11-11)
+
+| Task | Status | Evidence |
+|---|---|---|
+| T-P1-1 SSRF guard rollout | Partial | broll done; rss (fixed host) n/a; alerter = admin-trusted config (documented) |
+| T-P1-2 try/except/pass audit | Deferred | 145 blocks remain; logged in critical paths only; full sweep tracked P2 |
+| T-P1-3 Migration manifest | Done | `migrations/MANIFEST.md` |
+| T-P1-4 Idempotency sabotage tests | Done | existing `tests/test_sabotage_*.py` pass |
+| T-P1-5 Batch preview/run | Done | preview uses real handler in savepoint |
+| T-P1-6 Mypy debt reduction | Deferred | baseline 1051 unchanged; needs dedicated sprint (not weakened) |
+| T-P1-7 Docs correction | Partial | audit v2 documents; full pass deferred |
+| T-P1-8 Frontend tests | Blocked | no test framework chosen; needs user decision |
+| T-P1-9 Coverage gate | Done | `--cov-fail-under=60` in agent.yml |
+| Circular import fix | Done | publishing/client imports lazily |
 
 ## 7. Verification & Exit
 

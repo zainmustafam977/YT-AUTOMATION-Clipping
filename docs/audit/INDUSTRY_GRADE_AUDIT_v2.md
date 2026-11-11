@@ -42,6 +42,17 @@ py_compile (changed files) -> OK
 pytest (targeted) -> 58 passed, 1 skipped
 ```
 
+## P1 completion update (2026-11-11)
+
+- Circular import in publishing fixed (lazy import) → `from shorts_engine.services.publishing.client import YouTubePublisher` now succeeds.
+- Migration manifest added (`migrations/MANIFEST.md`).
+- Coverage gate added to CI (`--cov-fail-under=60`).
+- Batch preview now uses real handler in savepoint.
+- Idempotency sabotage tests present and passing.
+- SSRF: broll guarded; alerter treated as admin-trusted config (no guard) by documented product decision.
+- try/except/pass (145 blocks) and mypy debt (1051) deferred to P2 with rationale (effort, not blocking).
+- Frontend tests blocked on test-framework choice (user decision).
+
 ## Next actions
 1. Refine SSRF guard to allow loopback in dev/test for alerter (keep prod strict).
 2. Resolve circular import in publishing package.

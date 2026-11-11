@@ -33,7 +33,6 @@ from shorts_engine.services.captioning.contrast_sampler import ContrastSampler
 from shorts_engine.services.captioning.sfx_mapper import SFXMapper
 from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.quality_gate.review_queue import QualityGateManager
-from shorts_engine.services.publishing.client import YouTubePublisher
 from shorts_engine.services.publishing.metadata import ShortsMetadata
 from shorts_engine.services.monitoring.alerter import PipelineAlerter
 from shorts_engine.services.worker.runner import claim_clip_by_id, reconcile_stale_claims
@@ -134,6 +133,7 @@ class PipelineRunner:
         self.sfx_mapper = SFXMapper()
         self.compositor = VideoCompositor()
         self.quality_gate = QualityGateManager()
+        from shorts_engine.services.publishing.client import YouTubePublisher  # lazy: avoids circular import
         self.publisher = YouTubePublisher(db_session)
         self.alerter = PipelineAlerter()
         from shorts_engine.orchestration.stage_registry import StageExecutor, PIPELINE
