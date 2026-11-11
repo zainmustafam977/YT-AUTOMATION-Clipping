@@ -218,17 +218,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install system deps for Chromium
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
-            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-            libxrandr2 libgbm1 libasound2
       - name: Install Python + Playwright
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,e2e]
-          python -m playwright install chromium
+          # --with-deps installs the Chromium system libraries for the runner's
+          # distro (names differ between Ubuntu releases, e.g. libasound2 vs
+          # libasound2t64), so don't hand-maintain an apt package list here.
+          python -m playwright install --with-deps chromium
       - name: Init DB
         run: |
           python -c "from shorts_engine.db.session import init_db; init_db()"
