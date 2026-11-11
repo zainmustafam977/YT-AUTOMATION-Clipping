@@ -57,9 +57,12 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      # Mirrors pyproject.toml's requires-python = ">=3.11": the 3.10 jobs could
+      # never pass (the suite imports tomllib, stdlib only from 3.11), so they
+      # reported a red pipeline for a version the project does not support.
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11"]
+        python-version: ["3.11"]
 
     steps:
       - name: Checkout Source Code
