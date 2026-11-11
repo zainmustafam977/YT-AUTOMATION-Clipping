@@ -105,6 +105,10 @@ jobs:
           KMP_DUPLICATE_LIB_OK: "TRUE"
         # Browser E2E (tests/e2e) needs Playwright plus a Chromium download, so
         # it is opt-in: `pip install -e .[e2e]` then `pytest -m e2e`.
+        # Use bash on Windows: PowerShell fails to set the console window title
+        # when stdout is a pipe (ResourceUnavailable 0xE9) and flips the step's
+        # exit code to 1 even though every test passed.
+        shell: bash
         run: python -m pytest tests -q -m "not e2e"
 
   docker-build:
