@@ -435,7 +435,8 @@ def test_edge_case_rapid_button_spamming_idempotency(realtime_platform):
         r = httpx.post(f"{base_url}/api/clips/{clip_id}/approve", headers=headers)
         responses.append(r.status_code)
 
-    # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request
-    assert responses[0] in (200, 303), f"Initial click failed: {responses[0]}"
+    # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request.
+    # Approval is queued (202) rather than performed synchronously, so 202 counts as success.
+    assert responses[0] in (200, 202, 303), f"Initial click failed: {responses[0]}"
     for status_code in responses[1:]:
-        assert status_code in (200, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"
+        assert status_code in (200, 202, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"
