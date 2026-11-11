@@ -4,13 +4,74 @@ Implements unified single source of truth for all pipeline constants.
 """
 
 import os
+import re
+import json
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict
-from pydantic import Field, model_validator
+from typing import Any, Optional, List, Dict
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+# Fields that arrive from the environment as one string and mean a list.
+_LIST_ENV_FIELDS = (
+    "GEMINI_API_KEYS",
+    "GROQ_API_KEYS",
+    "OPENROUTER_API_KEYS",
+    "OPENAI_API_KEYS",
+    "PUBLISH_SLOT_TIMES_LOCAL",
+    "INGESTION_PROXY_POOL",
+)
+
+
+def parse_env_list(value: Any) -> Any:
+    """Normalize a list-valued setting read from the environment.
+
+    Complex fields are no longer JSON-decoded by pydantic-settings (see
+    ``model_config``), so the raw string is handed to this function. It accepts
+    the formats ``.env.example`` documents -- comma-separated and
+    newline-separated -- as well as a JSON array, and reads a blank or
+    whitespace-only value as "none configured" rather than raising. An empty
+    pool of optional API keys is a normal state, not a configuration error.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        return [entry.strip() for entry in re.split(r"[,\n]+", text) if entry.strip()]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return value
+
+
+def parse_env_mapping(value: Any) -> Any:
+    """Accept a JSON object for a dict-typed setting, or the mapping itself.
+
+    A blank value is rejected instead of silently becoming ``{}``: an empty
+    pricing table would quietly zero out spend accounting, so it is better to
+    fail loudly at startup.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError("expected a JSON object, got an empty value")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"expected a JSON object: {exc}") from exc
+    return value
 
 
 class PipelineSettings(BaseSettings):
@@ -18,7 +79,23 @@ class PipelineSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Hand complex values (lists, mappings) to the field validators as raw
+        # strings. Left to itself, pydantic-settings JSON-decodes them first and
+        # raises SettingsError on blank, comma-separated or newline-separated
+        # values -- so a copied .env.example, which leaves the API key pools
+        # blank, aborts the import of every module that touches settings.
+        enable_decoding=False,
     )
+
+    @field_validator(*_LIST_ENV_FIELDS, mode="before")
+    @classmethod
+    def _normalize_list_setting(cls, value: Any) -> Any:
+        return parse_env_list(value)
+
+    @field_validator("LLM_MODEL_PRICING", mode="before")
+    @classmethod
+    def _normalize_mapping_setting(cls, value: Any) -> Any:
+        return parse_env_mapping(value)
 
     # General App Config
     APP_NAME: str = "YouTube Shorts Automation"
