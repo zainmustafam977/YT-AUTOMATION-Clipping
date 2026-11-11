@@ -337,12 +337,14 @@ def test_realtime_settings_and_dynamic_store_sync(realtime_platform):
     assert store.get("VIDEO_PRESET") == new_preset
 
 
-def test_realtime_react_spa_pages_and_visual_capture(realtime_platform):
+def test_realtime_react_spa_pages_and_visual_capture(realtime_platform, tmp_path):
     """Navigates through all React 19 SPA pages and captures visual artifacts."""
     base_url, token = realtime_platform
     from playwright.sync_api import sync_playwright
 
-    artifact_dir = Path(r"C:\Users\ZACODEC\.gemini\antigravity\brain\c7dfcc93-21b9-4546-8fa8-4da2ac8217de")
+    # Screenshots are throwaway artifacts: write them to the test's temp dir so the
+    # suite is portable and never litters the checkout with one developer's paths.
+    artifact_dir = tmp_path / "spa-screenshots"
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
