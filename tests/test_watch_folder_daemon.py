@@ -8,6 +8,7 @@ Verifies:
 5. Clean start/stop thread lifecycle and context manager support.
 """
 
+import sys
 import time
 import pytest
 from pathlib import Path
@@ -35,17 +36,19 @@ def test_is_file_locked_on_nonexistent_file(tmp_path):
     assert is_file_locked(tmp_path / "missing.mp4") is True
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="POSIX allows reopening a file another process has open, so the write-handle "
+    "probe only reports a lock on Windows (see is_file_locked's Win32 branch)",
+)
 def test_is_file_locked_when_open_for_writing(tmp_path):
-    """Verifies is_file_locked detects an actively open file handle."""
+    """Verifies is_file_locked detects an actively open file handle (Windows only)."""
     target = tmp_path / "writing.mp4"
     with open(target, "wb") as f_out:
         f_out.write(b"in-flight-stream-bytes")
         f_out.flush()
-        # While handle is held open, lock check should detect activity
-        # (On Windows, opening with write mode prevents unshared write acquisition)
-        # Note: on POSIX or Windows, verify behavior:
+        # While the handle is held open, CreateFileW cannot acquire write access.
         locked = is_file_locked(target)
-        # In Windows with CreateFileW, this is guaranteed True
         assert locked is True
 
     # Once closed, lock check should return False
@@ -183,7 +186,7 @@ def test_is_file_locked_on_readonly_file(tmp_path):
         p.chmod(stat.S_IWRITE)
 
 
-def test_lock_release_resets_stability_window(tmp_path):
+def test_lock_release_resets_stability_window(tmp_path, monkeypatch):
     """Verifies that the stability timer only begins AFTER an active lock is fully released."""
     processed = []
     daemon = WatchFolderDaemon(
@@ -195,10 +198,16 @@ def test_lock_release_resets_stability_window(tmp_path):
     )
 
     test_file = tmp_path / "in_flight.mp4"
-    # Open for writing and keep open
-    f_out = open(test_file, "wb")
-    f_out.write(b"data" * 50)
-    f_out.flush()
+    test_file.write_bytes(b"data" * 50)
+
+    # Model the lock state explicitly. Holding an open handle is only observable
+    # as a lock on Windows, so relying on it would make this timer test fail on
+    # POSIX for reasons unrelated to the stability window being verified.
+    lock_state = {"held": True}
+    monkeypatch.setattr(
+        "shorts_engine.services.ingestion.watch_folder.is_file_locked",
+        lambda p: lock_state["held"] and Path(p) == test_file,
+    )
 
     daemon.register_candidate(str(test_file))
 
@@ -208,8 +217,8 @@ def test_lock_release_resets_stability_window(tmp_path):
         daemon.poll_and_process_stable_files()
         assert len(processed) == 0
 
-    # Close file lock now
-    f_out.close()
+    # Release the lock now
+    lock_state["held"] = False
 
     # Immediate poll right after lock release -> should NOT dispatch yet because stability window was reset
     daemon.poll_and_process_stable_files()

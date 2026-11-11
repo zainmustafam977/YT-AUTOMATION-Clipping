@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from shorts_engine.db.session import get_db
-from shorts_engine.dashboard.auth import require_operator
+from shorts_engine.dashboard.auth import require_operator, verify_csrf
 from shorts_engine.db.models import BatchJob, User
 from shorts_engine.services.batch import BatchEngine, BatchError
 
@@ -40,7 +40,7 @@ def list_operations(db: Session = Depends(get_db)) -> Dict[str, Any]:
     return {"operations": BatchEngine(db).list_operations()}
 
 
-@router.post("/preview", dependencies=[Depends(require_operator)])
+@router.post("/preview", dependencies=[Depends(require_operator), Depends(verify_csrf)])
 def preview(req: BatchRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
         result = BatchEngine(db).preview(req.operation, req.item_ids, req.params)
@@ -49,7 +49,7 @@ def preview(req: BatchRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return result.to_dict()
 
 
-@router.post("/run", dependencies=[Depends(require_operator)])
+@router.post("/run", dependencies=[Depends(require_operator), Depends(verify_csrf)])
 def run(
     req: BatchRequest,
     user: User = Depends(require_operator),
@@ -63,7 +63,7 @@ def run(
     return result.to_dict()
 
 
-@router.post("/{batch_id}/undo", dependencies=[Depends(require_operator)])
+@router.post("/{batch_id}/undo", dependencies=[Depends(require_operator), Depends(verify_csrf)])
 def undo(
     batch_id: str,
     req: UndoRequest,

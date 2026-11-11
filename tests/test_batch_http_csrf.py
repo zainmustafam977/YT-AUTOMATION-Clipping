@@ -67,9 +67,13 @@ def test_batch_mutations_require_csrf(operator_token):
     """A valid session cookie alone must not authorize the three mutating batch endpoints."""
     c = TestClient(app)
     c.cookies.set(SESSION_COOKIE_NAME, operator_token)
-    assert c.post("/api/batch/preview", json={"operation": "approve", "item_ids": []}).status_code == 403
-    assert c.post("/api/batch/run", json={"operation": "approve", "item_ids": []}).status_code == 403
+    # The payloads must be schema-valid: an empty item_ids list fails request
+    # validation (422) before the CSRF dependency runs, which would test the
+    # wrong layer. With a valid body only the missing CSRF token can explain 403.
+    body = {"operation": "approve", "item_ids": ["clip-csrf-probe"]}
+    assert c.post("/api/batch/preview", json=body).status_code == 403
+    assert c.post("/api/batch/run", json=body).status_code == 403
     assert c.post(
         "/api/batch/does-not-exist/undo",
-        json={"item_ids": []},
+        json={"item_ids": ["clip-csrf-probe"]},
     ).status_code == 403

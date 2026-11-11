@@ -34,6 +34,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
+from urllib.parse import unquote
 from sqlalchemy.orm import Session
 
 # ==============================================================================
@@ -794,7 +795,10 @@ class YouTubePublishWorker:
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
             allow_preview_flag = os.environ.get("ALLOW_IN_PROCESS_PREVIEW", "").lower() in ("1", "true", "yes")
-            bind_url = str(db.get_bind().url).lower()
+            # SQLAlchemy percent-encodes URL components, so an in-memory engine
+            # renders as "sqlite:///%3Amemory%3A". Decode before matching, or the
+            # isolation check rejects a perfectly isolated test database.
+            bind_url = unquote(str(db.get_bind().url)).lower()
             is_non_prod_db = (
                 ":memory:" in bind_url
                 or "tmp" in bind_url

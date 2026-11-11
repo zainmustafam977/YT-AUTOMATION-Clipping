@@ -397,6 +397,7 @@ class WorkerDaemon:
             self._on_job_completed(job_db, result, session, stage_name=stage_str)
 
             clear_cuda_cache()
+            return True
         except JobCancelledError:
             logger.info("Worker %s: job %s was cancelled during execution; preserving CANCELLED state.", self.worker_id, job.id)
             clear_cuda_cache()

@@ -12,7 +12,11 @@ from shorts_engine.db.models import (
     Channel, Clip, ClipCandidate, ClipStatus, SourceVideo, User, UserRole,
 )
 from shorts_engine.dashboard.app import create_dashboard_app
-from shorts_engine.dashboard.auth import create_session_token, SESSION_COOKIE_NAME
+from shorts_engine.dashboard.auth import (
+    create_session_token,
+    generate_csrf_token,
+    SESSION_COOKIE_NAME,
+)
 
 
 def test_s3_batch_approve_bulk_edit_publish():
@@ -61,11 +65,15 @@ def test_s3_batch_approve_bulk_edit_publish():
     app = create_dashboard_app()
     c = TestClient(app)
     c.cookies.set(SESSION_COOKIE_NAME, token)
+    # The batch API is CSRF-protected like every other mutating dashboard route,
+    # so the browser-equivalent client must present the session-bound token.
+    csrf_headers = {"X-CSRF-Token": generate_csrf_token(token)}
 
     # Step 1: batch approve 100 clips.
     r1 = c.post(
         "/api/batch/run",
         json={"operation": "approve", "item_ids": item_ids, "actor": "s3"},
+        headers=csrf_headers,
     )
     assert r1.status_code == 200, r1.text
     data1 = r1.json()
@@ -74,6 +82,7 @@ def test_s3_batch_approve_bulk_edit_publish():
     # Step 2: bulk edit titles.
     r2 = c.post(
         "/api/batch/run",
+        headers=csrf_headers,
         json={
             "operation": "bulk_edit_metadata",
             "item_ids": item_ids,
@@ -93,6 +102,7 @@ def test_s3_batch_approve_bulk_edit_publish():
     r3 = c.post(
         "/api/batch/run",
         json={"operation": "publish", "item_ids": item_ids, "actor": "s3"},
+        headers=csrf_headers,
     )
     assert r3.status_code == 200
     data3 = r3.json()
