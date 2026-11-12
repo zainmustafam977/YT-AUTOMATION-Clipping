@@ -11,7 +11,7 @@ import shutil
 import asyncio
 import logging
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import httpx
@@ -280,7 +280,7 @@ def build_recent_videos_payload(
         .options(joinedload(SourceVideo.channel), joinedload(SourceVideo.transcript))
     )
 
-    now_naive = datetime.utcnow()
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     df = (date_filter or "all").lower()
 
     if df == "today":
@@ -349,7 +349,7 @@ def build_recent_videos_payload(
     }
 
     result = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for v in recent_videos_raw:
         cands = candidates_by_vid.get(v.id, [])
@@ -380,8 +380,8 @@ def build_recent_videos_payload(
                 if lock_acquired:
                     try:
                         v_lock.release()
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     is_stale_or_interrupted = True
                     turnaround_text = f"Interrupted ({age_sec // 60}m ago)"
 
@@ -435,9 +435,8 @@ def build_recent_videos_payload(
             try:
                 sz = os.path.getsize(v.downloaded_path)
                 raw_size_mb = f"{round(sz / (1024 * 1024), 1)} MB"
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         # Child candidate cards for the expandable drawer
         candidates_summary = []
         for c in cands:
@@ -1280,8 +1279,8 @@ def get_thumbnail(
             if adj_thumb.exists() and adj_thumb.stat().st_size > 0:
                 try:
                     shutil.copy2(str(adj_thumb), str(storage_thumb_dir / f"{clean_id}.jpg"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 return FileResponse(adj_thumb, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
             # Extract frame via ffmpeg

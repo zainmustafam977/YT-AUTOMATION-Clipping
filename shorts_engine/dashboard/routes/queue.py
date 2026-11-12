@@ -4,7 +4,7 @@ import json
 import time
 import logging
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict
 from collections import OrderedDict
@@ -113,7 +113,7 @@ def queue_list(
         if oldest_waiting_clip:
             queued_time = getattr(oldest_waiting_clip, "queued_at", None) or oldest_waiting_clip.created_at
             if queued_time:
-                delta = datetime.utcnow() - queued_time
+                delta = datetime.now(timezone.utc).replace(tzinfo=None) - queued_time
                 total_secs = max(0, int(delta.total_seconds()))
                 days = total_secs // 86400
                 hours = (total_secs % 86400) // 3600
@@ -337,7 +337,7 @@ def queue_list(
         cand = clip.candidate
         sv = cand.source_video if (cand and cand.source_video) else None
         sv_id = sv.id if sv else "unknown"
-        date_obj = (sv.created_at if sv and sv.created_at else clip.created_at) or datetime.utcnow()
+        date_obj = (sv.created_at if sv and sv.created_at else clip.created_at) or datetime.now(timezone.utc).replace(tzinfo=None)
         date_str = date_obj.strftime("%Y-%m-%d")
         group_key = f"{sv_id}_{date_str}"
 
@@ -500,7 +500,7 @@ def export_queue_clips(
     if format_clean == "json":
         return JSONResponse(
             content=records,
-            headers={"Content-Disposition": f'attachment; filename="clips_{status.lower()}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.json"'},
+            headers={"Content-Disposition": f'attachment; filename="clips_{status.lower()}_{datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")}.json"'},
         )
 
     output = io.StringIO()
@@ -515,7 +515,7 @@ def export_queue_clips(
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="clips_{status.lower()}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="clips_{status.lower()}_{datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")}.csv"'},
     )
 
 
@@ -1137,7 +1137,7 @@ def restore_clip(
             detail=f"Clip is in status {clip.status.value}, not REJECTED",
         )
     clip.status = ClipStatus.WAITING_APPROVAL
-    clip.queued_at = datetime.utcnow()
+    clip.queued_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     logger.info("Operator '%s' restored clip %s from REJECTED back to WAITING_APPROVAL", current_user.username, clip_id)
 
@@ -1521,9 +1521,8 @@ def re_render_clip_style(
         try:
             qc = json.loads(clip.quality_check_result)
             hook_overlay = qc.get("selected_variation", {}).get("selected_hook_overlay")
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # Invalidate cache if force_re_render
     if force_re_render and target_clip_path.exists():
         try:
@@ -2039,12 +2038,12 @@ def api_clip_action(
             return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=res)
         else:
             clip.status = ClipStatus.WAITING_APPROVAL
-            clip.queued_at = datetime.utcnow()
+            clip.queued_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.commit()
             return {"status": "success", "clip_id": clip_id, "action": action, "new_status": clip.status.value}
     elif action == "restore":
         clip.status = ClipStatus.WAITING_APPROVAL
-        clip.queued_at = datetime.utcnow()
+        clip.queued_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
     elif action == "open-folder":
         from shorts_engine.services.quality_gate.recovery import ClipRecoveryService
@@ -2141,8 +2140,8 @@ async def ingest_external_video(
         if target_path.exists():
             try:
                 target_path.unlink()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         raise HTTPException(
             status_code=400,
             detail=f"Video exceeds YouTube Shorts duration limit (duration: {duration_sec:.1f}s > 60.0s).",
@@ -2151,8 +2150,8 @@ async def ingest_external_video(
         if target_path.exists():
             try:
                 target_path.unlink()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         raise HTTPException(
             status_code=400,
             detail=f"Video is not vertical ({width}x{height}). YouTube Shorts must be vertical (aspect ratio 9:16).",

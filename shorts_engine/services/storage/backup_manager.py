@@ -17,7 +17,7 @@ import shutil
 import hashlib
 import sqlite3
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -42,7 +42,7 @@ class DatabaseBackupManager:
         Returns metadata dictionary containing backup path, size, SHA-256, and duration.
         """
         db_url = settings.DATABASE_URL
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y%m%d_%H%M%S")
         start_time = time.monotonic()
 
         if db_url.startswith("sqlite"):

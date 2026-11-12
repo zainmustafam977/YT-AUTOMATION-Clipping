@@ -208,7 +208,7 @@ def test_compositor_hook_overlay_filter(tmp_path):
         
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        out = compositor.render_short(
+        compositor.render_short(
             source_video_path=dummy_source,
             start_ms=0,
             end_ms=5000,

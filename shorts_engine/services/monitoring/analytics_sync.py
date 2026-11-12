@@ -6,7 +6,7 @@ for published YouTube Shorts into the database.
 
 import logging
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from shorts_engine.db.models import Clip, ClipStatus
@@ -65,7 +65,7 @@ class YouTubeAnalyticsSync:
             "synced_count": synced_count,
             "total_views": total_views,
             "total_likes": total_likes,
-            "synced_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "synced_at": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S"),
         }
 
     def _fetch_clip_metrics(self, clip_id: str, yt_id: Optional[str] = None) -> Dict[str, Any]:
@@ -87,6 +87,6 @@ class YouTubeAnalyticsSync:
             "likes": simulated_likes,
             "comments": simulated_comments,
             "retention_pct": min(98.5, simulated_retention),
-            "synced_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+            "synced_at": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M"),
             "is_simulated": True,
         }

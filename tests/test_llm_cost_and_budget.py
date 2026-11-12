@@ -4,20 +4,19 @@ Database Logging, Rollup Queries, Daily Budget Brake Deferral, and Multi-Key 429
 """
 
 import json
-from datetime import datetime, timedelta, date
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from pydantic import BaseModel, Field
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from shorts_engine.config.settings import settings, PipelineSettings
+from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import (
     LLMUsageLog,
     PipelineJob,
     PipelineJobStatus,
-    SourceVideo,
     User,
     UserRole,
 )
@@ -300,7 +299,7 @@ def test_stage_executor_defers_job_on_budget_exceeded(monkeypatch, test_db):
     assert job.status == PipelineJobStatus.PENDING
     assert job.attempt_count == 0  # Did not burn a retry attempt!
     assert job.next_run_at is not None
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     assert job.next_run_at.date() > now.date()
     assert job.next_run_at.hour == 0 and job.next_run_at.minute == 0
     assert "Daily LLM budget of $5.00 exceeded" in job.last_error

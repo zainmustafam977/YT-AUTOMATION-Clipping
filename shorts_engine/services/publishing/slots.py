@@ -156,7 +156,7 @@ class PublishSlotService:
                     return slot_utc
 
         # Fallback to tomorrow if somehow all 60 days full
-        return (datetime.utcnow() + timedelta(days=1)).replace(microsecond=0)
+        return (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)).replace(microsecond=0)
 
     def allocate_slot(
         self,
@@ -449,8 +449,8 @@ class PublishSlotService:
                 try:
                     payload_dict = json.loads(job.payload_json)
                     has_session = bool(payload_dict.get("upload_session_uri"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
                 raise HTTPException(
                     status_code=409,
@@ -474,7 +474,7 @@ class PublishSlotService:
                     .update(
                         {
                             PipelineJob.status: PipelineJobStatus.CANCELLED,
-                            PipelineJob.completed_at: datetime.utcnow(),
+                            PipelineJob.completed_at: datetime.now(timezone.utc).replace(tzinfo=None),
                             PipelineJob.locked_by: None,
                             PipelineJob.locked_at: None,
                         },
@@ -576,8 +576,8 @@ class PublishSlotService:
                 try:
                     payload_dict = json.loads(job.payload_json)
                     has_session = bool(payload_dict.get("upload_session_uri"))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if has_session or job.attempt_count > 0 or clip.status == ClipStatus.PUBLISHING:
                 raise HTTPException(
                     status_code=409,
@@ -775,7 +775,7 @@ class PublishSlotService:
         Allocates publish_slots and triggers native publishAt upload so zero clips are orphaned.
         """
         service = cls()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         legacy_clips = (
             db.query(Clip)
@@ -849,7 +849,7 @@ class PublishSlotService:
                     PublishSlotStatus.RESERVED.value,
                     PublishSlotStatus.SCHEDULED.value,
                 ]),
-                PublishSlot.slot_start >= (datetime.utcnow() - timedelta(hours=2)),
+                PublishSlot.slot_start >= (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)),
             )
         )
         if channel_id:
@@ -862,7 +862,6 @@ class PublishSlotService:
 
         for s in slots:
             clip = s.clip
-            cand = clip.candidate if clip else None
             title = clip.generated_title if clip else "Untitled Short"
             ch = s.channel
             thumb_url = f"/api/thumbnails/clip_{clip.id}.jpg" if clip else None

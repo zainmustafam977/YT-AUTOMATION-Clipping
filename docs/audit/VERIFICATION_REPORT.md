@@ -140,7 +140,7 @@ Fix: add `require_operator` (+ viewer where read-only) to every overlay route.
 
 **SEV-2 (security). Production ships a working default admin password.** `settings.py:477` `DASHBOARD_PASSWORD="AdminPass12345!"` + `auth.py:36` fallback recreate it at boot (`ensure_default_admin`) with no forced change. Production validation only checks membership of a 8-word blocklist + length ≥12, so the shipped default passes. Repro: `ENV=production DASHBOARD_SECRET_KEY=<40 chars> SECRETS_MASTER_KEY=<44 chars> python -c …PipelineSettings()` → starts (PROBE-9). Then HTTP `POST /login admin/AdminPass12345!` → 200 + session.
 
-**SEV-2 (security). WebSub HMAC fails open by default.** `services/detection/websub.py:148`: `if not self.secret: return True`. Unsigned pushes are accepted (PROBE-4); with a known watched channel id, this admits forged ingestion notifications. Fix: refuse startup (or refuse the route) when `WEBSUB_SECRET` is unset in non-dev.
+**ARCHIVED FINDING (no longer current).** WebSub HMAC verification was previously fail-open, but the commitment at 6e2f7b1 made it fail-closed when WEBSUB_SECRET is unset. Do not treat this as an open defect; see the current implementation and tests in shorts_engine/services/detection/websub.py / tests/test_detection.py / tests/test_websub_fail_closed.py.
 
 **SEV-2 (security). CSRF missing on /api/batch/*.** All batch mutating routes take `Depends(require_operator)` but no `verify_csrf`, while other JSON routes (ingest) do wire it (behavior shown in PROBE-3). SameSite=Lax partially mitigates; the project's own contract ("CSRF on every mutating endpoint including batch" + SAB-12) is unmet and untested.
 

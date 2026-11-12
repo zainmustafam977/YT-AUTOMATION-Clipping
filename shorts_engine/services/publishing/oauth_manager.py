@@ -16,7 +16,7 @@ import logging
 import secrets
 import hashlib
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Union
 from sqlalchemy.orm import Session
@@ -187,7 +187,7 @@ class ChannelOAuthManager:
         """
         opaque_state = secrets.token_urlsafe(32)
         pkce_verifier, code_challenge = generate_pkce_pair()
-        expires_at = datetime.utcnow() + timedelta(minutes=10)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10)
 
         if db is not None:
             state_row = OAuthState(
@@ -195,7 +195,7 @@ class ChannelOAuthManager:
                 pkce_verifier=pkce_verifier,
                 intended_channel_id=intended_channel_id,
                 expected_handle=expected_handle,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 expires_at=expires_at,
             )
             db.add(state_row)
@@ -293,7 +293,7 @@ class ChannelOAuthManager:
         expected_handle = None
 
         if state_row and isinstance(state_row, OAuthState) and hasattr(state_row, "expires_at"):
-            if state_row.expires_at < datetime.utcnow():
+            if state_row.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
                 db.delete(state_row)
                 db.commit()
                 return {
@@ -403,7 +403,7 @@ class ChannelOAuthManager:
                 authorized_handle=auth_handle,
                 authorized_avatar_url=auth_avatar,
                 encrypted_token_data=encrypt_secret(json.dumps(tokens)),
-                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15),
             )
             db.add(mismatch)
 
@@ -441,7 +441,7 @@ class ChannelOAuthManager:
                 title=auth_title,
                 handle=auth_handle,
                 avatar_url=auth_avatar,
-                last_verified_at=datetime.utcnow(),
+                last_verified_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.add(channel)
             db.flush()
@@ -450,7 +450,7 @@ class ChannelOAuthManager:
             channel.name = auth_title or channel.name
             channel.handle = auth_handle
             channel.avatar_url = auth_avatar
-            channel.last_verified_at = datetime.utcnow()
+            channel.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Upsert ChannelCredential
         cred = db.query(ChannelCredential).filter_by(channel_id=channel.id).first()
@@ -460,7 +460,7 @@ class ChannelOAuthManager:
         cred.encrypted_refresh_token = encrypt_secret(tokens["refresh_token"])
         cred.scopes = json.dumps(tokens.get("scopes", DEFAULT_SCOPES))
         cred.status = "active"
-        cred.verified_at = datetime.utcnow()
+        cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
         cred.last_error = None
 
         # Synchronize legacy encrypted_oauth_token for older readers
@@ -494,7 +494,7 @@ class ChannelOAuthManager:
         - 'cancel': Discards B completely with no state change.
         """
         mismatch = db.query(PendingOAuthMismatch).filter_by(id=mismatch_id).first()
-        if not mismatch or mismatch.expires_at < datetime.utcnow():
+        if not mismatch or mismatch.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
             if mismatch:
                 db.delete(mismatch)
                 db.commit()
@@ -510,7 +510,7 @@ class ChannelOAuthManager:
                     title=mismatch.authorized_title,
                     handle=mismatch.authorized_handle,
                     avatar_url=mismatch.authorized_avatar_url,
-                    last_verified_at=datetime.utcnow(),
+                    last_verified_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 db.add(ch)
                 db.flush()
@@ -519,7 +519,7 @@ class ChannelOAuthManager:
                 ch.name = mismatch.authorized_title or ch.name
                 ch.handle = mismatch.authorized_handle
                 ch.avatar_url = mismatch.authorized_avatar_url
-                ch.last_verified_at = datetime.utcnow()
+                ch.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             cred = db.query(ChannelCredential).filter_by(channel_id=ch.id).first()
             if not cred:
@@ -528,7 +528,7 @@ class ChannelOAuthManager:
             cred.encrypted_refresh_token = encrypt_secret(tokens["refresh_token"])
             cred.scopes = json.dumps(tokens.get("scopes", DEFAULT_SCOPES))
             cred.status = "active"
-            cred.verified_at = datetime.utcnow()
+            cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
             cred.last_error = None
             ch.encrypted_oauth_token = encrypt_secret(json.dumps(tokens))
 
@@ -635,15 +635,14 @@ class ChannelOAuthManager:
         if cred and cred.encrypted_refresh_token:
             try:
                 refresh_token = decrypt_secret(cred.encrypted_refresh_token)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token and channel.encrypted_oauth_token:
             try:
                 legacy_data = json.loads(decrypt_secret(channel.encrypted_oauth_token))
                 refresh_token = legacy_data.get("refresh_token")
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token:
             if cred:
                 cred.status = "needs_auth"
@@ -696,9 +695,9 @@ class ChannelOAuthManager:
             # Identity confirmed!
             if cred:
                 cred.status = "active"
-                cred.verified_at = datetime.utcnow()
+                cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 cred.last_error = None
-            channel.last_verified_at = datetime.utcnow()
+            channel.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.commit()
             return True, None
 
@@ -759,9 +758,8 @@ class ChannelOAuthManager:
                 old_data = json.loads(old_json)
                 if old_data.get("refresh_token"):
                     token_data["refresh_token"] = old_data["refresh_token"]
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         token_json = json.dumps(token_data)
         channel.encrypted_oauth_token = encrypt_secret(token_json)
 
@@ -774,7 +772,7 @@ class ChannelOAuthManager:
             cred.encrypted_refresh_token = encrypt_secret(token_data["refresh_token"])
         cred.scopes = json.dumps(token_data.get("scopes", DEFAULT_SCOPES))
         cred.status = "active"
-        cred.verified_at = datetime.utcnow()
+        cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
         cred.last_error = None
 
         db.commit()
@@ -797,9 +795,8 @@ class ChannelOAuthManager:
             try:
                 refresh_token = decrypt_secret(cred.encrypted_refresh_token)
                 token_dict = {"refresh_token": refresh_token}
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if not refresh_token and channel.encrypted_oauth_token:
             try:
                 raw_token = decrypt_secret(channel.encrypted_oauth_token)
@@ -868,14 +865,14 @@ class ChannelOAuthManager:
 
             # Update verified timestamp and avatar
             if db is not None:
-                channel.last_verified_at = datetime.utcnow()
+                channel.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 channel.title = snippet.get("title", channel.title)
                 channel.handle = snippet.get("customUrl", channel.handle)
                 thumbnails = snippet.get("thumbnails", {})
                 channel.avatar_url = thumbnails.get("default", {}).get("url") or channel.avatar_url
                 if cred:
                     cred.status = "active"
-                    cred.verified_at = datetime.utcnow()
+                    cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     cred.last_error = None
                 db.commit()
 

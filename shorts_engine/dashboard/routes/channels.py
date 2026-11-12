@@ -484,8 +484,8 @@ def _fetch_video_upload_date(video_id: str) -> Optional[datetime]:
                     try:
                         dt = datetime.fromisoformat(date_str)
                         return dt.astimezone(timezone.utc)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     except Exception as e:
         logger.debug("Could not resolve upload date for %s: %s", video_id, e)
     return None
@@ -608,9 +608,8 @@ def api_channel_videos(
                                     resolved_dt = future.result()
                                     if resolved_dt:
                                         fetched_dates[v_id] = resolved_dt
-                                except Exception:
-                                    pass
-
+                                except Exception as _exc:
+                                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     for item in raw_items:
                         vid = item.get("id")
                         title = item.get("title", "")
@@ -621,8 +620,8 @@ def api_channel_videos(
                         if ts:
                             try:
                                 pub_dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         if not pub_dt and item.get("upload_date"):
                             try:
                                 ud = str(item["upload_date"])
@@ -631,8 +630,8 @@ def api_channel_videos(
                                         int(ud[:4]), int(ud[4:6]), int(ud[6:8]),
                                         12, 0, 0, tzinfo=timezone.utc
                                     )
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         if not pub_dt:
                             pub_dt = fetched_dates.get(vid)
 
@@ -679,8 +678,8 @@ def api_channel_videos(
             if meta.get("timestamp"):
                 try:
                     pub_dt = datetime.fromtimestamp(meta["timestamp"], tz=timezone.utc)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if not pub_dt and meta.get("upload_date"):
                 try:
                     ud = str(meta["upload_date"])
@@ -689,8 +688,8 @@ def api_channel_videos(
                             int(ud[:4]), int(ud[4:6]), int(ud[6:8]),
                             12, 0, 0, tzinfo=timezone.utc
                         )
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if not pub_dt:
                 pub_dt = v.created_at
 

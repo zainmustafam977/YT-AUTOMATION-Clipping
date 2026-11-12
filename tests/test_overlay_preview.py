@@ -1,5 +1,4 @@
 """Tests for E-011 preview module."""
-import pytest
 
 from shorts_engine.services.overlay.spec import (
     OverlaySpec, OverlayLayer, LayerType, TextStyle, StickerStyle, ShapeStyle,

@@ -7,7 +7,7 @@ Tests:
 - YouTubeAnalyticsSync service and /api/analytics/sync route
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -168,7 +168,7 @@ def test_youtube_analytics_sync(test_setup):
     pl = PublishLog(
         clip_id=clip.id,
         youtube_video_id="short_yt_analy_123",
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None),
         title="Test Clip Title",
         description="Test Clip Description",
         status="SUCCESS",

@@ -11,7 +11,7 @@ Defaults to StructuredLogEmitter (JSON lines) with swappable EventBusEmitter.
 import json
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger("shorts_engine.telemetry")
@@ -66,7 +66,7 @@ class StructuredLogEmitter(TelemetryEmitter):
     def _emit_json(self, event_name: str, payload: Dict[str, Any]) -> None:
         data = {
             "telemetry_event": event_name,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             **payload,
         }
         logger.log(self.log_level, json.dumps(data))

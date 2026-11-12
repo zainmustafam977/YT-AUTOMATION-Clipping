@@ -46,8 +46,8 @@ def is_preview_proxy_needed(video_path: Union[str, Path], codec: Optional[str] =
             c = str(meta.get("codec") or "").lower().strip()
             if c in INCOMPATIBLE_PREVIEW_CODECS:
                 return True
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return False
 
 
@@ -182,9 +182,8 @@ class LocalVideoIngestionService:
 
         try:
             metadata["size_bytes"] = file_path.stat().st_size
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         # Primary Probe: ffprobe JSON output
         norm_path = os.path.normpath(str(file_path))
         cmd = [
@@ -310,6 +309,11 @@ class LocalVideoIngestionService:
         """
         canonical_path = cls.validate_local_file(file_path)
         meta = cls.probe_video_metadata(canonical_path)
+        # Container integrity guard: reject files that do not decode as video.
+        if not (meta.get("duration_sec", 0.0) > 0.0 or (meta.get("width", 0) > 0 and meta.get("height", 0) > 0)):
+            raise ValueError(
+                f"File does not contain a decodable video stream (corrupt or not media): {canonical_path.name}"
+            )
         channel = cls.get_or_create_local_channel(db, channel_id)
 
         norm_disk_path = os.path.normpath(str(canonical_path))
@@ -427,8 +431,8 @@ class LocalVideoIngestionService:
             if part_path.exists():
                 try:
                     part_path.unlink()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             from shorts_engine.services.ingestion.security import VideoTooLargeError
             if isinstance(e, VideoTooLargeError):
                 raise e
@@ -462,6 +466,6 @@ class LocalVideoIngestionService:
             if saved_path.exists():
                 try:
                     saved_path.unlink()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             raise

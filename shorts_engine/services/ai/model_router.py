@@ -194,7 +194,6 @@ class DynamicModelRouter:
                 message="All LLM API keys exhausted or rate-limited. Running rule-based clip detection.",
             )
             global_event_bus.publish_sync(event)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return heuristic_route, None

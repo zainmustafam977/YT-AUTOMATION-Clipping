@@ -8,14 +8,13 @@ Verifies:
 5. Versioned schema migrations table applies and behaves idempotently.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker
 
-import pytest
 
-from shorts_engine.db.session import engine as global_engine, Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import (
     Channel,
     SourceVideo,
@@ -185,7 +184,7 @@ def test_review_decisions_and_publish_logs_survive_restart(tmp_path):
         pub_log = PublishLog(
             clip_id=clip_id,
             youtube_video_id="yt_published_999",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc).replace(tzinfo=None),
             title="Published Short",
             description="Published Short Description",
             status="SUCCESS",

@@ -13,7 +13,7 @@ Enforces:
 import json
 import logging
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set
 from sqlalchemy.orm import Session
@@ -76,9 +76,8 @@ class RetentionPolicyService:
                             val = payload.get(key)
                             if val:
                                 protected.add(str(val))
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return protected
 
     @classmethod
@@ -94,7 +93,7 @@ class RetentionPolicyService:
         and sets DB status to 'PURGED'.
         """
         days = source_retention_days if source_retention_days is not None else getattr(settings, "RETENTION_RAW_SOURCE_DAYS", 14)
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         protected_ids = cls.get_active_protected_entity_ids(db)
 
         purged_videos: List[Dict[str, Any]] = []
@@ -211,7 +210,7 @@ class RetentionPolicyService:
             if intermediate_retention_days is not None
             else getattr(settings, "RETENTION_INTERMEDIATES_DAYS", 3)
         )
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         protected_ids = cls.get_active_protected_entity_ids(db)
 
         purged_intermediates: List[Dict[str, Any]] = []
@@ -318,7 +317,7 @@ class RetentionPolicyService:
         )
 
         summary = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "dry_run": dry_run,
             "raw_sources_purged": len(raw_reports),
             "intermediates_purged": len(intermediate_reports),

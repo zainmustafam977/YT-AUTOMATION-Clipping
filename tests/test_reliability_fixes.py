@@ -60,7 +60,7 @@ def test_downloader_http_416_resets_fragments_and_retries_fresh(tmp_path):
 
     with patch("yt_dlp.YoutubeDL") as mock_ydl_cls, \
          patch.object(service, "get_metadata", return_value={"title": "Clean Test Video", "duration": 45, "channel": "Test Channel", "channel_id": "UC1234567890123456789012"}), \
-         patch.object(service, "extract_audio") as mock_audio, \
+         patch.object(service, "extract_audio"), \
          patch("time.sleep"):
         mock_ydl_cls.return_value.__enter__.return_value = mock_ydl_instance
         res = service.download_video("testvid1234")

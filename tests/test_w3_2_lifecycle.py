@@ -9,8 +9,7 @@ Guarantees:
 """
 
 import json
-import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
@@ -36,9 +35,7 @@ from shorts_engine.db.models import (
     AuditLog,
     PipelineJob,
     PipelineJobStatus,
-    EventLog,
 )
-from shorts_engine.config.settings import settings
 from shorts_engine.services.queue.durable_queue import durable_job_queue
 from shorts_engine.services.worker.daemon import WorkerDaemon
 from shorts_engine.services.publishing.worker import YouTubePublishWorker
@@ -47,7 +44,6 @@ from shorts_engine.services.publishing.quota import QuotaTracker, VIDEOS_INSERT_
 from shorts_engine.services.publishing.actions import (
     approve_clip_for_publishing,
     reject_clip_action,
-    recover_publish_job,
 )
 from shorts_engine.orchestration.exceptions import (
     PermanentError,
@@ -197,7 +193,7 @@ def test_t2_reschedule_atomic_synchronization(lifecycle_env):
     res = approve_clip_for_publishing(clip.id, db=db, actor="op_t2")
     assert res["ok"] is True
 
-    new_time = (datetime.utcnow() + timedelta(days=3)).replace(microsecond=0)
+    new_time = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3)).replace(microsecond=0)
     res_sched = publish_slot_service.reschedule_clip(clip.id, new_time, db=db)
     assert res_sched["success"] is True
 
@@ -297,7 +293,7 @@ def test_t5_running_reschedule_or_cancel_returns_409(lifecycle_env):
     assert exc_unapp.value.status_code == 409
 
     with pytest.raises(HTTPException) as exc_sched:
-        publish_slot_service.reschedule_clip(clip.id, datetime.utcnow() + timedelta(days=1), db=db)
+        publish_slot_service.reschedule_clip(clip.id, datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1), db=db)
     assert exc_sched.value.status_code == 409
 
     rej = reject_clip_action(clip.id, db=db)
@@ -331,7 +327,7 @@ def test_t6_worker_rejects_corrupt_missing_cancelled_slot_bindings(lifecycle_env
     slot_mismatch = PublishSlot(
         channel_id=other_chan.id,
         clip_id=clip.id,
-        slot_start=datetime.utcnow() + timedelta(hours=1),
+        slot_start=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
         platform="youtube",
         status=PublishSlotStatus.RESERVED.value,
     )
@@ -391,7 +387,7 @@ def test_t8_upload_success_finalizes_exact_bound_slot(lifecycle_env):
     worker = YouTubePublishWorker(dry_run=False)
 
     # 8a: Future publishAt -> slot.status = SCHEDULED, clip.status = SCHEDULED
-    future_time = datetime.utcnow() + timedelta(days=2)
+    future_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
     rendered_a = tmp_path / "t8a.mp4"
     rendered_a.write_bytes(b"\x00" * 1024)
     clip_a = _seed_clip(db, video, "clip_t8a_future", status=ClipStatus.APPROVED, rendered_path=str(rendered_a))
@@ -418,7 +414,7 @@ def test_t8_upload_success_finalizes_exact_bound_slot(lifecycle_env):
     assert clip_a.status == ClipStatus.SCHEDULED
 
     # 8b: Immediate publish -> slot.status = PUBLISHED, clip.status = PUBLISHED
-    past_time = datetime.utcnow() - timedelta(minutes=10)
+    past_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
     rendered_b = tmp_path / "t8b.mp4"
     rendered_b.write_bytes(b"\x00" * 1024)
     clip_b = _seed_clip(db, video, "clip_t8b_imm", status=ClipStatus.APPROVED, rendered_path=str(rendered_b))
@@ -665,11 +661,11 @@ def test_t15_race_barrier_reschedule_defeats_worker_claim_cas(lifecycle_env):
 
     job = db.query(PipelineJob).filter_by(entity_id=clip.id, stage="publish").first()
     # Make due
-    job.next_run_at = datetime.utcnow() - timedelta(minutes=5)
+    job.next_run_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
     db.commit()
 
     # 1. Worker candidate SELECT reads job as due
-    worker_now = datetime.utcnow()
+    worker_now = datetime.now(timezone.utc).replace(tzinfo=None)
     candidate = (
         db.query(PipelineJob)
         .filter(
@@ -682,7 +678,7 @@ def test_t15_race_barrier_reschedule_defeats_worker_claim_cas(lifecycle_env):
     assert candidate is not None
 
     # 2. Race Barrier: Operator reschedules job to future before worker UPDATE CAS executes
-    future_time = (datetime.utcnow() + timedelta(hours=3)).replace(microsecond=0)
+    future_time = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)).replace(microsecond=0)
     publish_slot_service.reschedule_clip(clip.id, future_time, db=db)
 
     # 3. Worker executes claim CAS update with next_run_at <= worker_now recheck
@@ -697,7 +693,7 @@ def test_t15_race_barrier_reschedule_defeats_worker_claim_cas(lifecycle_env):
             {
                 PipelineJob.status: PipelineJobStatus.RUNNING,
                 PipelineJob.locked_by: "worker_test",
-                PipelineJob.locked_at: datetime.utcnow(),
+                PipelineJob.locked_at: datetime.now(timezone.utc).replace(tzinfo=None),
             },
             synchronize_session=False,
         )
@@ -725,7 +721,7 @@ def test_t16_cancellation_non_overwrite_in_daemon(lifecycle_env):
         entity_id=clip.id,
         stage="publish",
         status=PipelineJobStatus.PENDING,
-        next_run_at=datetime.utcnow() - timedelta(seconds=1),
+        next_run_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1),
         payload_json=json.dumps({"slot_id": slot.id}),
     )
     db.add(job)
@@ -759,7 +755,7 @@ def test_t17_attempted_upload_safety_session_uri_cannot_cancel_reschedule(lifecy
     assert exc_unapp.value.status_code == 409
 
     with pytest.raises(HTTPException) as exc_sched:
-        publish_slot_service.reschedule_clip(clip.id, datetime.utcnow() + timedelta(days=1), db=db)
+        publish_slot_service.reschedule_clip(clip.id, datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1), db=db)
     assert exc_sched.value.status_code == 409
 
     rej = reject_clip_action(clip.id, db=db)
@@ -817,7 +813,7 @@ def test_t19_quota_exclusion_dry_run_ignored_in_quota_tracking(lifecycle_env):
     log_dry = PublishLog(
         clip_id=clip_dry.id,
         youtube_video_id="dry_run_12345",
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None),
         title="Dry Run Title",
         description="Dry Run Desc",
         status="DRY_RUN",
@@ -828,7 +824,7 @@ def test_t19_quota_exclusion_dry_run_ignored_in_quota_tracking(lifecycle_env):
     log_success = PublishLog(
         clip_id=clip_succ.id,
         youtube_video_id="real_yt_19",
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None),
         title="Success Title",
         description="Success Desc",
         status="SUCCESS",

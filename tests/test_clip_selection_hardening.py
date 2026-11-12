@@ -15,9 +15,8 @@ Validates:
 4. Stage-level acceptance test: analyze_candidates_stage completes cleanly despite 100% invalid model output.
 """
 
-import math
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -28,11 +27,9 @@ from shorts_engine.services.clip_selection.prompts import (
 )
 from shorts_engine.services.clip_selection.validator import (
     ClipCandidateValidator,
-    CandidateValidationResult,
 )
 from shorts_engine.services.clip_selection.selector import (
     ClipSelectionService,
-    SelectedClip,
 )
 from shorts_engine.orchestration.stage_registry import (
     StageContext,
@@ -42,8 +39,6 @@ from shorts_engine.db.models import (
     Base,
     SourceVideo,
     SourceVideoStatus,
-    ClipCandidate,
-    Clip,
     Transcript,
 )
 
@@ -305,7 +300,7 @@ def test_selector_one_repair_retry_succeeds():
 
     # Exactly 2 LLM calls: initial + 1 repair retry
     assert len(calls) == 2
-    initial_call, repair_call = calls[0], calls[1]
+    _initial_call, repair_call = calls[0], calls[1]
     assert repair_call[1] == "clip_selection_repair"
     # Repair prompt should contain the specific validation error
     assert "inverted range" in repair_call[0]

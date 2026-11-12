@@ -10,15 +10,14 @@ Verifies:
 7. Orphaned worker lease reclamation.
 """
 
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from shorts_engine.db.session import Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import PipelineJob, PipelineJobStatus
 from shorts_engine.services.queue.durable_queue import DurableJobQueue
 from shorts_engine.services.telemetry.progress_tracker import job_progress_tracker
@@ -80,7 +79,7 @@ def test_heartbeat_and_progress_telemetry(test_queue):
     """Verifies that heartbeat updates database timestamps and mirrors to telemetry tracker."""
     queue, SessionFactory = test_queue
 
-    job = queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_telemetry_01")
+    queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_telemetry_01")
     claimed = queue.claim_next_job(worker_id="worker-node1-111-aaa")
 
     success = queue.heartbeat(
@@ -111,7 +110,7 @@ def test_complete_job(test_queue):
     """Verifies that completing a job marks status COMPLETED and records outputs."""
     queue, SessionFactory = test_queue
 
-    job = queue.enqueue(job_type="RENDER_CLIP", entity_id="clip_001")
+    queue.enqueue(job_type="RENDER_CLIP", entity_id="clip_001")
     claimed = queue.claim_next_job(worker_id="worker-node1-111-aaa")
 
     success = queue.complete_job(claimed.id, result={"output_path": "/storage/outputs/clip_001.mp4"})
@@ -135,7 +134,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     """
     queue, SessionFactory = test_queue
 
-    job = queue.enqueue(
+    queue.enqueue(
         job_type="INGEST_VIDEO",
         entity_id="vid_failing_01",
         max_retries=3,
@@ -148,7 +147,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     assert f1.retry_count == 1
     assert f1.status == PipelineJobStatus.PENDING
     assert f1.next_run_at is not None
-    assert f1.next_run_at > datetime.utcnow()
+    assert f1.next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Attempt to claim immediately -> None (next_run_at is in future)
     assert queue.claim_next_job(worker_id="worker-node1-111-aaa") is None
@@ -156,7 +155,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     # Simulate arrival of next_run_at by shifting next_run_at to past
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update(
-            {"next_run_at": datetime.utcnow() - timedelta(seconds=1)}
+            {"next_run_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)}
         )
         session.commit()
 
@@ -170,7 +169,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     # Fast forward next_run_at again
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update(
-            {"next_run_at": datetime.utcnow() - timedelta(seconds=1)}
+            {"next_run_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)}
         )
         session.commit()
 
@@ -188,7 +187,7 @@ def test_requeue_dead_letter_job(test_queue):
     """Verifies that an operator can manually requeue a dead-letter job."""
     queue, SessionFactory = test_queue
 
-    job = queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_dlq_01", max_retries=1)
+    queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_dlq_01", max_retries=1)
     claimed = queue.claim_next_job(worker_id="worker-node1-111-aaa")
     f = queue.fail_job(claimed.id, "Hard failure")
     assert f.status == PipelineJobStatus.DEAD_LETTER
@@ -213,14 +212,14 @@ def test_reconcile_orphaned_jobs(test_queue):
     """Verifies that jobs abandoned by a crashed or dead worker are recovered."""
     queue, SessionFactory = test_queue
 
-    job = queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_orphaned_01")
+    queue.enqueue(job_type="INGEST_VIDEO", entity_id="vid_orphaned_01")
     claimed = queue.claim_next_job(worker_id="worker-local-999999-dead01")
 
     # Simulate that heartbeat was 15 minutes ago
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update({
-            "heartbeat_at": datetime.utcnow() - timedelta(seconds=900),
-            "locked_at": datetime.utcnow() - timedelta(seconds=900),
+            "heartbeat_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=900),
+            "locked_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=900),
         })
         session.commit()
 

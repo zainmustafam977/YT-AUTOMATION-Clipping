@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -76,7 +76,7 @@ class CostService:
             unit_cost_usd=unit_cost_usd,
             total_cost_usd=units * unit_cost_usd,
             actor=actor,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         self.db.add(e)
         self.db.commit()
@@ -203,7 +203,7 @@ class CostService:
         return result
 
     def _since(self, period: str) -> datetime:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if period == "daily":
             return now - timedelta(days=1)
         if period == "weekly":

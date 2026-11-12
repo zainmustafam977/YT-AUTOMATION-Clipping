@@ -11,7 +11,7 @@ Verifies:
 8. Daily quota resets and CRUD methods.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -187,7 +187,7 @@ def test_cooldown_backoff_and_event_bus_notifications(tmp_path, test_db):
     assert refreshed.status == "COOLING_DOWN"
     assert refreshed.consecutive_errors == 1
     assert refreshed.cooldown_until is not None
-    assert refreshed.cooldown_until > datetime.utcnow()
+    assert refreshed.cooldown_until > datetime.now(timezone.utc).replace(tzinfo=None)
 
     # EventBus check
     events = global_event_bus.get_history(category="quota")
@@ -238,7 +238,7 @@ def test_cooldown_automatic_recovery(tmp_path, test_db):
 
     # Manually set cooling down with expired cooldown timestamp (10 seconds ago)
     key.status = "COOLING_DOWN"
-    key.cooldown_until = datetime.utcnow() - timedelta(seconds=10)
+    key.cooldown_until = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=10)
     key.consecutive_errors = 2
     test_db.commit()
 
@@ -283,7 +283,7 @@ def test_exponential_cooldown_multi_step_progression(tmp_path, test_db):
     assert k1.status == "COOLING_DOWN"
 
     # Simulate cooldown expiry
-    k1.cooldown_until = datetime.utcnow() - timedelta(seconds=1)
+    k1.cooldown_until = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
     test_db.commit()
 
     # Recover key via acquire
@@ -297,7 +297,7 @@ def test_exponential_cooldown_multi_step_progression(tmp_path, test_db):
     assert k2.consecutive_errors == 2
     assert k2.status == "COOLING_DOWN"
     # Cooldown duration should be ~60 seconds from now
-    diff_sec = (k2.cooldown_until - datetime.utcnow()).total_seconds()
+    diff_sec = (k2.cooldown_until - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds()
     assert 55 <= diff_sec <= 65
 
 
@@ -321,7 +321,7 @@ def test_nulls_first_key_ordering(tmp_path, test_db):
 
     # k1 was used in the past with 0 daily tokens
     k1 = vault.add_key(provider="deepseek", raw_key="deepseek_used", nickname="DeepSeek Used")
-    k1.last_used_at = datetime.utcnow() - timedelta(hours=1)
+    k1.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
     k1.daily_token_count = 0
 
     # k2 was never used (last_used_at is None) with 0 daily tokens

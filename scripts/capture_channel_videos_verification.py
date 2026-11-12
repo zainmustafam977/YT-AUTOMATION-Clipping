@@ -11,9 +11,10 @@ from shorts_engine.dashboard.auth import SESSION_COOKIE_NAME, create_session_tok
 from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import User
 
+# Portable output location: screenshots land in the repo's artifacts/ directory
+# instead of a hard-coded developer machine path.
 ARTIFACT_DIRS = [
-    Path(r"C:\Users\ZACODEC\.gemini\antigravity\brain\c7dfcc93-21b9-4546-8fa8-4da2ac8217de"),
-    Path(r"C:\Users\ZACODEC\.gemini\antigravity\brain\bcc6cdfa-4fc0-4ec3-b246-c7cb62982161"),
+    Path(__file__).resolve().parents[1] / "artifacts" / "screenshots",
 ]
 
 def main():

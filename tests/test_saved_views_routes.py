@@ -1,43 +1,118 @@
-"""Tests for EASE-02 saved views HTTP routes."""
+"""Tests for EASE-02 saved views HTTP routes.
+
+Every saved-view endpoint requires authentication, so these tests drive
+operator-authenticated clients: a session cookie plus a matching CSRF token for
+the mutating calls. Ownership is derived from the session, so the suite also
+covers that one user cannot see, rename or delete another user's views.
+
+Anonymous access is covered separately by ``tests/test_p0_security_hardening.py``.
+"""
+import uuid
+
 import pytest
 
 from fastapi.testclient import TestClient
 
-from shorts_engine.db.session import engine, Base
+from shorts_engine.db.session import engine, SessionLocal, Base, ensure_schema_upgrades
 from shorts_engine.db import models  # noqa: F401
 from shorts_engine.dashboard.app import app
+from shorts_engine.dashboard.auth import (
+    create_session_token,
+    generate_csrf_token,
+    SESSION_COOKIE_NAME,
+)
+from shorts_engine.db.models import User, UserRole
+
+OWNER_A = "saved_views_test_operator"
+OWNER_B = "saved_views_test_operator_b"
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _setup_db():
     Base.metadata.create_all(engine)
+    # Run the same boot-time upgrade the app performs, which migrates a
+    # pre-existing saved_views table from the legacy owner column.
+    ensure_schema_upgrades(engine)
     yield
 
 
+def _token_for(username: str) -> str:
+    db = SessionLocal()
+    user = db.query(User).filter_by(username=username).first()
+    if not user:
+        user = User(
+            username=username,
+            password_hash="dummy_hash",
+            role=UserRole.OPERATOR,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    token = create_session_token(user.id)
+    db.close()
+    return token
+
+
+def _client(token: str) -> TestClient:
+    c = TestClient(app, headers={"X-CSRF-Token": generate_csrf_token(token)})
+    c.cookies.set(SESSION_COOKIE_NAME, token)
+    return c
+
+
+@pytest.fixture(scope="module")
+def auth_token():
+    """Session token for an operator account; saved-view routes require auth."""
+    return _token_for(OWNER_A)
+
+
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(auth_token):
+    return _client(auth_token)
+
+
+@pytest.fixture(scope="module")
+def other_client():
+    """An authenticated operator who owns none of the first user's views."""
+    return _client(_token_for(OWNER_B))
+
+
+def _unique(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
 def test_create_saved_view(client):
-    import uuid
-    name = f"ready-clips-{uuid.uuid4().hex[:8]}"
+    name = _unique("ready-clips")
     r = client.post("/api/saved-views", json={
         "name": name,
         "expression": "status=ready",
-        "owner": f"alice-{uuid.uuid4().hex[:8]}",
     })
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["name"] == name
     assert "id" in data
+    # Owner comes from the session, not the payload.
+    assert data["owner"] == OWNER_A
+
+
+def test_create_ignores_client_supplied_owner(client):
+    """A spoofed owner in the body must not influence ownership."""
+    name = _unique("spoof")
+    r = client.post("/api/saved-views", json={
+        "name": name,
+        "expression": "",
+        "owner": "somebody-else",
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["owner"] == OWNER_A
+
+    listed = client.get("/api/saved-views").json()["views"]
+    assert all(v["owner"] == OWNER_A for v in listed)
 
 
 def test_create_duplicate_returns_409(client):
-    import uuid
-    owner = f"bob-{uuid.uuid4().hex[:8]}"
-    name = f"dup-{uuid.uuid4().hex[:8]}"
-    body = {"name": name, "expression": "x", "owner": owner}
+    name = _unique("dup")
+    body = {"name": name, "expression": "x"}
     r1 = client.post("/api/saved-views", json=body)
     assert r1.status_code == 200, r1.text
     r2 = client.post("/api/saved-views", json=body)
@@ -50,25 +125,35 @@ def test_list_views(client):
     data = r.json()
     assert "views" in data
     assert isinstance(data["views"], list)
+    assert all(v["owner"] == OWNER_A for v in data["views"])
 
 
-def test_list_views_filter_by_owner(client):
-    import uuid
-    owner = f"alice-{uuid.uuid4().hex[:8]}"
-    name = f"v-{uuid.uuid4().hex[:8]}"
-    client.post("/api/saved-views", json={"name": name, "expression": "", "owner": owner})
-    r = client.get(f"/api/saved-views?owner={owner}")
-    assert r.status_code == 200
-    data = r.json()
-    assert any(v["owner"] == owner for v in data["views"])
+def test_list_views_scoped_to_caller(client, other_client):
+    """Another user's view never appears in the caller's list."""
+    shared_name = _unique("other-users-view")
+    created = other_client.post("/api/saved-views", json={
+        "name": shared_name,
+        "expression": "status=failed",
+    })
+    assert created.status_code == 200, created.text
+
+    mine = client.get("/api/saved-views").json()["views"]
+    assert all(v["id"] != created.json()["id"] for v in mine)
+    assert all(v["name"] != shared_name for v in mine)
+
+    theirs = other_client.get("/api/saved-views").json()["views"]
+    assert any(v["id"] == created.json()["id"] for v in theirs)
+
+
+def test_list_rejects_foreign_owner_filter(client):
+    r = client.get(f"/api/saved-views?owner={OWNER_B}")
+    assert r.status_code == 403, r.text
 
 
 def test_get_view(client):
-    import uuid
     cr = client.post("/api/saved-views", json={
-        "name": f"getme-{uuid.uuid4().hex[:8]}",
+        "name": _unique("getme"),
         "expression": "y=z",
-        "owner": f"tester-{uuid.uuid4().hex[:8]}",
     })
     assert cr.status_code == 200
     vid = cr.json()["id"]
@@ -82,35 +167,59 @@ def test_get_missing_404(client):
     assert r.status_code == 404
 
 
+def test_get_other_users_view_404(client, other_client):
+    """A view owned by someone else is reported as missing, not as forbidden."""
+    created = other_client.post("/api/saved-views", json={
+        "name": _unique("not-yours"),
+        "expression": "",
+    })
+    assert created.status_code == 200, created.text
+    vid = created.json()["id"]
+    assert client.get(f"/api/saved-views/{vid}").status_code == 404
+
+
 def test_update_view(client):
-    import uuid
     cr = client.post("/api/saved-views", json={
-        "name": f"upd-{uuid.uuid4().hex[:8]}",
+        "name": _unique("upd"),
         "expression": "old",
-        "owner": f"u-{uuid.uuid4().hex[:8]}",
     })
     assert cr.status_code == 200
     vid = cr.json()["id"]
     r = client.put(f"/api/saved-views/{vid}", json={
-        "name": f"upd-{uuid.uuid4().hex[:8]}",
+        "name": _unique("upd"),
         "expression": "new",
-        "owner": f"u-{uuid.uuid4().hex[:8]}",
     })
     assert r.status_code == 200
     assert r.json()["expression"] == "new"
+    assert r.json()["owner"] == OWNER_A
 
 
 def test_update_missing_404(client):
-    r = client.put("/api/saved-views/missing", json={"name": "x", "expression": "y", "owner": "z"})
+    r = client.put("/api/saved-views/missing", json={"name": "x", "expression": "y"})
     assert r.status_code == 404
 
 
+def test_update_other_users_view_404(client, other_client):
+    created = other_client.post("/api/saved-views", json={
+        "name": _unique("cant-edit"),
+        "expression": "original",
+    })
+    assert created.status_code == 200, created.text
+    vid = created.json()["id"]
+
+    r = client.put(f"/api/saved-views/{vid}", json={"name": "hijacked", "expression": "x"})
+    assert r.status_code == 404
+
+    # And the original is untouched.
+    still = other_client.get(f"/api/saved-views/{vid}")
+    assert still.status_code == 200
+    assert still.json()["expression"] == "original"
+
+
 def test_delete_view(client):
-    import uuid
     cr = client.post("/api/saved-views", json={
-        "name": f"del-{uuid.uuid4().hex[:8]}",
+        "name": _unique("del"),
         "expression": "",
-        "owner": f"d-{uuid.uuid4().hex[:8]}",
     })
     assert cr.status_code == 200
     vid = cr.json()["id"]
@@ -125,3 +234,74 @@ def test_delete_view(client):
 def test_delete_missing_404(client):
     r = client.delete("/api/saved-views/missing")
     assert r.status_code == 404
+
+
+def test_delete_other_users_view_404(client, other_client):
+    created = other_client.post("/api/saved-views", json={
+        "name": _unique("cant-delete"),
+        "expression": "",
+    })
+    assert created.status_code == 200, created.text
+    vid = created.json()["id"]
+
+    assert client.delete(f"/api/saved-views/{vid}").status_code == 404
+    # Still there for its owner.
+    assert other_client.get(f"/api/saved-views/{vid}").status_code == 200
+
+
+def test_views_survive_username_change(client):
+    """Renaming an account keeps its views, because ownership is a user id."""
+    created = client.post("/api/saved-views", json={
+        "name": _unique("survives-rename"),
+        "expression": "status=ready",
+    })
+    assert created.status_code == 200, created.text
+    vid = created.json()["id"]
+    renamed = f"{OWNER_A}-renamed"
+
+    db = SessionLocal()
+    user = db.query(User).filter_by(username=OWNER_A).first()
+    user.username = renamed
+    db.commit()
+    db.close()
+
+    try:
+        r = client.get(f"/api/saved-views/{vid}")
+        assert r.status_code == 200, r.text
+        assert r.json()["owner"] == renamed
+        listed = client.get("/api/saved-views").json()["views"]
+        assert any(v["id"] == vid for v in listed)
+    finally:
+        db = SessionLocal()
+        user = db.query(User).filter_by(username=renamed).first()
+        if user is not None:
+            user.username = OWNER_A
+            db.commit()
+        db.close()
+
+
+def test_deleting_account_removes_its_views():
+    """Deleting an account takes its views with it instead of leaving orphans."""
+    db = SessionLocal()
+    try:
+        user = User(
+            username=_unique("cascade-probe"),
+            password_hash="dummy_hash",
+            role=UserRole.OPERATOR,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        view = models.SavedView(name=_unique("cascade-view"), expression="", user_id=user.id)
+        db.add(view)
+        db.commit()
+        view_id = view.id
+
+        db.delete(user)
+        db.commit()
+
+        assert db.query(models.SavedView).filter_by(id=view_id).first() is None
+    finally:
+        db.close()

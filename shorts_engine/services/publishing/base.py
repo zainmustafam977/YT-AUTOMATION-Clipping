@@ -6,7 +6,7 @@ from clip orchestration, scheduling, and database logging.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -20,7 +20,7 @@ class PlatformPublishResult:
     permalink: Optional[str] = None
     error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    published_at: datetime = field(default_factory=datetime.utcnow)
+    published_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     dry_run: bool = False
 
     def to_dict(self) -> Dict[str, Any]:

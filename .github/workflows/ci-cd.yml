@@ -50,8 +50,10 @@ jobs:
           VECLIB_MAXIMUM_THREADS: "1"
           NUMEXPR_NUM_THREADS: "1"
           KMP_DUPLICATE_LIB_OK: "TRUE"
+        # Browser E2E (tests/e2e) requires Playwright + Chromium and is opt-in:
+        # `pip install -e .[e2e]` then `pytest -m e2e`.
         run: |
-          pytest -v tests/
+          pytest -v tests/ -m "not e2e"
 
   # ==========================================
   # CD Staging: Deploy on Push to Main

@@ -8,8 +8,6 @@
 .env
 .env.*
 !.env.example
-in progress dev/.env
-in progress dev/.env.*
 *.pem
 *.key
 *.cert
@@ -25,6 +23,10 @@ harvester_cookies*.txt
 storage/harvester_cookies.txt
 storage/cookies.txt
 *.bak
+
+# Local tooling / caches (not part of project)
+.tools/
+.fontconfig/
 
 # ------------------------------------------------------------------------------
 # 2. Virtual Environments & Python Runtime
@@ -81,6 +83,9 @@ storage/api_key_usage.json
 storage/quota_state.json
 storage/deep_audit_dump.json
 storage/detailed_failure_audit.json
+storage/quota_state.json
+tools/bin/*.exe
+tools/bin/gitleaks
 storage/config/runtime_settings.json
 
 # ------------------------------------------------------------------------------
@@ -188,3 +193,5 @@ htmlcov/
 .hypothesis/
 test_run_output.txt
 scratch_queue.html
+# TypeScript incremental build cache
+*.tsbuildinfo

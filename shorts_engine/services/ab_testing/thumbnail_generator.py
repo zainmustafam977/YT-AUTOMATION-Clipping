@@ -37,8 +37,8 @@ class ThumbnailVariantGenerator:
             if os.path.exists(font_path):
                 try:
                     return ImageFont.truetype(font_path, font_size)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return ImageFont.load_default()
 
     @staticmethod
@@ -128,9 +128,8 @@ class ThumbnailVariantGenerator:
             if temp_frame.exists():
                 try:
                     temp_frame.unlink()
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def generate_variant_b(
         self,
         video_path: Path,
@@ -196,9 +195,8 @@ class ThumbnailVariantGenerator:
             if temp_frame.exists():
                 try:
                     temp_frame.unlink()
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def generate_variant_c(
         self,
         video_path: Path,
@@ -260,9 +258,8 @@ class ThumbnailVariantGenerator:
             if temp_frame.exists():
                 try:
                     temp_frame.unlink()
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def generate_3_variants(
         self,
         video_path: Path,

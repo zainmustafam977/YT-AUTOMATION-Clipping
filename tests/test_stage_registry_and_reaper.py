@@ -10,28 +10,23 @@ Fault-injection acceptance test suite for:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
-from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from shorts_engine.db.session import Base
-from shorts_engine.db.models import PipelineJob, PipelineJobStatus, SourceVideo, User, UserRole
+from shorts_engine.db.models import PipelineJob, PipelineJobStatus, User, UserRole
 from shorts_engine.orchestration.exceptions import (
-    PipelineError,
     TransientError,
     PermanentError,
     classify_exception,
-    NetworkTransientError,
-    AuthPermanentError,
 )
 from shorts_engine.orchestration.stage_registry import (
     Stage,
     StageContext,
     StageExecutor,
-    PIPELINE,
     calculate_backoff_run_at,
     get_quarantined_jobs,
 )
@@ -41,10 +36,8 @@ from shorts_engine.orchestration.reaper import (
 )
 from shorts_engine.orchestration.telemetry import (
     TelemetryEmitter,
-    StructuredLogEmitter,
     set_telemetry_emitter,
     get_telemetry_emitter,
-    emit,
 )
 from shorts_engine.dashboard.app import create_dashboard_app as create_app
 
@@ -166,7 +159,7 @@ def test_acceptance_transient_failure_twice_then_success(in_memory_db, recording
     assert job.attempt_count == 1
     assert "Temporary network blip (failure #1)" in job.last_error
     assert job.next_run_at is not None
-    assert job.next_run_at > datetime.utcnow()
+    assert job.next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)
     assert len(recording_emitter.retried_events) == 1
     assert recording_emitter.retried_events[0]["attempt_count"] == 1
 
@@ -243,7 +236,7 @@ def test_acceptance_permanent_error_quarantined_immediately_zero_retries(in_memo
         job_id=job.id,
     )
 
-    with pytest.raises(PermanentError) as exc_info:
+    with pytest.raises(PermanentError):
         executor.execute_stage("test_fatal_stage", ctx, job=job)
 
     in_memory_db.refresh(job)
@@ -272,7 +265,7 @@ def test_acceptance_simulated_killed_worker_recovered_by_reaper(in_memory_db):
     ACCEPTANCE CRITERION 3:
     A simulated killed worker (stale locked_at) has its job recovered by the reaper.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     stale_time = now - timedelta(seconds=900)  # 15 minutes ago (threshold is 10 mins = 600s)
 
     # Job leased by crashed worker
@@ -324,7 +317,7 @@ def test_acceptance_simulated_killed_worker_recovered_by_reaper(in_memory_db):
 # ==============================================================================
 
 def test_worker_heartbeat_prevents_reaping(in_memory_db):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     long_render_job = PipelineJob(
         job_type="RENDER_CLIP",
         entity_type="clip",
@@ -342,8 +335,8 @@ def test_worker_heartbeat_prevents_reaping(in_memory_db):
     assert success is True
 
     in_memory_db.refresh(long_render_job)
-    assert (datetime.utcnow() - long_render_job.locked_at).total_seconds() < 5
-    assert (datetime.utcnow() - long_render_job.heartbeat_at).total_seconds() < 5
+    assert (datetime.now(timezone.utc).replace(tzinfo=None) - long_render_job.locked_at).total_seconds() < 5
+    assert (datetime.now(timezone.utc).replace(tzinfo=None) - long_render_job.heartbeat_at).total_seconds() < 5
 
     # Reaper runs -> Job must NOT be reaped
     reaped = reap_stale_jobs(stale_threshold_sec=600, db=in_memory_db)
@@ -531,7 +524,6 @@ def test_quarantined_jobs_visibility_query_and_api_endpoint(in_memory_db):
     from shorts_engine.dashboard.routes.queue import get_db as queue_get_db
     from shorts_engine.db.session import get_db as session_get_db
     from shorts_engine.dashboard.auth import require_viewer
-    from shorts_engine.db.models import User, UserRole
     app.dependency_overrides[queue_get_db] = lambda: in_memory_db
     app.dependency_overrides[session_get_db] = lambda: in_memory_db
     app.dependency_overrides[require_viewer] = lambda: User(id="u1", username="viewer", role=UserRole.VIEWER, is_active=True)

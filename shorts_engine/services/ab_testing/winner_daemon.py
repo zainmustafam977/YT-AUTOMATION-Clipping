@@ -20,7 +20,7 @@ jobs in the durable queue. The daemon makes zero direct external API calls.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Any
 from sqlalchemy.orm import Session
 
@@ -112,7 +112,7 @@ def evaluate_and_promote_clip(
             start_dt = publish_log.published_at if (publish_log and publish_log.published_at) else clip.created_at
 
         if start_dt:
-            test_duration_hours = max(0.0, (datetime.utcnow() - start_dt.replace(tzinfo=None)).total_seconds() / 3600.0)
+            test_duration_hours = max(0.0, (datetime.now(timezone.utc).replace(tzinfo=None) - start_dt.replace(tzinfo=None)).total_seconds() / 3600.0)
         else:
             test_duration_hours = 0.0
 
@@ -178,7 +178,7 @@ def evaluate_and_promote_clip(
         for i, var in enumerate(variations):
             if i == winner_idx:
                 var["is_active"] = True
-                var["promoted_at"] = datetime.utcnow().isoformat()
+                var["promoted_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 var["confidence"] = eval_result.confidence
             else:
                 var["is_active"] = False
@@ -192,7 +192,7 @@ def evaluate_and_promote_clip(
         analytics["last_promotion"] = {
             "variant_index": winner_idx,
             "title": new_title,
-            "promoted_at": datetime.utcnow().isoformat(),
+            "promoted_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "confidence": eval_result.confidence,
             "swap_number": title_swap_count,
             "relative_margin": eval_result.details.get("relative_margin"),
@@ -260,7 +260,7 @@ def evaluate_and_promote_clip(
         clip.generated_title = baseline_title
 
         analytics["circuit_breaker_rollback"] = {
-            "reverted_at": datetime.utcnow().isoformat(),
+            "reverted_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "previous_velocity": current_velocity,
             "baseline_velocity": baseline_velocity,
         }

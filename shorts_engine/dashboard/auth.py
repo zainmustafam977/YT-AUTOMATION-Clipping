@@ -205,9 +205,8 @@ async def verify_csrf(request: Request) -> bool:
             try:
                 form = await request.form()
                 csrf_token = form.get("csrf_token")
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not csrf_token or not verify_csrf_token(session_token, str(csrf_token)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -19,7 +19,7 @@ def test_phase1_migration_and_rollback_on_db_copy():
         rollback_sql = Path("migrations/003_phase1_publishing_studio_rollback.sql").read_text(encoding="utf-8")
         for stmt in rollback_sql.split(";"):
             stmt = stmt.strip()
-            clean_lines = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
+            clean_lines = [line for line in stmt.splitlines() if not line.strip().startswith("--")]
             clean_stmt = "\n".join(clean_lines).strip()
             if clean_stmt:
                 dest.execute(clean_stmt)
@@ -28,7 +28,7 @@ def test_phase1_migration_and_rollback_on_db_copy():
     migration_sql = Path("migrations/003_phase1_publishing_studio.sql").read_text(encoding="utf-8")
     for stmt in migration_sql.split(";"):
         stmt = stmt.strip()
-        clean_lines = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
+        clean_lines = [line for line in stmt.splitlines() if not line.strip().startswith("--")]
         clean_stmt = "\n".join(clean_lines).strip()
         if clean_stmt:
             dest.execute(clean_stmt)
@@ -56,7 +56,7 @@ def test_phase1_migration_and_rollback_on_db_copy():
     rollback_sql = Path("migrations/003_phase1_publishing_studio_rollback.sql").read_text(encoding="utf-8")
     for stmt in rollback_sql.split(";"):
         stmt = stmt.strip()
-        clean_lines = [l for l in stmt.splitlines() if not l.strip().startswith("--")]
+        clean_lines = [line for line in stmt.splitlines() if not line.strip().startswith("--")]
         clean_stmt = "\n".join(clean_lines).strip()
         if clean_stmt:
             dest.execute(clean_stmt)

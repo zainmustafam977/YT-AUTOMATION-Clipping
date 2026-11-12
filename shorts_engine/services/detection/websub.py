@@ -38,8 +38,8 @@ def _load_subscriptions() -> dict:
     if _SUBS_STATE_FILE.exists():
         try:
             return json.loads(_SUBS_STATE_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return {}
 
 
@@ -143,11 +143,17 @@ class WebSubNotificationParser:
         YouTube sends: X-Hub-Signature: sha1=<hex_digest>
 
         Uses hmac.compare_digest() for timing-safe comparison.
-        Returns True if signature is valid or if no secret is configured (dev mode).
+
+        Fail-closed: without a configured WEBSUB_SECRET no signature can be
+        verified, so every notification is rejected. Accepting unsigned payloads
+        would let anyone enqueue arbitrary videos for ingestion.
         """
         if not self.secret:
-            logger.debug("No WEBSUB_SECRET configured — skipping signature verification (dev mode).")
-            return True
+            logger.error(
+                "WEBSUB_SECRET is not configured — rejecting WebSub notification "
+                "(signature verification cannot be performed)."
+            )
+            return False
 
         if not x_hub_signature or not x_hub_signature.startswith("sha1="):
             logger.warning("Missing or malformed X-Hub-Signature header.")

@@ -9,19 +9,15 @@ Verifies:
 
 import os
 import socket
-from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
-import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from shorts_engine.db.session import (
-    Base,
     init_db,
     ensure_schema_upgrades,
-    is_postgres,
 )
 from shorts_engine.db.models import (
     Channel,
@@ -39,8 +35,6 @@ from shorts_engine.services.worker.runner import (
     parse_claim_info,
     extract_pid_from_claim,
     is_claim_stale,
-    claim_next_clip,
-    reconcile_stale_claims,
 )
 from shorts_engine.db.data_migration import migrate_sqlite_to_postgres
 
@@ -89,7 +83,7 @@ def test_is_claim_stale_cross_node_isolation():
     Verifies that claims from a DIFFERENT host are NOT stolen even if the PID doesn't exist locally,
     unless the claim age exceeds the stale timeout.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     current_host = socket.gethostname()
 
     # Case A: Local host claim with a non-existent dead PID -> IMMEDIATELY STALE
@@ -184,7 +178,7 @@ def test_sqlite_to_target_data_migration_end_to_end(tmp_path):
             clip_candidate_id=cand.id,
             status=ClipStatus.APPROVED,
             rendered_path="/tmp/rendered_test.mp4",
-            scheduled_publish_at=datetime.utcnow() + timedelta(days=1),
+            scheduled_publish_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
         )
         session.add(clip)
         session.flush()
@@ -192,7 +186,7 @@ def test_sqlite_to_target_data_migration_end_to_end(tmp_path):
         pub = PublishLog(
             clip_id=clip.id,
             youtube_video_id="YT_PUB_MIG_001",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc).replace(tzinfo=None),
             title="Published Short",
             description="Test short description",
             status="SUCCESS",

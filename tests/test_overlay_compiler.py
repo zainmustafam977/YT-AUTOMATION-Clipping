@@ -1,5 +1,4 @@
 """Tests for E-011 compiler: OverlaySpec -> ffmpeg filter chain."""
-import pytest
 
 from shorts_engine.services.overlay.spec import (
     OverlaySpec, OverlayLayer, LayerType, TextStyle, ShapeStyle, StickerStyle,
@@ -7,7 +6,6 @@ from shorts_engine.services.overlay.spec import (
 from shorts_engine.services.overlay.compiler import (
     compile_ffmpeg_filter,
     escape_drawtext,
-    compile_drawtext_filter,
 )
 
 

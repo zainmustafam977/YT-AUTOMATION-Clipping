@@ -13,7 +13,7 @@ Tests for Phase 5:
 import csv
 import io
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
@@ -210,7 +210,7 @@ def test_queue_pagination_boundaries(phase5_env):
             id=f"clip_p_{i}",
             clip_candidate_id=cand.id,
             status=ClipStatus.WAITING_APPROVAL,
-            created_at=datetime.utcnow() + timedelta(minutes=i),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=i),
         )
         db.add_all([cand, clip])
     db.commit()
@@ -506,7 +506,7 @@ def test_channel_skip_backfill_toggle(phase5_env):
     """Verifies that adding a channel with only_new_uploads immediately sets last_seen_video_id."""
     client, db, _ = phase5_env
 
-    mock_feed = [("latest_vid_1234", datetime.utcnow())]
+    mock_feed = [("latest_vid_1234", datetime.now(timezone.utc).replace(tzinfo=None))]
     with patch("shorts_engine.services.detection.rss_poller.RSSPoller.fetch_feed", return_value=mock_feed):
         resp = client.post(
             "/channels/add",

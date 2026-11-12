@@ -499,5 +499,64 @@ def cmd_worker(
     runner.run_loop(poll_interval=poll_interval)
 
 
+batch_app = typer.Typer(help="Batch operations on clips")
+app.add_typer(batch_app, name="batch")
+
+
+@batch_app.command("preview")
+def cmd_batch_preview(
+    operation: str = typer.Argument(..., help="Batch operation name (e.g. approve)"),
+    item_ids: str = typer.Argument(..., help="Comma-separated clip IDs"),
+):
+    """Preview a batch operation without persisting changes."""
+    from shorts_engine.services.batch import BatchEngine, BatchError
+
+    init_db()
+    ids = [x.strip() for x in item_ids.split(",") if x.strip()]
+    with SessionLocal() as db:
+        try:
+            res = BatchEngine(db).preview(operation, ids, {})
+        except BatchError as e:
+            console.print(f"[bold red]{e.code}: {e}[/bold red]")
+            raise typer.Exit(code=1)
+        console.print(f"batch_id={res.batch_id} ok={res.ok} failed={res.failed} skipped={res.skipped}")
+        for it in res.items:
+            console.print(f"  {it.item_id}: {it.status} {it.message or ''}")
+
+
+@batch_app.command("run")
+def cmd_batch_run(
+    operation: str = typer.Argument(..., help="Batch operation name (e.g. approve)"),
+    item_ids: str = typer.Argument(..., help="Comma-separated clip IDs"),
+    actor: str = typer.Option("cli", "--actor", help="Actor name for audit log"),
+):
+    """Run a batch operation and persist changes."""
+    from shorts_engine.services.batch import BatchEngine, BatchError
+
+    init_db()
+    ids = [x.strip() for x in item_ids.split(",") if x.strip()]
+    with SessionLocal() as db:
+        try:
+            res = BatchEngine(db).run(operation, ids, {}, actor=actor)
+        except BatchError as e:
+            console.print(f"[bold red]{e.code}: {e}[/bold red]")
+            raise typer.Exit(code=1)
+        console.print(f"batch_id={res.batch_id} ok={res.ok} failed={res.failed} skipped={res.skipped}")
+        for it in res.items:
+            console.print(f"  {it.item_id}: {it.status} {it.message or ''}")
+
+
+@batch_app.command("list")
+def cmd_batch_list(limit: int = typer.Option(20, "--limit", help="Max batches to show")):
+    """List recent batch jobs."""
+    from shorts_engine.db.models import BatchJob
+
+    init_db()
+    with SessionLocal() as db:
+        rows = db.query(BatchJob).order_by(BatchJob.created_at.desc()).limit(limit).all()
+        for r in rows:
+            console.print(f"{r.id} {r.operation} ok={r.ok_count} failed={r.failed_count} {r.state}")
+
+
 if __name__ == "__main__":
     app()

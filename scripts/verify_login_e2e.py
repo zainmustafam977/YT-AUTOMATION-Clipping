@@ -16,7 +16,7 @@ async def run():
         print(f"Login page loaded. Title: {title}")
         
         # Screenshot login page
-        artifact_dir = Path("C:/Users/ZACODEC/.gemini/antigravity/brain/c7dfcc93-21b9-4546-8fa8-4da2ac8217de")
+        artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "screenshots"
         await page.screenshot(path=str(artifact_dir / "login_page_verified.png"))
         
         # 2. Test password toggle

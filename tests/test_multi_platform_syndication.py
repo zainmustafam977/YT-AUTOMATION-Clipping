@@ -300,7 +300,7 @@ def test_multi_platform_syndicator_parallel_dispatch(db_session, tmp_path):
     # Verify database audit logging in platform_publish_logs
     logs = db_session.query(PlatformPublishLog).filter_by(clip_id=clip.id).all()
     assert len(logs) == 3
-    platforms_logged = {l.platform for l in logs}
+    platforms_logged = {line.platform for line in logs}
     assert platforms_logged == {"youtube", "tiktok", "instagram"}
     for log in logs:
         assert log.status == "DRY_RUN"

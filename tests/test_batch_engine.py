@@ -60,11 +60,17 @@ def test_engine_lists_25_operations(db_session):
         assert op in ops
 
 
-def test_preview_returns_dry_run(db_session):
+def test_preview_does_not_persist(db_session):
+    from shorts_engine.db.models import Clip, ClipStatus
+    clip = db_session.query(Clip).filter_by(id="c1").first()
+    assert clip.status == ClipStatus.WAITING_APPROVAL
     res = BatchEngine(db_session).preview("approve", ["c1"], {})
     assert res.batch_id == "preview"
     assert res.items[0].status == "OK"
-    assert res.items[0].after.get("dry_run") is True
+    # Preview must report the same outcome as run() without persisting.
+    db_session.expire_all()
+    clip = db_session.query(Clip).filter_by(id="c1").first()
+    assert clip.status == ClipStatus.WAITING_APPROVAL
 
 
 def test_preview_rejects_unknown_op(db_session):

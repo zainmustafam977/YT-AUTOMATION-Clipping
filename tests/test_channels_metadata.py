@@ -65,7 +65,7 @@ def test_format_relative_time():
     assert _format_relative_time(now - timedelta(days=400)) == "1y ago"
 
     # Test timezone naive fallback
-    naive_dt = datetime.utcnow() - timedelta(minutes=10)
+    naive_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
     res = _format_relative_time(naive_dt)
     assert "m ago" in res or "s ago" in res
 

@@ -165,9 +165,8 @@ class ClipRecoveryService:
             try:
                 t_data = json.loads(transcript_record.word_level_json)
                 words = t_data.get("words", [])
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         seg_text = ""
         if words and cand:
             seg_text = " ".join([

@@ -12,12 +12,12 @@ Visibility: job.reconciled platform event emitted with db session.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from shorts_engine.db.session import Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import (
     Channel,
     SourceVideo,
@@ -85,7 +85,7 @@ def test_reaper_reconciles_crash_after_ingest_commit_1(test_env):
             entity_id=vid_id,
             stage="ingest",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             payload_json='{"file_path": "/tmp/vid_t1.mp4"}',
         )
         session.add(ingest_job)
@@ -138,7 +138,7 @@ def test_reaper_reconciles_crash_after_transcribe_commit_1(test_env):
             entity_id=vid_id,
             stage="transcribe",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             payload_json="{}",
         )
         session.add(transcribe_job)
@@ -198,7 +198,7 @@ def test_reaper_resolves_dual_join_race_for_render(test_env):
             entity_id=clip_id,
             stage="reframe",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         captions_job = PipelineJob(
             job_type="captions",
@@ -206,7 +206,7 @@ def test_reaper_resolves_dual_join_race_for_render(test_env):
             entity_id=clip_id,
             stage="captions",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add_all([reframe_job, captions_job])
         session.commit()
@@ -246,7 +246,7 @@ def test_reaper_idempotency_no_duplicate_enqueues(test_env):
             entity_id=vid_id,
             stage="ingest",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add(ingest_job)
         session.commit()
@@ -308,7 +308,7 @@ def test_reaper_partial_select_fanout_missing_captions(test_env):
             entity_id=clip_id,
             stage="reframe",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add(reframe_job)
         session.commit()
@@ -329,7 +329,7 @@ def test_reaper_partial_select_fanout_missing_captions(test_env):
     with SessionFactory() as session:
         captions_job = session.query(PipelineJob).filter_by(entity_id=clip_id, stage="captions").first()
         captions_job.status = PipelineJobStatus.DONE
-        captions_job.completed_at = datetime.utcnow()
+        captions_job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         session.commit()
 
     # Run sweep again: dual-join satisfied -> enqueues render
@@ -375,7 +375,7 @@ def test_reaper_negative_quarantined_dependency_suppresses_render(test_env):
             entity_id=clip_id,
             stage="reframe",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         captions_job = PipelineJob(
             job_type="captions",
@@ -384,7 +384,7 @@ def test_reaper_negative_quarantined_dependency_suppresses_render(test_env):
             stage="captions",
             status=PipelineJobStatus.QUARANTINED,
             error_message="Whisper model corrupted",
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add_all([reframe_job, captions_job])
         session.commit()
@@ -423,7 +423,7 @@ def test_reaper_guards_terminal_and_rejected_entities(test_env):
             entity_id=vid_id,
             stage="ingest",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add(ingest_job)
 
@@ -443,7 +443,7 @@ def test_reaper_guards_terminal_and_rejected_entities(test_env):
             entity_id=clip_id,
             stage="reframe",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         captions_job = PipelineJob(
             job_type="captions",
@@ -451,7 +451,7 @@ def test_reaper_guards_terminal_and_rejected_entities(test_env):
             entity_id=clip_id,
             stage="captions",
             status=PipelineJobStatus.DONE,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         session.add_all([reframe_job, captions_job])
         session.commit()

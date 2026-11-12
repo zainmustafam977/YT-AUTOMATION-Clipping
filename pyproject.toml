@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "shorts-engine"
 version = "0.1.0"
 description = "Automated YouTube Shorts repurposing platform"
-readme = "CLARIFICATION_QUESTIONS.md"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5.0",
@@ -39,6 +39,8 @@ dependencies = [
     "scipy>=1.11.0",
     "portalocker>=2.8.0",
     "watchdog>=4.0.0",
+    # Font capability probing (emoji/script coverage) imports fontTools directly.
+    "fonttools>=4.47.0",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +49,13 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.3.0",
     "mypy>=1.8.0",
+]
+# Browser E2E suite (tests/e2e). Kept out of `dev` so unit-test and mypy
+# environments stay small; the Chromium build is a further separate download:
+#   pip install -e .[e2e] && python -m playwright install chromium
+# Without it, tests/e2e skips itself instead of failing.
+e2e = [
+    "playwright>=1.40.0",
 ]
 
 [tool.pytest.ini_options]
@@ -74,9 +83,7 @@ exclude = [
     "dist",
     "build",
     "*.egg-info",
-    "in progress dev",
     "docs",
-    "tests",
     "scripts",
     "patch.py",
 ]
@@ -85,12 +92,9 @@ exclude = [
 select = ["E", "F"]
 ignore = ["E501"]
 
-# R3 mypy ratchet: the baseline file holds the current error
-# count. CI fails if it rises. New code keeps the ratchet at 0.
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
-ignore_errors = true
 no_implicit_optional = true
 
 [tool.setuptools.packages.find]

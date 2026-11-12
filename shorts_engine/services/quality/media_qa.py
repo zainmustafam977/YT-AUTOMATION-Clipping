@@ -160,9 +160,8 @@ class MediaQAGate:
                 try:
                     num, den = video_stream["r_frame_rate"].split("/")
                     fps = round(float(num) / float(den), 2)
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "valid": True,
                 "duration": duration,

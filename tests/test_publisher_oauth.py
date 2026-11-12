@@ -135,14 +135,14 @@ def test_live_publish_updates_last_seen_video_id():
 
 def test_quota_tracker_active_db_reconciliation(tmp_path):
     """Verifies that QuotaTracker actively reconciles usage units with database PublishLog records."""
-    from datetime import datetime
+    from datetime import datetime, timezone
     from shorts_engine.db.models import PublishLog
 
     db = _make_in_memory_db()
     clip1, _, _ = _make_approved_clip(db)
 
     # Insert 2 PublishLog records for today
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     p1 = PublishLog(
         clip_id=clip1.id,
         youtube_video_id="yt_p1",

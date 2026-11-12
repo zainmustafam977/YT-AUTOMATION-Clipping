@@ -53,9 +53,8 @@ def get_master_key() -> str:
         try:
             from shorts_engine.config.settings import settings
             key = getattr(settings, "SECRETS_MASTER_KEY", None)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not key:
         raise RuntimeError(
             f"{ENV_KEY_NAME} environment variable is not set. "

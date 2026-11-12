@@ -7,7 +7,7 @@ and dashboard without direct platform API calls from consumers.
 
 import uuid
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
@@ -60,7 +60,7 @@ class AnalyticsPoller:
             existing.click_through_rate = click_through_rate
             existing.average_view_duration = average_view_duration
             existing.subscribers_gained = subscribers_gained
-            existing.fetched_at = datetime.utcnow()
+            existing.fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
             metric = existing
         else:
             metric = AnalyticsMetric(
@@ -72,7 +72,7 @@ class AnalyticsPoller:
                 click_through_rate=click_through_rate,
                 average_view_duration=average_view_duration,
                 subscribers_gained=subscribers_gained,
-                fetched_at=datetime.utcnow(),
+                fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.add(metric)
 
@@ -124,8 +124,8 @@ class AnalyticsPoller:
                 return []
 
         # Compute date range
-        end_date = datetime.utcnow().strftime("%Y-%m-%d")
-        start_date = (datetime.utcnow() - timedelta(days=max(1, lookback_days))).strftime("%Y-%m-%d")
+        end_date = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
+        start_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(1, lookback_days))).strftime("%Y-%m-%d")
 
         try:
             reports = fetch_video_analytics_reports(
@@ -212,7 +212,7 @@ class AnalyticsPoller:
             analytics["average_view_duration"] = latest_avg_dur
             analytics["subscribers_gained"] = total_subs
             analytics["youtube_video_id"] = yt_id
-            analytics["last_polled_at"] = datetime.utcnow().isoformat()
+            analytics["last_polled_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             clip.analytics = analytics
 
             # Sync active variation performance
@@ -269,7 +269,7 @@ class AnalyticsPoller:
         return {
             "polled_clips_count": polled_count,
             "total_records_upserted": total_records,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
     @staticmethod
@@ -278,7 +278,7 @@ class AnalyticsPoller:
         Schedules the next hourly analytics poll job via the durable queue run_at mechanism.
         Ensures continuous execution without an external OS cron daemon.
         """
-        next_run_at = datetime.utcnow() + timedelta(hours=delay_hours)
+        next_run_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=delay_hours)
         poll_id = f"poll_{uuid.uuid4().hex[:12]}"
         job = durable_job_queue.enqueue(
             job_type="analytics_poll",

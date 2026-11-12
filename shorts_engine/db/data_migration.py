@@ -6,9 +6,9 @@ topological foreign-key ordering, datatype normalization, and row-count verifica
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from sqlalchemy import create_engine, inspect, text, Table, MetaData, Boolean, DateTime
 from sqlalchemy.engine import Engine
 
@@ -101,7 +101,7 @@ def migrate_sqlite_to_postgres(
     Executes an end-to-end migration of SQLite data into a target database (typically PostgreSQL).
     Idempotent: Initializes target schema, migrates rows, and verifies parity.
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
     source_sqlite_path = Path(source_sqlite_path)
 
     if not source_sqlite_path.exists():
@@ -177,7 +177,6 @@ def migrate_sqlite_to_postgres(
                     if rows_to_insert:
                         with dst_conn.begin():
                             dst_conn.execute(dst_table.insert(), rows_to_insert)
-                        migrated_for_table += len(rows_to_insert)
 
                     dst_count = dst_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
                     summary.tables.append(MigrationTableResult(
@@ -190,7 +189,7 @@ def migrate_sqlite_to_postgres(
 
                 # Insert in batches into destination
                 batch: List[Dict[str, Any]] = []
-                migrated_for_table = 0
+                migrated_count = 0
 
                 for row in cursor:
                     row_dict = dict(zip(cols, row))
@@ -200,21 +199,21 @@ def migrate_sqlite_to_postgres(
                         # Use target table insert
                         with dst_conn.begin():
                             dst_conn.execute(dst_table.insert(), batch)
-                        migrated_for_table += len(batch)
+                        migrated_count += len(batch)
                         batch = []
 
                 if batch:
                     with dst_conn.begin():
                         dst_conn.execute(dst_table.insert(), batch)
-                    migrated_for_table += len(batch)
+                    migrated_count += len(batch)
 
                 # Verify target count
                 dst_count = dst_conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
 
                 if dst_count >= src_count:
                     status = "SUCCESS"
-                    summary.total_migrated_rows += migrated_for_table
-                    logger.info("Table '%s': %d rows successfully migrated.", table_name, migrated_for_table)
+                    summary.total_migrated_rows += migrated_count
+                    logger.info("Table '%s': %d rows successfully migrated.", table_name, migrated_count)
                 else:
                     status = "ROW_COUNT_MISMATCH"
                     err = f"Table '{table_name}' row mismatch: source={src_count}, target={dst_count}"
@@ -241,7 +240,7 @@ def migrate_sqlite_to_postgres(
             ))
 
     # 3. Final summary check
-    summary.duration_seconds = round((datetime.utcnow() - start_time).total_seconds(), 2)
+    summary.duration_seconds = round((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds(), 2)
     summary.success = len(summary.errors) == 0
 
     logger.info(

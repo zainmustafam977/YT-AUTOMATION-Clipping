@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
 
-from .spec import OverlaySpec, OverlayLayer, LayerType
+from .spec import OverlaySpec, LayerType
 
 
 def preview_overlay_at_t(

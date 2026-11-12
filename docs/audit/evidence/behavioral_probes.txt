@@ -46,7 +46,6 @@ POST /api/batch/run {"operation":"approve","item_ids":["nonexistent-clip"]}
 POST /websub/callback unsigned -> {"status":"ok","detected":0}
 POST /websub/callback forged Atom entry -> {"status":"ok","detected":0,"queued":[]}
 Code: services/detection/websub.py verify_signature():
-  "if not self.secret: ... return True  # dev mode"
 -> Signature verification FAILS OPEN when WEBSUB_SECRET is unset (the default).
    "HMAC secured" (dashboard/app.py comment) only holds when configured.
 

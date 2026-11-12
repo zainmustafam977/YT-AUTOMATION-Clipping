@@ -6,12 +6,15 @@ and manual publication interface.
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Request, Query, Depends
+from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from shorts_engine.dashboard.auth import require_viewer, require_operator
-from shorts_engine.db.models import User
+from shorts_engine.db.models import EventLog, User, prune_old_event_logs
+from shorts_engine.db.session import get_db
 from shorts_engine.services.events.bus import global_event_bus
 from shorts_engine.services.events.models import PlatformEvent
 
@@ -112,13 +115,6 @@ async def publish_event(
     return {"status": "published", "id": event.id}
 
 
-from datetime import datetime
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from shorts_engine.db.session import get_db
-from shorts_engine.db.models import EventLog, prune_old_event_logs
-
-
 @router.get(
     "/api/events/recent",
     summary="Get recent persisted platform events from the event_logs table for polling and downtime catch-up",
@@ -154,9 +150,8 @@ def get_recent_persisted_events(
         try:
             since_dt = datetime.fromisoformat(since_iso)
             query = query.filter(EventLog.created_at > since_dt)
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if event_name:
         query = query.filter(EventLog.event_name == event_name)
 

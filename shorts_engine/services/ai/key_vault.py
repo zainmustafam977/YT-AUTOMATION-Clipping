@@ -8,7 +8,7 @@ import os
 import time
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Union, Dict
 
@@ -299,7 +299,7 @@ class ApiKeyVault:
         Raises RuntimeError if all keys are cooling down, rate-limited, or exhausted.
         """
         provider_clean = provider.strip().lower()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         tokens_to_acquire = max(1, int(estimated_tokens)) if estimated_tokens is not None else 1
 
         # 1. Recover expired cooldowns
@@ -356,7 +356,7 @@ class ApiKeyVault:
             # If max_wait_sec provided, wait brief tick and retry leaky-bucket
             if max_wait_sec > 0.0 and (time.monotonic() - start_wait) < max_wait_sec:
                 time.sleep(0.1)
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 continue
             break
 
@@ -420,7 +420,7 @@ class ApiKeyVault:
             # Exponential cooldown: 30s, 60s, 120s, 240s... up to 3600s
             backoff_sec = min(3600, 30 * (2 ** max(0, key.consecutive_errors - 1)))
             key.status = "COOLING_DOWN"
-            key.cooldown_until = datetime.utcnow() + timedelta(seconds=backoff_sec)
+            key.cooldown_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=backoff_sec)
             self.db.commit()
 
             # Emit live notification bubble via EventBus

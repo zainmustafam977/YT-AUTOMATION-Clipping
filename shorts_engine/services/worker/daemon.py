@@ -19,7 +19,7 @@ import logging
 import argparse
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
@@ -152,7 +152,7 @@ class WorkerDaemon:
         lock_info = {
             "pid": os.getpid(),
             "worker_id": self.worker_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         self.lock_file.write_text(json.dumps(lock_info))
         self._lock_acquired = True
@@ -201,16 +201,14 @@ class WorkerDaemon:
                 try:
                     payload_data = json.loads(job.payload_json)
                     video_id = payload_data.get("video_id")
-                except Exception:
-                    pass
-
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         payload_dict = {}
         if job.payload_json:
             try:
                 payload_dict = json.loads(job.payload_json)
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         def heartbeat_cb():
             durable_job_queue.heartbeat(
                 job_id=job.id,
@@ -374,14 +372,14 @@ class WorkerDaemon:
             # Mark job DONE only if not cancelled
             if job_db.status != PipelineJobStatus.CANCELLED:
                 job_db.status = PipelineJobStatus.DONE
-                job_db.completed_at = datetime.utcnow()
+                job_db.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 job_db.locked_by = None
                 job_db.locked_at = None
                 if result and isinstance(result, dict):
                     try:
                         job_db.result_json = json.dumps(result)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 session.commit()
                 is_marked_done = True
 
@@ -397,6 +395,7 @@ class WorkerDaemon:
             self._on_job_completed(job_db, result, session, stage_name=stage_str)
 
             clear_cuda_cache()
+            return True
         except JobCancelledError:
             logger.info("Worker %s: job %s was cancelled during execution; preserving CANCELLED state.", self.worker_id, job.id)
             clear_cuda_cache()

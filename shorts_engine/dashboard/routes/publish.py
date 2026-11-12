@@ -391,8 +391,8 @@ def execute_publish(
                 action_url=f"/queue?clip={clip.id}",
                 details={"scheduled_at": dt.isoformat()},
             ))
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return {
             "status": "scheduled",
             "clip_id": clip.id,

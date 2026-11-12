@@ -31,6 +31,7 @@ from shorts_engine.services.ingestion.oauth_flow import YouTubeDeviceOAuth
 from shorts_engine.services.ingestion.session_harvester import SessionHarvester
 from shorts_engine.services.ingestion.proxy_manager import ProxyManager
 from shorts_engine.services.ingestion.hotfolder_watcher import hotfolder_watcher
+from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,6 @@ class LocalPathIngestRequest(BaseModel):
 class LocalPathValidateRequest(BaseModel):
     file_path: str = Field(..., description="Path to check and probe")
 
-
-from shorts_engine.dashboard.rate_limit import rate_limit_ingestion
 
 @router.post(
     "/local-path",
@@ -359,9 +358,8 @@ def get_cookies_status_endpoint(
             for line in f:
                 if line.strip() and not line.strip().startswith("#"):
                     count += 1
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return {
         "exists": True,
         "path": str(cookies_path),

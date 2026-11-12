@@ -442,8 +442,8 @@ def delete_api_key(
                         raw_val = decrypt_secret(k_rec.api_key_encrypted)
                         if raw_val == removed or hash_api_key(raw_val)[:16] == key_hash or hash_api_key(raw_val) == key_hash:
                             db.delete(k_rec)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 db.commit()
         except Exception as e:
             logger.warning("Could not synchronize ApiKey DB deletion: %s", e)
@@ -648,8 +648,8 @@ def purge_invalid_keys(
                         raw_val = decrypt_secret(k_rec.api_key_encrypted)
                         if hash_api_key(raw_val)[:16] in purged_hashes or hash_api_key(raw_val) in purged_hashes:
                             db.delete(k_rec)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 db.commit()
         except Exception as e:
             logger.warning("Could not synchronize ApiKey DB purge: %s", e)

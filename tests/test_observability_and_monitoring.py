@@ -9,11 +9,7 @@ Validates:
   6. Prometheus & OpenMetrics telemetry exposition
 """
 
-import os
-import json
-import time
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,7 +17,6 @@ from shorts_engine.dashboard.app import create_dashboard_app
 from shorts_engine.services.publishing.quota import QuotaTracker
 from shorts_engine.services.monitoring.token_tracker import (
     AITokenCostTracker,
-    DEFAULT_TOKEN_PRICING,
 )
 
 

@@ -6,7 +6,7 @@ Dead-Letter Queue (DLQ), stage checkpoint resumption, and worker lease reconcili
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -180,9 +180,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -203,7 +202,7 @@ class DurableJobQueue:
         - SQLite: Uses atomic Compare-And-Swap (CAS).
         """
         wid = worker_id or generate_worker_id()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         session, should_close = self._get_session(db)
 
         try:
@@ -300,7 +299,7 @@ class DurableJobQueue:
             if not job or job.status != PipelineJobStatus.RUNNING:
                 return False
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             job.heartbeat_at = now
             job.locked_at = now
 
@@ -342,7 +341,7 @@ class DurableJobQueue:
             if not job:
                 return False
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             job.status = PipelineJobStatus.COMPLETED
             job.stage = "COMPLETED"
             job.progress_pct = 100.0
@@ -363,9 +362,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return True
         finally:
             if should_close:
@@ -386,7 +384,7 @@ class DurableJobQueue:
             if not job:
                 raise ValueError(f"Job {job_id} not found.")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             job.retry_count += 1
             job.attempt_count = max(getattr(job, "attempt_count", 0) + 1, job.retry_count)
             job.error_message = str(error_message)[:2000]
@@ -430,9 +428,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -454,7 +451,7 @@ class DurableJobQueue:
             if not job:
                 raise ValueError(f"Job {job_id} not found.")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             job.status = PipelineJobStatus.QUARANTINED
             job.error_message = str(error_message)[:2000]
             job.locked_by = None
@@ -475,9 +472,8 @@ class DurableJobQueue:
                     entity_id=job.id,
                     entity_type="pipeline_job",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return job
         finally:
             if should_close:
@@ -514,7 +510,7 @@ class DurableJobQueue:
 
             job.status = PipelineJobStatus.PENDING
             job.retry_count = 0
-            job.next_run_at = datetime.utcnow()
+            job.next_run_at = datetime.now(timezone.utc).replace(tzinfo=None)
             job.locked_by = None
             job.locked_at = None
             job.error_message = None
@@ -531,7 +527,7 @@ class DurableJobQueue:
         Finds jobs in RUNNING status whose worker lease has expired or whose worker is dead.
         Reclaims them via fail_job so they are automatically rescheduled via backoff or moved to DLQ.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         session, should_close = self._get_session(db)
         reclaimed_count = 0
 
@@ -637,7 +633,7 @@ class DurableJobQueue:
 
         session, should_close = self._get_session(db)
         reconciled_count = 0
-        cutoff = datetime.utcnow() - timedelta(days=window_days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
 
         try:
             done_jobs = (
@@ -687,8 +683,8 @@ class DurableJobQueue:
                         if job.payload_json:
                             try:
                                 payload = json.loads(job.payload_json)
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         if "file_path" not in payload and video.downloaded_path:
                             payload["file_path"] = str(video.downloaded_path)
                         try:
@@ -734,8 +730,8 @@ class DurableJobQueue:
                         if job.payload_json:
                             try:
                                 payload = json.loads(job.payload_json)
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         try:
                             new_job = self.enqueue(
                                 job_type="select",

@@ -11,7 +11,7 @@ import json
 import uuid
 import socket
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
@@ -120,9 +120,8 @@ def is_pid_alive(pid: int) -> bool:
     try:
         import psutil
         return psutil.pid_exists(pid)
-    except Exception:
-        pass
-
+    except Exception as _exc:
+        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     try:
         if os.name == "nt":
             import ctypes
@@ -200,7 +199,7 @@ def reconcile_stale_claims(db: Session, stale_timeout_sec: int = 600) -> int:
     Returns the number of reclaimed clips.
     """
     from datetime import datetime
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     reclaimed = 0
 
     try:
@@ -238,8 +237,8 @@ def claim_clip_by_id(db: Session, clip_id: str, worker_id: Optional[str] = None)
 
     # If already claimed, check if holding PID is alive
     if target_clip.rendered_path and target_clip.rendered_path.startswith("CLAIMED:"):
-        from datetime import datetime
-        if is_claim_stale(target_clip.rendered_path, target_clip.updated_at, datetime.utcnow()):
+        from datetime import datetime, timezone
+        if is_claim_stale(target_clip.rendered_path, target_clip.updated_at, datetime.now(timezone.utc).replace(tzinfo=None)):
             logger.info("Stealing/reclaiming clip %s from stale claim %s", clip_id, target_clip.rendered_path)
         else:
             # Still held by an active live process or named worker, do not steal
@@ -324,9 +323,8 @@ class WorkerRunner:
                     entity_type="clip",
                     action_url=f"/queue?clip={clip.id}",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             # Transcript words
             words = []
             if video.transcript:
@@ -369,8 +367,8 @@ class WorkerRunner:
                 try:
                     c_data = json.loads(clip.caption_style)
                     style_overrides = parse_custom_template(c_data).to_ass_overrides()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             if not style_overrides:
                 style_overrides = get_caption_template(caption_preset).to_ass_overrides()
 
@@ -457,9 +455,8 @@ class WorkerRunner:
                     entity_type="clip",
                     action_url=f"/queue?clip={clip.id}",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             # Quality Check
             seg_words = [w.word for w in words if (w.start >= cand.start_ms / 1000.0 - 0.5 and w.end <= cand.end_ms / 1000.0 + 0.5)] if words else []
             seg_text = " ".join(seg_words) if seg_words else (cand.hook_text or "")
@@ -491,8 +488,8 @@ class WorkerRunner:
                                 entity_type="clip",
                                 action_url=f"/queue?clip={clip.id}",
                             ))
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                         return False
                 except Exception as qa_err:
                     logger.warning("MediaQAGate inspection exception (continuing to semantic gate): %s", qa_err)
@@ -525,9 +522,8 @@ class WorkerRunner:
                     entity_type="clip",
                     action_url=f"/queue?clip={clip.id}",
                 ))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             logger.info(f"Worker {self.worker_id} completed clip {clip.id} -> {next_status}")
             return True
 
@@ -543,8 +539,8 @@ class WorkerRunner:
                     entity_type="clip",
                     action_url=f"/queue?clip={clip_id}",
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             db.rollback()
             try:
                 failed_clip = db.query(Clip).filter_by(id=clip_id).first()

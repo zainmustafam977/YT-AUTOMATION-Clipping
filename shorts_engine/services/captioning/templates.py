@@ -3,6 +3,7 @@ Caption Style Template Engine: provides declarative presets, color conversions,
 and custom template customization for YouTube Shorts subtitles.
 """
 
+import logging
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
@@ -321,9 +322,8 @@ def get_caption_template(preset_or_id: Optional[str] = None, db: Optional[Any] =
                     scale_pop=preset.scale_pop,
                     active_scale=preset.active_scale,
                 )
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return BUILTIN_TEMPLATES["hormozi"]
 
 
@@ -336,8 +336,8 @@ def list_caption_templates(db: Optional[Any] = None) -> List[Dict[str, Any]]:
             custom_presets = db.query(CaptionPreset).filter(CaptionPreset.is_builtin.is_(False)).all()
             for cp in custom_presets:
                 results.append(cp.to_dict())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return results
 
 

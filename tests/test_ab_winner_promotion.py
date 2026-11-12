@@ -3,7 +3,7 @@ Unit & Integration Tests for Component 4: Bayesian Multi-Armed Bandit A/B Winner
 (Conjugate Beta-Binomial Updating, Velocity Scoring, 95% Confidence Gate, Circuit Breaker Rollback)
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import create_engine
@@ -133,7 +133,7 @@ def test_evaluate_and_promote_clip_winner_promotion(db_session):
         title="Original Baseline Title",
         description="Description",
         status="SUCCESS",
-        published_at=datetime.utcnow() - timedelta(hours=80),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=80),
     )
     db_session.add(pub_log)
     db_session.commit()

@@ -3,10 +3,11 @@ SQLAlchemy ORM models implementing all 7 entities from Section 10 of SRS.
 Incorporates duplicate prevention unique constraints and reconciled ClipStatus enum.
 """
 
+import logging
 import json
 import uuid
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from sqlalchemy import (
     Column,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Text,
     DateTime,
     ForeignKey,
+    CheckConstraint,
     UniqueConstraint,
     Enum as SQLEnum,
 )
@@ -112,8 +114,8 @@ class Channel(Base):
     # Application-level OAuth client secrets must NEVER be stored in this column.
     encrypted_oauth_token = Column(Text, nullable=True)
     upload_defaults_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     source_videos = relationship("SourceVideo", back_populates="channel", cascade="all, delete-orphan")
     credential = relationship("ChannelCredential", back_populates="channel", uselist=False, cascade="all, delete-orphan")
@@ -164,8 +166,8 @@ class ChannelCredential(Base):
     status = Column(String(32), default="active", nullable=False)  # active, needs_auth, revoked, identity_mismatch
     verified_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     channel = relationship("Channel", back_populates="credential")
 
@@ -177,7 +179,7 @@ class OAuthState(Base):
     pkce_verifier = Column(String(256), nullable=False)
     intended_channel_id = Column(String(64), nullable=True)
     expected_handle = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
 
@@ -191,7 +193,7 @@ class PendingOAuthMismatch(Base):
     authorized_handle = Column(String(255), nullable=True)
     authorized_avatar_url = Column(String(1024), nullable=True)
     encrypted_token_data = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
 
@@ -215,8 +217,8 @@ class SourceVideo(Base):
     error_message = Column(Text, nullable=True)
     runtime_overrides_json = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     channel = relationship("Channel", back_populates="source_videos")
     transcript = relationship("Transcript", back_populates="source_video", uselist=False, cascade="all, delete-orphan")
@@ -252,7 +254,7 @@ class Transcript(Base):
     source_video_id = Column(String(36), ForeignKey("source_videos.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     word_level_json = Column(Text, nullable=False)  # JSON-encoded array of word timestamps
     language = Column(String(16), default="en", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     source_video = relationship("SourceVideo", back_populates="transcript")
 
@@ -282,7 +284,7 @@ class ClipCandidate(Base):
     caption_words_json = Column(Text, nullable=True)
     caption_edited_at = Column(DateTime, nullable=True)
     caption_edited_by = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     source_video = relationship("SourceVideo", back_populates="candidates")
     clip = relationship("Clip", back_populates="candidate", uselist=False, cascade="all, delete-orphan")
@@ -357,8 +359,8 @@ class Clip(Base):
     rejected_at = Column(DateTime, nullable=True)
     queued_at = Column(DateTime, nullable=True, index=True)
     source = Column(String(32), default="pipeline", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     candidate = relationship("ClipCandidate", back_populates="clip")
     publish_log = relationship("PublishLog", back_populates="clip", uselist=False, cascade="all, delete-orphan")
@@ -381,8 +383,8 @@ class Clip(Base):
         if self.variations_json:
             try:
                 return json.loads(self.variations_json)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if self.candidate and self.candidate.variations:
             return self.candidate.variations
         return []
@@ -425,8 +427,8 @@ class Clip(Base):
             try:
                 qr = json.loads(self.quality_check_result)
                 return qr.get("rejection_reason")
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return None
 
     @rejection_reason.setter
@@ -436,7 +438,7 @@ class Clip(Base):
         if val and not self.rejection_reason_code:
             self.rejection_reason_code = "MANUAL_REJECTION"
         if val and not self.rejected_at:
-            self.rejected_at = datetime.utcnow()
+            self.rejected_at = datetime.now(timezone.utc).replace(tzinfo=None)
         try:
             qr = json.loads(self.quality_check_result or "{}")
         except Exception:
@@ -454,7 +456,7 @@ class PublishLog(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     youtube_video_id = Column(String(64), nullable=True, index=True)
-    published_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    published_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     title = Column(Text, nullable=False)
     description = Column(Text, nullable=False)
     tags_json = Column(Text, nullable=True)
@@ -484,7 +486,7 @@ class AnalyticsMetric(Base):
     click_through_rate = Column(Float, default=0.0, nullable=False)
     average_view_duration = Column(Float, default=0.0, nullable=False)
     subscribers_gained = Column(Integer, default=0, nullable=False)
-    fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fetched_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     clip = relationship("Clip", back_populates="analytics_metrics")
 
@@ -522,7 +524,7 @@ class PlatformPublishLog(Base):
     permalink = Column(String(512), nullable=True)
     error_message = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
-    published_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    published_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     clip = relationship("Clip", back_populates="platform_publish_logs")
 
@@ -556,8 +558,8 @@ class PublishJob(Base):
     youtube_video_id = Column(String(64), nullable=True, index=True)
     upload_session_uri = Column(Text, nullable=True)
     last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     clip = relationship("Clip", back_populates="publish_jobs")
 
@@ -584,8 +586,8 @@ class PublishSlot(Base):
     platform = Column(String(32), default="youtube", nullable=False, index=True)
     status = Column(String(32), default=PublishSlotStatus.RESERVED.value, nullable=False, index=True)
     youtube_video_id = Column(String(64), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("channel_id", "slot_start", name="uq_publish_slots_channel_slot_start"),
@@ -617,8 +619,8 @@ class PipelineJob(Base):
     locked_by = Column(String(128), nullable=True, index=True)
     locked_at = Column(DateTime, nullable=True)
     heartbeat_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
@@ -654,7 +656,7 @@ class QuotaLedger(Base):
     __tablename__ = "quota_ledger"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ts = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     units = Column(Integer, nullable=False)
     operation = Column(String(64), nullable=False)  # 'channels.list', 'videos.insert', 'calibration'
     channel_id = Column(String(64), nullable=True)
@@ -665,7 +667,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ts = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     actor = Column(String(64), default="system", nullable=False)
     event = Column(String(64), nullable=False)
     channel_id = Column(String(64), nullable=True)
@@ -680,7 +682,25 @@ class SFXLibrary(Base):
     tag = Column(String(64), unique=True, nullable=False, index=True)  # whoosh, pop, ding, reveal, punch
     file_path = Column(String(1024), nullable=False)
     license_note = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+
+
+class RightsAttestation(Base):
+    """Append-only rights/licence attestation for a clip or source video (F-17)."""
+    __tablename__ = "rights_attestations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), nullable=True, index=True)
+    source_video_id = Column(String(36), ForeignKey("source_videos.id", ondelete="CASCADE"), nullable=True, index=True)
+    license_type = Column(String(32), nullable=False, index=True)
+    license_url = Column(String(1024), nullable=True)
+    attestor = Column(String(128), nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("clip_id IS NOT NULL OR source_video_id IS NOT NULL", name="ck_rights_target_present"),
+    )
 
 
 class User(Base):
@@ -691,8 +711,8 @@ class User(Base):
     password_hash = Column(String(256), nullable=False)
     role = Column(SQLEnum(UserRole), default=UserRole.OPERATOR, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 class ApiKey(Base):
@@ -715,20 +735,20 @@ class ApiKey(Base):
     consecutive_errors = Column(Integer, default=0, nullable=False)
     cooldown_until = Column(DateTime, nullable=True)
     last_used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     def is_cooling_down(self, now: Optional[datetime] = None) -> bool:
         if self.status != "COOLING_DOWN":
             return False
-        curr_time = now or datetime.utcnow()
+        curr_time = now or datetime.now(timezone.utc).replace(tzinfo=None)
         return self.cooldown_until is not None and self.cooldown_until > curr_time
 
     def is_available(self, now: Optional[datetime] = None) -> bool:
         if self.status == "DISABLED" or self.status == "EXHAUSTED":
             return False
         if self.status == "COOLING_DOWN":
-            curr_time = now or datetime.utcnow()
+            curr_time = now or datetime.now(timezone.utc).replace(tzinfo=None)
             return self.cooldown_until is not None and self.cooldown_until <= curr_time
         return self.status == "ACTIVE"
 
@@ -759,8 +779,8 @@ class CaptionPreset(Base):
     scale_pop = Column(Boolean, default=True, nullable=False)
     active_scale = Column(Integer, default=115, nullable=False)
     is_builtin = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     def to_dict(self) -> Dict[str, Any]:
         from shorts_engine.services.captioning.templates import ass_to_hex_color
@@ -825,7 +845,7 @@ class EventLog(Base):
     entity_id = Column(String(64), nullable=True, index=True)
     entity_type = Column(String(32), nullable=True)
     payload_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
 
     @property
     def payload(self) -> Dict[str, Any]:
@@ -857,7 +877,7 @@ def prune_old_event_logs(db: Session, retention_days: int = 7) -> int:
     Deletes event logs older than the retention threshold (default 7 days).
     Returns the count of pruned rows.
     """
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=retention_days)
     deleted_count = (
         db.query(EventLog)
         .filter(EventLog.created_at < cutoff)
@@ -875,7 +895,7 @@ class LLMUsageLog(Base):
     __tablename__ = "llm_usage_logs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     provider = Column(String(64), nullable=False, index=True)
     model = Column(String(128), nullable=False, index=True)
     key_index = Column(Integer, nullable=True)
@@ -937,7 +957,7 @@ class BatchJob(Base):
         index=True,
     )
     params_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     @property
@@ -965,7 +985,7 @@ class BatchItemLock(Base):
     batch_id = Column(String(36), nullable=False, index=True)
     operation = Column(String(64), nullable=False)
     item_id = Column(String(64), nullable=False, index=True)
-    acquired_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    acquired_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     released_at = Column(DateTime, nullable=True, index=True)
 
 
@@ -983,7 +1003,7 @@ class BatchAuditLog(Base):
     before_json = Column(Text, nullable=True)
     after_json = Column(Text, nullable=True)
     idempotency_key = Column(String(64), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1012,8 +1032,8 @@ class Webhook(Base):
     events_json = Column(Text, nullable=False, default="[]")
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     created_by = Column(String(64), nullable=False, default="system")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     @property
     def events(self) -> list:
@@ -1038,7 +1058,7 @@ class WebhookDelivery(Base):
     duration_ms = Column(Integer, nullable=False, default=0)
     attempts = Column(Integer, nullable=False, default=1)
     error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
 
     webhook = relationship("Webhook")
 
@@ -1052,7 +1072,7 @@ class WebhookDeadLetter(Base):
     body = Column(Text, nullable=False)
     last_status = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
 
 
 # ----------------------------------------------------------------------
@@ -1065,7 +1085,7 @@ class SettingsExport(Base):
     payload_json = Column(Text, nullable=False)
     schema_version = Column(Integer, nullable=False, default=1)
     created_by = Column(String(64), nullable=False, default="system")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 # ----------------------------------------------------------------------
@@ -1082,7 +1102,7 @@ class CostEntry(Base):
     unit_cost_usd = Column(Float, nullable=False, default=0)
     total_cost_usd = Column(Float, nullable=False, default=0)
     actor = Column(String(64), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
 
     @property
     def total(self) -> float:
@@ -1098,8 +1118,8 @@ class CostBudget(Base):
     soft_limit_usd = Column(Float, nullable=False, default=10.0)
     hard_limit_usd = Column(Float, nullable=False, default=20.0)
     period = Column(String(16), nullable=False, default="daily")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 # ----------------------------------------------------------------------
@@ -1126,10 +1146,10 @@ class ABTest2(Base):
     status = Column(String(16), default="RUNNING", nullable=False, index=True)
     rotation_seconds = Column(Integer, default=21600, nullable=False)
     winner_variant_id = Column(String(36), nullable=True)
-    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     variants = relationship(
         "ABVariant2", cascade="all, delete-orphan",
@@ -1149,7 +1169,7 @@ class ABVariant2(Base):
     impressions = Column(Integer, default=0, nullable=False)
     views = Column(Integer, default=0, nullable=False)
     last_published_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 class ABMetricSnapshot2(Base):
@@ -1158,7 +1178,7 @@ class ABMetricSnapshot2(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     test_id = Column(String(36), ForeignKey("ab_tests_2.id", ondelete="CASCADE"), nullable=False, index=True)
     variant_id = Column(String(36), ForeignKey("ab_variants_2.id", ondelete="CASCADE"), nullable=False, index=True)
-    captured_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    captured_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     impressions = Column(Integer, default=0, nullable=False)
     views = Column(Integer, default=0, nullable=False)
     ctr = Column(Float, default=0.0, nullable=False)
@@ -1173,8 +1193,17 @@ class SavedView(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(128), nullable=False)
     expression = Column(Text, nullable=False, default="")
-    owner = Column(String(64), nullable=False, default="system")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Ownership is a foreign key to the account, not a free-form username, so a
+    # renamed user keeps their views and a deleted user takes them along.
+    # Nullable only to preserve legacy rows that no longer match any account;
+    # every row written by the API carries a user_id.
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 class OperatorGuide(Base):
@@ -1185,7 +1214,7 @@ class OperatorGuide(Base):
     title = Column(String(255), nullable=False)
     body = Column(Text, nullable=False)
     order = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
 
 
@@ -1201,8 +1230,8 @@ class OverlayPreset(Base):
     description = Column(Text, nullable=False, default="")
     spec_json = Column(Text, nullable=False)
     spec_sha256 = Column(String(64), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     created_by = Column(String(64), nullable=False, default="system")
     is_builtin = Column(Integer, nullable=False, default=0)
 
@@ -1213,7 +1242,7 @@ class OverlayRenderAudit(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     candidate_id = Column(Integer, nullable=True, index=True)
     preset_id = Column(Integer, nullable=True, index=True)
-    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     finished_at = Column(DateTime, nullable=True)
     ok = Column(Integer, nullable=False, default=0)
     error = Column(Text, nullable=True)

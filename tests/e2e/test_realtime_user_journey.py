@@ -17,6 +17,18 @@ from pathlib import Path
 import pytest
 import uvicorn
 
+# Playwright is an optional extra (``pip install -e .[e2e]``) and its browsers
+# are a separate download, so a checkout without them skips this module instead
+# of failing every test with ModuleNotFoundError.
+try:
+    import playwright.sync_api  # noqa: F401
+except ImportError:  # pragma: no cover - exercised by browser-less runners
+    pytest.skip(
+        "Playwright is not installed; run `pip install -e .[e2e]` and "
+        "`python -m playwright install chromium` to run the browser E2E suite",
+        allow_module_level=True,
+    )
+
 # Test environment configuration
 os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -325,12 +337,14 @@ def test_realtime_settings_and_dynamic_store_sync(realtime_platform):
     assert store.get("VIDEO_PRESET") == new_preset
 
 
-def test_realtime_react_spa_pages_and_visual_capture(realtime_platform):
+def test_realtime_react_spa_pages_and_visual_capture(realtime_platform, tmp_path):
     """Navigates through all React 19 SPA pages and captures visual artifacts."""
     base_url, token = realtime_platform
     from playwright.sync_api import sync_playwright
 
-    artifact_dir = Path(r"C:\Users\ZACODEC\.gemini\antigravity\brain\c7dfcc93-21b9-4546-8fa8-4da2ac8217de")
+    # Screenshots are throwaway artifacts: write them to the test's temp dir so the
+    # suite is portable and never litters the checkout with one developer's paths.
+    artifact_dir = tmp_path / "spa-screenshots"
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
@@ -421,7 +435,8 @@ def test_edge_case_rapid_button_spamming_idempotency(realtime_platform):
         r = httpx.post(f"{base_url}/api/clips/{clip_id}/approve", headers=headers)
         responses.append(r.status_code)
 
-    # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request
-    assert responses[0] in (200, 303), f"Initial click failed: {responses[0]}"
+    # First request should succeed; subsequent rapid clicks are safely rejected with conflict/bad request.
+    # Approval is queued (202) rather than performed synchronously, so 202 counts as success.
+    assert responses[0] in (200, 202, 303), f"Initial click failed: {responses[0]}"
     for status_code in responses[1:]:
-        assert status_code in (200, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"
+        assert status_code in (200, 202, 400, 404, 409, 303), f"Unexpected status code {status_code} during rapid clicking"

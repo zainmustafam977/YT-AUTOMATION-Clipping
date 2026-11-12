@@ -1,12 +1,12 @@
 # ⚡ YouTube Shorts Autonomous Production & Syndication Engine
 
 [![CI/CD Reliability Gate](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml/badge.svg)](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Database](https://img.shields.io/badge/database-SQLite%20%7C%20PostgreSQL-blue.svg)](https://www.sqlite.org/)
 [![AI Models](https://img.shields.io/badge/AI-Gemini%203.8%20%7C%20Groq%20%7C%20Whisper-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![Hardware Accel](https://img.shields.io/badge/Hardware-NVENC%20%7C%20QSV%20%7C%20VAAPI-green.svg)](https://ffmpeg.org)
 [![Security Audited](https://img.shields.io/badge/Security-AES--256--GCM%20Vault-red.svg)](#security--secrets-management)
-[![Test Coverage](https://img.shields.io/badge/Tests-337%2B%20Passing%20(100%25)-brightgreen.svg)](#test-suite--reliability-verification)
+[![Test Coverage](https://img.shields.io/badge/Tests-1100%2B%20Passing-brightgreen.svg)](#test-suite--reliability-verification)
 
 An enterprise-grade, end-to-end autonomous media processing and publishing platform designed for high-throughput video ingestion, AI-driven clip boundary extraction, intelligent face-tracking reframing (9:16), word-level synchronized subtitle animation, broadcast-grade audio mastering, and automated multi-platform syndication (YouTube Shorts, Instagram Reels, TikTok).
 
@@ -127,73 +127,112 @@ flowchart TD
 ## 📁 Directory Structure
 
 ```text
-├── assets/                         # Graphic assets, custom fonts, and audio libraries
-│   ├── fonts/                      # Font files for ASS subtitle rendering
-│   └── sfx_library/                # Audio effects and transition stems
-├── docs/                           # Architecture, audit reports, and design documentation
-│   └── audit/                      # Complete remediation logs and technical audits
-├── frontend/                       # Modern React + Vite + Tailwind dashboard frontend
-│   ├── src/                        # React components, hooks, and views
-│   └── dist/                       # Production pre-compiled static frontend assets
-├── migrations/                     # SQL database schema migration scripts
-├── scratch/                        # Diagnostic tools, audit scripts, and verification utilities
-├── scripts/                        # Operational scripts (launchers, worker runners, maintenance)
-├── shorts_engine/                  # Core Python backend engine
-│   ├── config/                     # Configuration schemas and settings loaders
-│   ├── dashboard/                  # FastAPI & Jinja2 operator dashboard
-│   │   ├── routes/                 # REST endpoints and UI controllers
-│   │   ├── static/                 # Static CSS, JS, and compiled bundles
-│   │   └── templates/              # Server-rendered HTML view templates
-│   ├── db/                         # SQLAlchemy / SQLite database models and sessions
-│   ├── orchestration/              # Main workflow runner and pipeline orchestrator
-│   ├── services/                   # Modular service architecture
-│   │   ├── ab_testing/             # Multi-armed bandit title and thumbnail testing
-│   │   ├── ai/                     # KeyVault, rate limiting, and model router
-│   │   ├── audio/                  # Audio mastering, loudness normalizer, ducking
-│   │   ├── captioning/             # ASS subtitle generator and contrast sampler
-│   │   ├── clip_selection/         # AI boundary selection, hook analysis, and virality scoring
-│   │   ├── detection/              # RSS feed poller and WebSub webhook handlers
-│   │   ├── events/                 # Pub/sub event bus models and message dispatchers
-│   │   ├── execution/              # Win32 job object limits, watchdog monitors, task runners
-│   │   ├── ingestion/              # Watch folder daemon, YouTube downloader, OAuth flows
-│   │   ├── monitoring/             # System health monitors, telemetry, and Discord/Slack alerts
-│   │   ├── publishing/             # Multi-platform syndication, quota ledgers, drip feed
-│   │   ├── quality_gate/           # Technical inspector, video recovery, and dead-letter queue
-│   │   ├── reframing/              # Computer vision face tracking and 9:16 smart cropper
-│   │   ├── rendering/              # Hardware-accelerated video compositor and trimmer
-│   │   ├── seo/                    # Viral title, description, and hashtag generator
-│   │   ├── storage/                # Path management, database backup, reset, and housekeeping
-│   │   └── transcription/          # faster-whisper engine and word-level formatter
-│   └── utils/                      # File system utilities, path helpers, and process wrappers
-├── storage/                        # Persistent application state (vaulted)
-│   ├── backups/                    # Automated timestamped database snapshots (.db.gz)
-│   ├── config/                     # Runtime settings and channel profiles
-│   ├── downloads/                  # Staging directory for raw ingested footage
-│   ├── logs/                       # Comprehensive engine execution and diagnostic logs
-│   ├── models/                     # Computer vision ONNX models and AI caches
-│   ├── outputs/                    # Fully rendered, quality-inspected vertical clips
-│   ├── temp/                       # Transient render scratch space
-│   ├── thumbnails/                 # Generated clip thumbnail variants
-│   ├── client_secret.json          # Google OAuth2 client credentials
-│   ├── harvester_cookies.txt       # Active session cookies for ingestion
-│   ├── shorts_automation.db        # Primary SQLite operational database
-│   └── shorts_engine.db            # Secondary engine state database
-├── tests/                          # Automated test suite (337+ tests)
-│   ├── e2e/                        # End-to-end user journey and UI integration tests
-│   └── conftest.py                 # Pytest fixtures and mock factories
-├── tools/                          # Audit, packaging, and diagnostic tool binaries
-│   ├── audit/                      # Automated codebase coverage and chunk scanners
-│   └── bin/                        # Binary tools (Gitleaks, inspection utilities)
-├── .env                            # Active runtime environment configuration
-├── .env.example                    # Template environment file
-├── cli.py                          # Unified management CLI
-├── docker-compose.yml              # Production container orchestration
-├── Dockerfile                      # Multi-stage production container build
-├── pyproject.toml                  # Python package specifications and tool configuration
-├── requirements.txt                # Production runtime dependencies
-├── requirements-dev.txt            # Development, testing, and linting dependencies
-└── setup_environment.py            # Automated Windows/Linux environment bootstrapper
+├── .github/                        # CI workflows and repository automation
+├── .env.example                     # Template environment file
+├── .gitignore                       # Repository hygiene rules
+├── ARCHITECTURE.md                  # System architecture specification
+├── Caddyfile                        # Web server / reverse proxy configuration
+├── CONTRIBUTING.md                  # Contribution guidelines
+├── Dockerfile                       # Multi-stage production container build
+├── README.md                        # Project overview and entry point
+├── SECURITY.md                      # Enterprise security policy and posture
+├── SETUP_GUIDE.md                   # Complete device setup and deployment guide
+├── QUICK_START.md                   # Quick start and installation notes
+├── docker-compose.yml               # Production container orchestration
+├── pyproject.toml                   # Python package specifications and tool configuration
+├── requirements-dev.txt             # Development, testing, and linting dependencies
+├── requirements.txt                 # Production runtime dependencies
+├── setup.bat                        # Windows bootstrap launcher
+├── setup.ps1                        # PowerShell bootstrap launcher
+├── setup.sh                         # POSIX (Linux/macOS) bootstrap launcher
+├── setup_environment.py             # Cross-platform environment bootstrap called by CI and launch scripts
+├── START_HERE.bat                   # Windows one-click launcher for the control center
+├── Shorts_Engine_Control_Center/    # Windows desktop control center (batch operator menus)
+├── assets/                          # Graphic assets, custom fonts, and audio libraries
+│   ├── fonts/                       # Font files for ASS subtitle rendering
+│   └── sfx_library/                 # Audio effects and transition stems
+├── cli.py                           # Unified management CLI
+├── docs/                            # All project documentation
+│   ├── agent/                       # Agent ledger, file manifest, findings, and progress
+│   ├── architecture/                # Architecture specification, module reference, persistence, secrets
+│   ├── audit/                       # Remediation logs, evidence, and per-file assessment cards
+│   ├── decisions/                   # Architecture decision log
+│   ├── legacy/                      # Superseded material (archives and project handover)
+│   ├── operations/                  # Runbooks, playbooks, and channel operations guides
+│   ├── qa/                          # QA verification protocols
+│   └── requirements/                # Clarification questions and requirements capture
+├── frontend/                        # React + Vite dashboard frontend
+│   ├── src/                         # React components, hooks, and views
+│   └── dist/                        # Production pre-compiled static frontend assets
+├── migrations/                      # SQL database schema migration scripts
+├── run.bat                          # Windows one-click self-healing launcher (calls scripts/bootstrap.ps1)
+├── run.py                           # Application entry point
+├── scripts/                         # Operational scripts (launchers, workers, maintenance)
+├── shorts_engine/                   # Core Python backend engine
+│   ├── cli/                         # CLI subcommands and ergonomics
+│   ├── config/                      # Configuration schemas and settings loaders
+│   ├── dashboard/                   # FastAPI and Jinja2 operator dashboard
+│   │   ├── routes/                  # REST endpoints and UI controllers
+│   │   ├── static/                  # Static CSS, JS, and compiled bundles
+│   │   └── templates/               # Server-rendered HTML view templates
+│   ├── db/                          # Database models, sessions, migrations, and adapters
+│   ├── orchestration/               # Pipeline runner, lifecycle, and telemetry
+│   ├── security/                    # Cryptographic helpers and secretbox utilities
+│   ├── utils/                       # File system utilities, path helpers, and process wrappers
+│   └── services/                    # Modular service architecture
+│       ├── ab_testing/              # Multi-armed bandit title and thumbnail testing
+│       ├── ai/                      # KeyVault, rate limiting, and model router
+│       ├── analytics/               # Channel and usage analytics
+│       ├── audio/                   # Audio mastering, loudness normalization, and ducking
+│       ├── batch/                   # Batch operation support
+│       ├── captioning/              # ASS subtitle generation and contrast sampling
+│       ├── clip_selection/          # AI boundary selection, hook analysis, and virality scoring
+│       ├── cost/                    # Cost, quota, and budget tracking
+│       ├── detection/               # RSS feed poller and WebSub webhook handlers
+│       ├── events/                  # Pub/sub event bus models and dispatchers
+│       ├── execution/               # Win32 job object limits, watchdog monitors, task runners
+│       ├── ingestion/               # Watch folder daemon, downloader, and OAuth flows
+│       ├── llm/                     # LLM provider abstractions
+│       ├── monitoring/              # Health monitors, telemetry, and alerts
+│       ├── overlay/                 # Overlay rendering engine and presets
+│       ├── publishing/              # Multi-platform syndication, quota ledgers, drip feed
+│       ├── quality_gate/            # Technical inspector, video recovery, and dead-letter queue
+│       ├── queue/                   # Durable job queue support
+│       ├── reframing/               # Computer vision face tracking and 9:16 smart cropper
+│       ├── rendering/               # Hardware-accelerated compositor and trimmer
+│       ├── search/                  # Search helpers
+│       ├── security/                # Application-layer security utilities
+│       ├── seo/                     # Viral title, description, and hashtag generation
+│       ├── settings_io/             # Settings import/export helpers
+│       ├── storage/                 # Path management, backup, reset, and housekeeping
+│       ├── telemetry/               # Progress and telemetry tracking
+│       ├── transcription/           # faster-whisper engine and word-level formatter
+│       ├── triage/                  # Triage and needs-attention helpers
+│       ├── webhooks/                # Webhook ingestion helpers
+│       └── worker/                  # Background worker and runner support
+├── storage/                         # Persistent application state (vaulted)
+│   ├── backups/                     # Automated timestamped database snapshots (.db.gz)
+│   ├── config/                      # Runtime settings and channel profiles
+│   ├── crops/                       # Cropped and intermediate render outputs
+│   ├── downloads/                   # Staging directory for raw ingested footage
+│   ├── logs/                        # Engine execution and diagnostic logs
+│   ├── models/                      # Computer vision ONNX models and AI caches
+│   ├── outputs/                     # Fully rendered, quality-inspected vertical clips
+│   ├── temp/                        # Transient render scratch space
+│   ├── thumbnails/                  # Generated clip thumbnail variants
+│   ├── client_secret.json           # Google OAuth2 client credentials
+│   ├── harvester_cookies.txt        # Active session cookies for ingestion
+│   ├── shorts_automation.db         # Primary SQLite operational database
+│   └── shorts_engine.db             # Secondary engine state database
+├── tests/                           # Automated test suite
+│   ├── e2e/                         # End-to-end user journey and UI integration tests
+│   └── conftest.py                  # Pytest fixtures and mock factories
+└── tools/                           # Audit, packaging, and diagnostic tools
+    ├── audit/                       # Coverage, ledger, code-scan, and drift-check utilities
+    └── bin/                         # Binary tooling (for example Gitleaks)
 ```
+
+
 
 ---
 

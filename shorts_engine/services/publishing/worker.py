@@ -34,6 +34,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
+from urllib.parse import unquote
 from sqlalchemy.orm import Session
 
 # ==============================================================================
@@ -137,8 +138,17 @@ def build_youtube_analytics_client(
 ) -> Any:
     """
     Builds an authorized YouTube Analytics API v2 client using OAuth credentials.
+
+    AUD-003: removed implicit ``get_default_client_config()`` dependency so this
+    function no longer silently relies on a hidden global default. Callers that
+    omit ``client_config`` will now fail fast with a clear error.
     """
-    config = client_config or get_default_client_config()
+    config = client_config
+    if config is None:
+        raise ValueError(
+            "build_youtube_analytics_client requires an explicit client_config; "
+            "the legacy implicit default lookup was removed (AUD-003)."
+        )
     installed = config.get("installed") or config.get("web") or {}
     client_id = installed.get("client_id")
     client_secret = installed.get("client_secret")
@@ -214,8 +224,8 @@ def get_channel_refresh_token(channel: Channel, db: Session) -> Optional[str]:
         try:
             token_dict = json.loads(decrypt_secret(channel.encrypted_oauth_token))
             return token_dict.get("refresh_token")
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return None
 
 
@@ -366,15 +376,14 @@ def verify_channel_credentials(
     if cred and cred.encrypted_refresh_token:
         try:
             refresh_token = decrypt_secret(cred.encrypted_refresh_token)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not refresh_token and channel.encrypted_oauth_token:
         try:
             legacy = json.loads(decrypt_secret(channel.encrypted_oauth_token))
             refresh_token = legacy.get("refresh_token")
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     if not refresh_token:
         if cred:
             cred.status = "needs_auth"
@@ -400,9 +409,9 @@ def verify_channel_credentials(
 
         if cred:
             cred.status = "active"
-            cred.verified_at = datetime.utcnow()
+            cred.verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
             cred.last_error = None
-        channel.last_verified_at = datetime.utcnow()
+        channel.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         return True, None
     except HttpError as e:
@@ -467,8 +476,14 @@ def check_channel_recent_uploads_for_clip(
 # ==============================================================================
 # YouTube Publish Worker Engine
 # ==============================================================================
-
-from shorts_engine.orchestration.exceptions import PermanentError, JobCancelledError
+# Deferred deliberately: shorts_engine.orchestration/__init__ pulls in the
+# pipeline runner, which imports publishing.client, which imports this module.
+# Importing it at the top of the file would close that cycle on a partially
+# initialized module, so it must load after the helpers above are defined.
+from shorts_engine.orchestration.exceptions import (  # noqa: E402
+    PermanentError,
+    JobCancelledError,
+)
 
 
 class YouTubePublishWorker:
@@ -491,9 +506,8 @@ class YouTubePublishWorker:
         if env_json and env_json.strip().startswith("{"):
             try:
                 return json.loads(env_json.strip())
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         storage_dir = Path(settings.STORAGE_DIR)
         candidates = [
             storage_dir / "client_secret.enc",
@@ -576,9 +590,8 @@ class YouTubePublishWorker:
                 message=f"YouTube daily quota limit reached. Job deferred until Pacific midnight ({reset_iso}).",
                 db=db,
             )
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     def _handle_invalid_grant(
         self,
         channel: Channel,
@@ -622,9 +635,8 @@ class YouTubePublishWorker:
                 message="Google OAuth refresh token revoked or expired (invalid_grant). Reconnection required.",
                 action_url="/channels",
             ))
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     # ==========================================================================
     # Intent 1: 'publish' Job Execution
     # ==========================================================================
@@ -678,7 +690,7 @@ class YouTubePublishWorker:
             )
             if job_entity and hasattr(job_entity, "status"):
                 job_entity.status = PipelineJobStatus.CANCELLED
-                job_entity.completed_at = datetime.utcnow()
+                job_entity.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 job_entity.locked_by = None
                 job_entity.locked_at = None
                 db.commit()
@@ -748,7 +760,7 @@ class YouTubePublishWorker:
         # without error and emit job.late_publish event for observability (W3-2 A2).
         if sched_dt:
             sched_naive = sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt
-            now_utc = datetime.utcnow()
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
             if sched_naive <= now_utc:
                 logger.info(
                     "Execution start for clip %s is later than scheduled slot (%s <= %s). Publishing immediately.",
@@ -779,7 +791,10 @@ class YouTubePublishWorker:
         is_dry_run = self.dry_run or payload.get("dry_run", False)
         if is_dry_run:
             allow_preview_flag = os.environ.get("ALLOW_IN_PROCESS_PREVIEW", "").lower() in ("1", "true", "yes")
-            bind_url = str(db.get_bind().url).lower()
+            # SQLAlchemy percent-encodes URL components, so an in-memory engine
+            # renders as "sqlite:///%3Amemory%3A". Decode before matching, or the
+            # isolation check rejects a perfectly isolated test database.
+            bind_url = unquote(str(db.get_bind().url)).lower()
             is_non_prod_db = (
                 ":memory:" in bind_url
                 or "tmp" in bind_url
@@ -804,7 +819,7 @@ class YouTubePublishWorker:
                 p_log = PublishLog(
                     clip_id=clip.id,
                     youtube_video_id=simulated_id,
-                    published_at=datetime.utcnow(),
+                    published_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     title=clean_title,
                     description=description,
                     status="DRY_RUN",
@@ -834,9 +849,8 @@ class YouTubePublishWorker:
                     message=f"[DRY-RUN] Clip '{clean_title}' simulated as {simulated_id}.",
                     db=db,
                 )
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": True,
                 "status": "DRY_RUN",
@@ -863,7 +877,7 @@ class YouTubePublishWorker:
         )
         if existing_video_id:
             logger.info("Found existing video %s with tag %s. Reclaiming without re-upload.", existing_video_id, tag)
-            is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.utcnow())
+            is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.now(timezone.utc).replace(tzinfo=None))
             if is_future_schedule:
                 clip.status = ClipStatus.SCHEDULED
                 slot.status = PublishSlotStatus.SCHEDULED.value
@@ -879,7 +893,7 @@ class YouTubePublishWorker:
                 p_log = PublishLog(
                     clip_id=clip.id,
                     youtube_video_id=existing_video_id,
-                    published_at=datetime.utcnow(),
+                    published_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     title=clean_title,
                     description=description,
                     status="SUCCESS",
@@ -887,7 +901,7 @@ class YouTubePublishWorker:
                 db.add(p_log)
             else:
                 p_log.youtube_video_id = existing_video_id
-                p_log.published_at = datetime.utcnow()
+                p_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 p_log.status = "SUCCESS"
 
             db.commit()
@@ -911,8 +925,8 @@ class YouTubePublishWorker:
                     message=f"Clip '{clean_title}' reclaimed as {existing_video_id}.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": True,
                 "status": clip.status.value,
@@ -945,7 +959,7 @@ class YouTubePublishWorker:
         # Native scheduled release support
         if sched_dt:
             sched_naive = sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt
-            if sched_naive > datetime.utcnow():
+            if sched_naive > datetime.now(timezone.utc).replace(tzinfo=None):
                 body["status"]["privacyStatus"] = "private"
                 dt_sched = sched_dt
                 if dt_sched.tzinfo is None:
@@ -1043,7 +1057,7 @@ class YouTubePublishWorker:
             raise RuntimeError(f"YouTube upload finished with no video ID. Response: {response}")
 
         # Success state transitions (I6)
-        is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.utcnow())
+        is_future_schedule = bool(sched_dt and (sched_dt.replace(tzinfo=None) if sched_dt.tzinfo else sched_dt) > datetime.now(timezone.utc).replace(tzinfo=None))
         if is_future_schedule:
             clip.status = ClipStatus.SCHEDULED
             slot.status = PublishSlotStatus.SCHEDULED.value
@@ -1068,7 +1082,7 @@ class YouTubePublishWorker:
             p_log = PublishLog(
                 clip_id=clip.id,
                 youtube_video_id=youtube_video_id,
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 title=clean_title,
                 description=description,
                 status="SUCCESS",
@@ -1076,7 +1090,7 @@ class YouTubePublishWorker:
             db.add(p_log)
         else:
             p_log.youtube_video_id = youtube_video_id
-            p_log.published_at = datetime.utcnow()
+            p_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
             p_log.status = "SUCCESS"
         db.commit()
 
@@ -1386,8 +1400,8 @@ class YouTubePublishWorker:
                     message=f"Channel {channel.display_title} requires re-authentication.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": False, "status": "needs_reauth", "error": cred.last_error}
 
         is_dry_run = self.dry_run or payload.get("dry_run", False)
@@ -1405,8 +1419,8 @@ class YouTubePublishWorker:
                     message=f"[DRY-RUN] Channel {channel.display_title} healthy.",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": True, "dry_run": True, "channel_id": channel.id}
 
         is_valid, err = verify_channel_credentials(channel, db=db, client_config=self._resolve_client_config())
@@ -1425,15 +1439,15 @@ class YouTubePublishWorker:
                     message=f"Channel {channel.display_title} health check failed: {err}",
                     db=db,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {"healthy": False, "channel_id": channel.id, "error": err}
 
         try:
             from shorts_engine.services.events.taxonomy import emit_platform_event, CHANNEL_HEALTH
             emit_platform_event(
                 event_name=CHANNEL_HEALTH,
-                payload={"healthy": True, "channel_id": channel.id, "verified_at": datetime.utcnow().isoformat()},
+                payload={"healthy": True, "channel_id": channel.id, "verified_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()},
                 entity_id=channel.id,
                 entity_type="channel",
                 level="INFO",
@@ -1441,9 +1455,9 @@ class YouTubePublishWorker:
                 message=f"Channel {channel.display_title} verified healthy.",
                 db=db,
             )
-        except Exception:
-            pass
-        return {"healthy": True, "channel_id": channel.id, "verified_at": datetime.utcnow().isoformat()}
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
+        return {"healthy": True, "channel_id": channel.id, "verified_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
 
     # ==========================================================================
     # Unified Job Router

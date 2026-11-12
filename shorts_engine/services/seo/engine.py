@@ -4,6 +4,7 @@ Generates CTR-optimized titles (3 archetypes), keyword-dense descriptions,
 and 15-20 trend-matched hashtag clouds for approved clips via multi-provider LLM.
 """
 
+import logging
 from typing import Any, List, Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -141,9 +142,8 @@ class SEOMetadataEngine:
                 import json
                 qr = json.loads(clip.quality_check_result)
                 cover_frame_sec = float(qr.get("cover_frame_sec", 0.0))
-            except Exception:
-                pass
-
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         return {
             "clip_id": clip.id,
             "title_variants": {

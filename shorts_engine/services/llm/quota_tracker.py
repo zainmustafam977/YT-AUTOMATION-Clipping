@@ -10,7 +10,7 @@ import time
 import hashlib
 import logging
 import threading
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import portalocker
@@ -191,8 +191,8 @@ class APIUsageTracker:
                 "to_provider": str(t_prov).lower(),
                 "reason": str(r_text),
                 "video_id": str(v_id),
-                "time": datetime.utcnow().strftime("%H:%M:%S"),
-                "timestamp": datetime.utcnow().strftime("%H:%M:%S"),
+                "time": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%H:%M:%S"),
+                "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%H:%M:%S"),
             }
             self._recent_failovers.insert(0, event)
             if len(self._recent_failovers) > 20:
@@ -295,7 +295,7 @@ class APIUsageTracker:
                 k_info["total_requests"] = k_info.get("total_requests", 0) + 1
                 k_info["last_latency_ms"] = latency_ms
                 k_info["last_model_used"] = model or k_info.get("last_model_used", "—")
-                k_info["last_used_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                k_info["last_used_at"] = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
                 k_info["last_status"] = status
                 if error:
                     k_info["last_error"] = error[:200]

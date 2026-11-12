@@ -233,8 +233,8 @@ class ViralPredictor:
         self.model = model
         self.is_fitted = True
         self.sample_count = len(X_list)
-        from datetime import datetime
-        self.last_trained_at = datetime.utcnow().isoformat()
+        from datetime import datetime, timezone
+        self.last_trained_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
         logger.info("Successfully trained ViralPredictor on %d historical video samples.", len(X_list))
         return {

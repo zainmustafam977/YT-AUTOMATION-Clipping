@@ -14,9 +14,9 @@ Tests for Publish Slots, Native publishAt Scheduling, and In-Place Post-Upload M
 
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -34,14 +34,12 @@ from shorts_engine.db.models import (
     ChannelCredential,
     PublishSlot,
     PublishSlotStatus,
-    PublishLog,
     PipelineJob,
     PipelineJobStatus,
 )
 from shorts_engine.services.publishing.slots import PublishSlotService
 from shorts_engine.services.publishing.actions import approve_clip_for_publishing
 from shorts_engine.services.publishing.quota import QuotaTracker
-from shorts_engine.services.publishing.worker import YouTubePublishWorker
 
 
 @pytest.fixture
@@ -120,9 +118,12 @@ def test_automatic_slot_calculation_and_dst(test_db):
     ch, sv = _seed_channel_and_video(test_db)
     service = PublishSlotService()
 
-    # Given a local time at 08:00 AM NY on 2026-10-15
+    # Given a local time at 08:00 AM NY two days from now. The date is relative
+    # because the service never schedules in the past: start_from is clamped to
+    # now + lead time, so a hard-coded date would silently expire.
     ny_tz = ZoneInfo("America/New_York")
-    morning_time = datetime(2026, 10, 15, 8, 0, 0, tzinfo=ny_tz)
+    future_day = (datetime.now(ny_tz) + timedelta(days=2)).date()
+    morning_time = datetime(future_day.year, future_day.month, future_day.day, 8, 0, 0, tzinfo=ny_tz)
 
     next_slot = service.calculate_next_available_slot(ch, test_db, start_from=morning_time)
 
@@ -133,7 +134,7 @@ def test_automatic_slot_calculation_and_dst(test_db):
     assert slot_ny.date() == morning_time.date()
 
     # Now if current time is 11:00 AM NY, next slot should be 18:00 (6 PM) NY
-    afternoon_time = datetime(2026, 10, 15, 11, 0, 0, tzinfo=ny_tz)
+    afternoon_time = datetime(future_day.year, future_day.month, future_day.day, 11, 0, 0, tzinfo=ny_tz)
     next_slot_pm = service.calculate_next_available_slot(ch, test_db, start_from=afternoon_time)
     slot_pm_ny = next_slot_pm.replace(tzinfo=ZoneInfo("UTC")).astimezone(ny_tz)
     assert slot_pm_ny.hour == 18
@@ -346,7 +347,7 @@ def test_reschedule_updates_publish_at_without_reupload(test_db, tmp_path):
     slot = test_db.query(PublishSlot).filter_by(clip_id=clip.id).first()
     job = test_db.query(PipelineJob).filter_by(id=app_res["job_id"]).first()
 
-    new_time = (datetime.utcnow() + timedelta(days=3)).replace(microsecond=0)
+    new_time = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3)).replace(microsecond=0)
     res_res = service.reschedule_clip(clip_id=clip.id, new_slot_time=new_time, db=test_db)
 
     assert res_res["success"] is True
@@ -455,7 +456,7 @@ def test_legacy_drip_feed_clips_migration(test_db, tmp_path):
         status=ClipStatus.APPROVED,
         rendered_path=str(video_file),
     )
-    future_time = datetime.utcnow() + timedelta(days=2)
+    future_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
     legacy_clip.scheduled_publish_at = future_time
     test_db.commit()
 

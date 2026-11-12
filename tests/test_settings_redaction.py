@@ -8,17 +8,14 @@ Enforces Amendment A6:
 
 import json
 import logging
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from shorts_engine.config.logging_config import (
     redact_sensitive_data,
     SensitiveDataFilter,
     save_runtime_settings,
-    RUNTIME_CONFIG_PATH,
 )
 from shorts_engine.dashboard.app import app
 from shorts_engine.dashboard.auth import require_operator, verify_csrf
@@ -110,7 +107,7 @@ def test_save_runtime_settings_excludes_sensitive_keys(tmp_path, monkeypatch):
         "CLIENT_SECRET": "should_not_persist_secret",
     }
 
-    applied = save_runtime_settings(test_updates)
+    save_runtime_settings(test_updates)
 
     assert custom_cfg_path.exists()
     persisted = json.loads(custom_cfg_path.read_text(encoding="utf-8"))

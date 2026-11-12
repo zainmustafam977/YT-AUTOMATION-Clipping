@@ -58,9 +58,8 @@ def resolve_transient_cookiefile(cookie_path: Optional[str]):
                 if temp_path.exists():
                     try:
                         temp_path.unlink()
-                    except Exception:
-                        pass
-
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return str(temp_path), cleanup
         except Exception as e:
             logger.warning("Failed to decrypt cookies from %s: %s", path, e)
@@ -538,9 +537,8 @@ class IngestionService:
                                 for partial_file in scan_dir.glob(pattern):
                                     try:
                                         partial_file.unlink(missing_ok=True)
-                                    except Exception:
-                                        pass
-
+                                    except Exception as _exc:
+                                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                 # 2. Windows WinError 32 file-locking recovery
                 if "WinError 32" in err_msg or "used by another process" in err_msg:
                     gc.collect()
@@ -645,9 +643,8 @@ class IngestionService:
             active_proxy = ProxyManager.get_next_proxy()
             if active_proxy:
                 opts["proxy"] = active_proxy
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(url, download=False)

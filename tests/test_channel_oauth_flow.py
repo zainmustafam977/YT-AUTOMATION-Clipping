@@ -22,8 +22,10 @@ from shorts_engine.db.security import decrypt_secret
 from shorts_engine.dashboard.app import app
 from shorts_engine.dashboard.routes.queue import get_db
 from shorts_engine.dashboard.auth import require_operator, require_viewer
+from tests.oauth_credentials import requires_client_secrets
 
 
+@requires_client_secrets
 def test_load_client_secrets_from_storage():
     """Verifies that client_secret.json in storage/ loads successfully and contains valid client_id."""
     mgr = ChannelOAuthManager()
@@ -40,6 +42,7 @@ def test_missing_client_secrets_raises_filenotfound():
         mgr.load_client_secrets()
 
 
+@requires_client_secrets
 def test_get_authorization_url():
     """Verifies generation of Google OAuth 2.0 authorization URL with correct parameters."""
     mgr = ChannelOAuthManager()
@@ -53,6 +56,7 @@ def test_get_authorization_url():
     assert "youtube.upload" in auth_url
 
 
+@requires_client_secrets
 def test_exchange_code_and_bind_to_channel():
     """Verifies code exchange and AES-256-GCM encrypted binding to Channel model."""
     mgr = ChannelOAuthManager()
@@ -114,6 +118,7 @@ def test_verify_channel_token_unconfigured_and_invalid():
     assert "valid JSON" in res2["error"]
 
 
+@requires_client_secrets
 def test_verify_channel_token_success():
     """Verifies live token verification returns channel title, avatar, and subscriber count."""
     mgr = ChannelOAuthManager()
@@ -156,6 +161,7 @@ def test_verify_channel_token_success():
         assert res["subscriber_count"] == "15200"
 
 
+@requires_client_secrets
 def test_oauth_api_endpoints():
     """Verifies FastAPI OAuth endpoints: /oauth/start, /oauth/exchange, /oauth/status, /oauth/revoke, /oauth2callback."""
     mock_channel = Channel(

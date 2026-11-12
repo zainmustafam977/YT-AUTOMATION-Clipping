@@ -299,8 +299,10 @@ def test_preflight_channel_discovery_registration(auth_client):
         assert data["channel"]["detected_id"] == channel_handle
         assert data["channel"]["exists"] is False
 
-        # Ingest with register_channel = true
-        with patch("shorts_engine.dashboard.routes.status.threading.Thread"):
+        # Ingest with register_channel = true. The route runs the pipeline work
+        # inline via _run_pipeline_background (there is no thread to patch), so
+        # stub that seam to keep ingestion out of this registration-focused test.
+        with patch("shorts_engine.dashboard.routes.status._run_pipeline_background"):
             ingest_resp = client.post(
                 "/process-video",
                 data={

@@ -1,22 +1,18 @@
 """E-011 — Overlay engine HTTP routes."""
 from __future__ import annotations
 
-import json
-import sqlite3
 from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 
-from shorts_engine.db.session import get_session, engine
+from shorts_engine.dashboard.auth import require_operator, require_viewer, verify_csrf
+from shorts_engine.db.session import engine
+from shorts_engine.db.sqlite_adapter import SqliteAdapter
 from shorts_engine.services.overlay import (
-    OverlaySpec,
     parse_spec,
-    serialize_spec,
     validate_spec,
     list_builtin_presets,
-    get_builtin_preset,
     upsert_preset,
     export_preset,
     export_all,
@@ -24,26 +20,46 @@ from shorts_engine.services.overlay import (
     preset_sha256,
     seed_builtins_if_empty,
     compile_ffmpeg_filter,
-    apply_preset_to_candidate,
     batch_apply_preset,
     list_audit,
-    last_audit_for_candidate,
     preview_overlay_at_t,
     preview_ascii,
     preview_summary,
 )
 
 
-router = APIRouter(prefix="/api/overlays", tags=["overlays"])
+router = APIRouter(
+    prefix="/api/overlays",
+    tags=["overlays"],
+    # Presets drive rendering, so every overlay endpoint requires a signed-in user.
+    dependencies=[Depends(require_viewer)],
+)
+
+# Mutating endpoints additionally require the operator role and a CSRF token.
+MUTATION_GUARDS = [Depends(require_operator), Depends(verify_csrf)]
 
 
 def _sqlite():
-    """Returns a raw sqlite3 connection that the engine / presets modules expect.
+    """Returns a sqlite3-compatible wrapper backed by a real SQLAlchemy connection.
 
-    The SQLAlchemy session is a thin wrapper; the overlay engine uses raw sqlite3
-    (positional `?` placeholders), so we hand it a real DBAPI connection.
+    The wrapper presents a sqlite3.Connection-compatible interface so the overlay
+    engine and presets modules (which use raw sqlite3 with positional `?`
+    placeholders) keep working, while never exposing the raw driver connection
+    to a direct close() — the root cause of the _sqlite() segfault under
+    concurrent requests.
     """
-    return engine.connect().connection.driver_connection
+    sa_conn = engine.connect()
+    return SqliteAdapter(sa_conn)
+
+
+def get_session():
+    """Provide a SQLAlchemy session for endpoints that need one (e.g. batch_apply_preset).
+
+    The overlay routes historically called ``get_session()`` from ``shorts_engine.db.session``;
+    keep that import-compatible shim so existing service-layer call sites compile.
+    """
+    from shorts_engine.db.session import SessionLocal
+    return SessionLocal()
 
 
 class PresetUpsertIn(BaseModel):
@@ -109,7 +125,7 @@ def get_preset(name: str):
         conn.close()
 
 
-@router.post("/presets")
+@router.post("/presets", dependencies=MUTATION_GUARDS)
 def upsert(body: PresetUpsertIn):
     spec = parse_spec(body.spec)
     errs = validate_spec(spec)
@@ -126,7 +142,7 @@ def upsert(body: PresetUpsertIn):
     return {"id": row_id, "name": spec.name, "spec_sha256": preset_sha256(spec)}
 
 
-@router.post("/presets/import")
+@router.post("/presets/import", dependencies=MUTATION_GUARDS)
 def import_p(body: PresetImportIn):
     conn = _sqlite()
     try:
@@ -140,16 +156,7 @@ def import_p(body: PresetImportIn):
     return {"id": row_id, "verified": verified}
 
 
-@router.get("/presets/export-all")
-def export_all_p():
-    conn = _sqlite()
-    try:
-        return {"presets": export_all(conn)}
-    finally:
-        conn.close()
-
-
-@router.post("/presets/{name}/compile")
+@router.post("/presets/{name}/compile", dependencies=MUTATION_GUARDS)
 def compile_p(name: str, video_duration: Optional[float] = None):
     conn = _sqlite()
     try:
@@ -164,7 +171,7 @@ def compile_p(name: str, video_duration: Optional[float] = None):
     return {"name": name, "filter_chain": chain, "contrasts": contrasts}
 
 
-@router.post("/presets/{name}/validate")
+@router.post("/presets/{name}/validate", dependencies=MUTATION_GUARDS)
 def validate_p(name: Optional[str] = None, spec: Optional[dict] = Body(None)):
     if spec is not None:
         s = parse_spec(spec)
@@ -184,7 +191,7 @@ def validate_p(name: Optional[str] = None, spec: Optional[dict] = Body(None)):
     return {"valid": not errs, "errors": errs, "summary": preview_summary(s)}
 
 
-@router.post("/apply")
+@router.post("/apply", dependencies=MUTATION_GUARDS)
 def apply(body: BatchApplyIn):
     conn = _sqlite()
     try:
@@ -241,7 +248,7 @@ def preview(name: str, t: float = 0.0, ascii: bool = False):
     return body
 
 
-@router.post("/seed-builtins")
+@router.post("/seed-builtins", dependencies=MUTATION_GUARDS)
 def seed_builtins():
     conn = _sqlite()
     try:

@@ -7,7 +7,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from shorts_engine.services.publishing.worker import (
     build_youtube_client,
@@ -57,9 +57,8 @@ def _build_youtube_client(oauth_token_json: str):
         try:
             from shorts_engine.services.publishing.oauth_manager import ChannelOAuthManager
             cfg = ChannelOAuthManager().get_client_config()
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
     return build_youtube_client(token_data, client_config=cfg)
 
 
@@ -155,8 +154,8 @@ class YouTubePublisher:
                     entity_type="clip",
                     action_url="/settings",
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": False,
                 "quota_exhausted": True,
@@ -170,7 +169,7 @@ class YouTubePublisher:
             publish_log = PublishLog(
                 clip_id=clip.id,
                 youtube_video_id=None,
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 title=metadata.title,
                 description=metadata.description,
                 tags_json=json.dumps(metadata.tags),
@@ -197,9 +196,8 @@ class YouTubePublisher:
                 entity_type="clip",
                 action_url=f"/queue?clip={clip.id}",
             ))
-        except Exception:
-            pass
-
+        except Exception as _exc:
+            logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         youtube_video_id: Optional[str] = None
         status_label = "SUCCESS"
 
@@ -240,7 +238,7 @@ class YouTubePublisher:
                     clip.status = ClipStatus.PUBLISHED
                     publish_log.youtube_video_id = existing_yt_id
                     publish_log.status = "RECLAIMED"
-                    publish_log.published_at = datetime.utcnow()
+                    publish_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     self.db.commit()
                     try:
                         global_event_bus.publish_sync(PlatformEvent(
@@ -254,8 +252,8 @@ class YouTubePublisher:
                             action_url=f"https://youtube.com/shorts/{existing_yt_id}",
                             details={"youtube_video_id": existing_yt_id, "reclaimed": True},
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     return {
                         "success": True,
                         "youtube_video_id": existing_yt_id,
@@ -281,8 +279,8 @@ class YouTubePublisher:
                             entity_type="clip",
                             action_url="/settings",
                         ))
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
                     return {
                         "success": False,
                         "quota_exhausted": True,
@@ -303,7 +301,7 @@ class YouTubePublisher:
             # 5. Update Clip status and create PublishLog atomically
             clip.status = ClipStatus.PUBLISHED
             publish_log.youtube_video_id = youtube_video_id
-            publish_log.published_at = datetime.utcnow()
+            publish_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
             publish_log.status = status_label
             self.db.commit()
 
@@ -324,8 +322,8 @@ class YouTubePublisher:
                     action_url=yt_link,
                     details={"youtube_video_id": youtube_video_id, "dry_run": is_dry_run},
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             return {
                 "success": True,
                 "youtube_video_id": youtube_video_id,
@@ -347,8 +345,8 @@ class YouTubePublisher:
                     entity_type="clip",
                     action_url=f"/queue?clip={clip.id}",
                 ))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
             raise
 
     def update_video_title(

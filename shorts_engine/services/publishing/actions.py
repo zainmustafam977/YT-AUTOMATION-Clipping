@@ -6,7 +6,7 @@ atomic publish slot allocation, and bulk review operations.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
@@ -201,8 +201,8 @@ def reject_clip_action(
             try:
                 payload_dict = json.loads(job.payload_json)
                 has_session = bool(payload_dict.get("upload_session_uri"))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logging.getLogger(__name__).debug("suppressed exception: %s", _exc)
         if has_session or job.attempt_count > 0:
             return {
                 "clip_id": clip_id,
@@ -232,7 +232,7 @@ def reject_clip_action(
                 .update(
                     {
                         PipelineJob.status: PipelineJobStatus.CANCELLED,
-                        PipelineJob.completed_at: datetime.utcnow(),
+                        PipelineJob.completed_at: datetime.now(timezone.utc).replace(tzinfo=None),
                         PipelineJob.locked_by: None,
                         PipelineJob.locked_at: None,
                     },
@@ -271,7 +271,7 @@ def reject_clip_action(
     clip.scheduled_publish_at = None
     clip.rejection_reason_code = code
     clip.rejection_note = note
-    clip.rejected_at = datetime.utcnow()
+    clip.rejected_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Dual-write into quality_check_result
     try:
@@ -385,7 +385,7 @@ def recover_publish_job(
     if slot_id:
         slot = db.query(PublishSlot).filter_by(id=slot_id).first()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     slot_is_valid = (
         slot is not None
         and slot.status == PublishSlotStatus.RESERVED.value

@@ -163,9 +163,12 @@ def test_reject_and_restore_clip(test_env):
     qr = json.loads(clip.quality_check_result or "{}")
     assert qr.get("rejection_reason") == "Weak payoff"
 
-    # Reject again should return 409
+    # Re-rejecting is idempotent: reject_clip_action reserves CONFLICT for clips
+    # that are actively publishing/published, so a repeat stays a no-op success.
     resp_re_reject = client.post(f"/queue/{clip.id}/reject")
-    assert resp_re_reject.status_code == 409
+    assert resp_re_reject.status_code == 200
+    db.refresh(clip)
+    assert clip.status == ClipStatus.REJECTED
 
     # Restore back to queue
     resp_restore = client.post(f"/queue/{clip.id}/restore")

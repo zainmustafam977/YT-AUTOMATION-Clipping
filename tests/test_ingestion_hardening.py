@@ -3,7 +3,6 @@ Tests for Ingestion Hardening, SSRF Protection, Pre-Download Bounds,
 Subprocess Hardening, Rate Limiting, and Authentication Coverage.
 """
 
-import subprocess
 import time
 import pytest
 from unittest.mock import MagicMock, patch
@@ -12,8 +11,6 @@ from fastapi.testclient import TestClient
 from shorts_engine.utils.url_guard import (
     validate_youtube_url_or_id,
     SSRFValidationError,
-    is_safe_public_ip,
-    is_ip_literal,
 )
 from shorts_engine.services.ingestion.downloader import IngestionService
 from shorts_engine.services.execution.watchdog import SubprocessWatchdog

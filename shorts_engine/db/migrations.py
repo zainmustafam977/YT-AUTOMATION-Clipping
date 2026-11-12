@@ -5,7 +5,7 @@ ensuring idempotent, transactional schema upgrades across SQLite and PostgreSQL.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, List, Any, Optional
 from sqlalchemy import text, Engine
 
@@ -41,7 +41,7 @@ def _record_migration(conn, version: str, description: str) -> None:
     """Records an applied migration in the schema_migrations table."""
     conn.execute(
         text("INSERT INTO schema_migrations (version, applied_at, description) VALUES (:ver, :ts, :desc)"),
-        {"ver": version, "ts": datetime.utcnow(), "desc": description},
+        {"ver": version, "ts": datetime.now(timezone.utc).replace(tzinfo=None), "desc": description},
     )
 
 
@@ -109,6 +109,16 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         version="011_pipeline_jobs_cancelled_status",
         description="Adds CANCELLED status to pipelinejobstatus enum for graceful job cancellation",
         upgrade_fn=lambda conn: _upgrade_011_cancelled_status(conn),
+    ),
+    Migration(
+        version="012_saved_views_user_fk",
+        description="Replaces saved_views.owner username with a users.id foreign key (ON DELETE CASCADE)",
+        upgrade_fn=lambda conn: None,  # Handled in ensure_schema_upgrades
+    ),
+    Migration(
+        version="013_rights_ledger",
+        description="Adds rights_attestations table for licence/rights attestation ledger (F-17)",
+        upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
     ),
 ]
 

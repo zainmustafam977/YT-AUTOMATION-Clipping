@@ -6,8 +6,6 @@ Tests:
 3. Autonomous A/B Variant Suite Generation (3 Diverse Thumbnails, Titles, and YouTube Promotion).
 """
 
-import os
-import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -31,15 +29,12 @@ from shorts_engine.services.reframing.detector import DetectedFace
 from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.captioning.templates import (
     get_caption_template,
-    CaptionStyleTemplate,
     BUILTIN_TEMPLATES,
-    TEMPLATE_ALIASES,
 )
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.ab_testing.thumbnail_generator import ThumbnailVariantGenerator
 from shorts_engine.services.ab_testing.coordinator import ABVariantCoordinator
-from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
 from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip
 from shorts_engine.services.publishing.client import YouTubePublisher
 
@@ -372,14 +367,14 @@ def test_winner_daemon_promotes_both_title_and_thumbnail(db_session, tmp_path):
     db_session.add(clip)
     db_session.flush()
 
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     pub_log = PublishLog(
         clip_id=clip.id,
         youtube_video_id="yt_win_789",
         status="PUBLISHED",
         title="Baseline Title",
         description="Test Description",
-        published_at=datetime.utcnow() - timedelta(days=4),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=4),
     )
     db_session.add(pub_log)
     db_session.commit()
