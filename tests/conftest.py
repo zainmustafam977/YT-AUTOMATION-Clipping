@@ -1,5 +1,23 @@
 import os
 
+# Ensure libass/fontconfig can locate the bundled project fonts even in minimal
+# CI/container images that ship no system fontconfig configuration.
+if not os.environ.get("FONTCONFIG_FILE"):
+    _fc_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+    _fc_conf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".fontconfig", "fonts.conf")
+    os.makedirs(os.path.dirname(_fc_conf), exist_ok=True)
+    if not os.path.exists(_fc_conf):
+        with open(_fc_conf, "w", encoding="utf-8") as _fh:
+            _fh.write(
+                "<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n"
+                "<fontconfig>\n"
+                f"  <dir>{_fc_dir}</dir>\n"
+                "  <cachedir>/tmp/fontconfig-cache</cachedir>\n"
+                "</fontconfig>\n"
+            )
+    os.environ["FONTCONFIG_FILE"] = _fc_conf
+    os.environ.setdefault("FONTCONFIG_PATH", os.path.dirname(_fc_conf))
+
 # Prevent OpenMP and BLAS threading runtime conflicts between torch, ctranslate2, and pyav on Linux
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"

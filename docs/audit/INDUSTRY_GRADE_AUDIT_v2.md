@@ -79,7 +79,7 @@ Fresh evidence:
 
 - F-12: SRT/VTT sidecar generation implemented (`shorts_engine/services/captioning/sidecar.py`) with tests (3 passed).
 - F-23/F-24: already resolved (duplicate remove_key removed; async webhook dispatch).
-- F-17 rights ledger: blocked — requires product decision on schema/scope/MVP inclusion.
+- F-17: rights ledger implemented — `RightsAttestation` model, migration `013_rights_ledger`, `services/rights_ledger.py` (record/list/has with licence allowlist + validation), 5 tests passing.
 
 ## Next actions
 1. Refine SSRF guard to allow loopback in dev/test for alerter (keep prod strict).

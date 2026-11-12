@@ -24,6 +24,10 @@ storage/harvester_cookies.txt
 storage/cookies.txt
 *.bak
 
+# Local tooling / caches (not part of project)
+.tools/
+.fontconfig/
+
 # ------------------------------------------------------------------------------
 # 2. Virtual Environments & Python Runtime
 # ------------------------------------------------------------------------------

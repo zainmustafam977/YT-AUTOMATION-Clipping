@@ -444,7 +444,19 @@ def test_watch_folder_ingestion_emits_video_ingested(tmp_path, db_session):
     )
 
     test_file = incoming_dir / "sample_test_drop.mp4"
-    test_file.write_bytes(b"Simulated MP4 Header Content for Telemetry Acceptance")
+    # Generate a tiny valid MP4 so the corrupt-media guard accepts the file.
+    import subprocess
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=320x240:d=1:r=10",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            str(test_file),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     daemon.scan_directory_candidates()
     daemon.poll_and_process_stable_files()  # First poll establishes initial baseline size

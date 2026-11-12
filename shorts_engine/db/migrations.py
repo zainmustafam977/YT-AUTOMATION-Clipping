@@ -115,6 +115,11 @@ MIGRATIONS_REGISTRY: List[Migration] = [
         description="Replaces saved_views.owner username with a users.id foreign key (ON DELETE CASCADE)",
         upgrade_fn=lambda conn: None,  # Handled in ensure_schema_upgrades
     ),
+    Migration(
+        version="013_rights_ledger",
+        description="Adds rights_attestations table for licence/rights attestation ledger (F-17)",
+        upgrade_fn=lambda conn: None,  # Handled by Base.metadata.create_all
+    ),
 ]
 
 

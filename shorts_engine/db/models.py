@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     DateTime,
     ForeignKey,
+    CheckConstraint,
     UniqueConstraint,
     Enum as SQLEnum,
 )
@@ -682,6 +683,24 @@ class SFXLibrary(Base):
     file_path = Column(String(1024), nullable=False)
     license_note = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+
+
+class RightsAttestation(Base):
+    """Append-only rights/licence attestation for a clip or source video (F-17)."""
+    __tablename__ = "rights_attestations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    clip_id = Column(String(36), ForeignKey("clips.id", ondelete="CASCADE"), nullable=True, index=True)
+    source_video_id = Column(String(36), ForeignKey("source_videos.id", ondelete="CASCADE"), nullable=True, index=True)
+    license_type = Column(String(32), nullable=False, index=True)
+    license_url = Column(String(1024), nullable=True)
+    attestor = Column(String(128), nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("clip_id IS NOT NULL OR source_video_id IS NOT NULL", name="ck_rights_target_present"),
+    )
 
 
 class User(Base):
