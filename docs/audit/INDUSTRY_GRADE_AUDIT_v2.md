@@ -75,6 +75,12 @@ Fresh evidence:
 - T-P2-2 datetime.utcnow modernization: Done (230 call sites + 55 default_factory; ruff/mypy clean; naive UTC preserved).
 - ruff: All checks passed; mypy 1030.
 
+## P2 unverified features update (2026-11-11)
+
+- F-12: SRT/VTT sidecar generation implemented (`shorts_engine/services/captioning/sidecar.py`) with tests (3 passed).
+- F-23/F-24: already resolved (duplicate remove_key removed; async webhook dispatch).
+- F-17 rights ledger: blocked — requires product decision on schema/scope/MVP inclusion.
+
 ## Next actions
 1. Refine SSRF guard to allow loopback in dev/test for alerter (keep prod strict).
 2. Resolve circular import in publishing package.
