@@ -120,6 +120,16 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 | T-P1-9 Coverage gate | Done | `--cov-fail-under=60` in agent.yml |
 | Circular import fix | Done | publishing/client imports lazily |
 
+## 8. P2 Progress (2026-11-11)
+
+- T-P2-2 datetime.utcnow modernization: Done (230 call sites + 55 default_factory converted; ruff/mypy clean; semantics preserved as naive UTC).
+- T-P2-1 Ruff scope expansion: Pending (config excludes tests; expanding requires fixing 159 pre-existing F401 in tests — deferred).
+- T-P2-5 Docker digest pinning: Pending.
+- T-P2-6 Large asset LFS: Pending.
+- T-P2-3 Dead/unwired feature audit: Pending.
+- T-P2-4 Batch UI/CLI: Pending.
+- T-P2-7 Unverified features: Pending.
+
 ## 7. Verification & Exit
 
 After implementation: re-run ruff, mypy, bandit, pip-audit, pytest (unit+e2e), and produce `INDUSTRY_GRADE_AUDIT_v2.md` with updated scores and a delta table. Push to PR #8; all gates must be green.

@@ -4,7 +4,7 @@ Supports SQLite (with WAL mode & busy timeout) and PostgreSQL.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, scoped_session
@@ -262,7 +262,7 @@ def ensure_schema_upgrades(target_engine=None):
                                 if r_reason:
                                     conn.execute(
                                         text("UPDATE clips SET rejection_reason_code = 'LEGACY_REJECTION', rejection_note = :note, rejected_at = :ts WHERE id = :cid"),
-                                        {"note": str(r_reason), "ts": upd_at or datetime.utcnow(), "cid": cid}
+                                        {"note": str(r_reason), "ts": upd_at or datetime.now(timezone.utc).replace(tzinfo=None), "cid": cid}
                                     )
                             except Exception as _exc:
                                 logging.getLogger(__name__).debug("suppressed exception: %s", _exc)

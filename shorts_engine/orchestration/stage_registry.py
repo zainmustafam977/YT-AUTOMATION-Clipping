@@ -13,7 +13,7 @@ import json
 import random
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Any, Dict, Optional, List
 from sqlalchemy.orm import Session
@@ -97,7 +97,7 @@ def calculate_backoff_run_at(
     Computes scheduled retry time with exponential backoff and jitter:
     run_at = now + base * 2^attempt_count + jitter
     """
-    current_time = now or datetime.utcnow()
+    current_time = now or datetime.now(timezone.utc).replace(tzinfo=None)
     jitter = random.uniform(0.0, jitter_max) if jitter_max > 0 else 0.0
     delay_sec = base * (2 ** attempt_count) + jitter
     return current_time + timedelta(seconds=delay_sec)
@@ -551,7 +551,7 @@ def daily_cleanup_stage(ctx: StageContext) -> Dict[str, Any]:
         # Self-schedule next daily cleanup in 24 hours
         import uuid
         interval_days = int(ctx.payload.get("interval_days", 1))
-        next_run = datetime.utcnow() + timedelta(days=interval_days)
+        next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=interval_days)
         cleanup_id = f"cleanup_{uuid.uuid4().hex[:12]}"
         durable_job_queue.enqueue(
             job_type="daily_cleanup",
@@ -699,7 +699,7 @@ class StageExecutor:
         stage_max_attempts = stage.max_attempts or 3
 
         # Update heartbeat and job state if job attached
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if job:
             job.stage = stage.name
             job.heartbeat_at = now
@@ -725,7 +725,7 @@ class StageExecutor:
                 "Daily LLM budget exceeded in stage '%s': %s (deferring job to tomorrow)",
                 stage.name, error_msg,
             )
-            tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(
+            tomorrow = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
             if job:
@@ -794,7 +794,7 @@ class StageExecutor:
             if job:
                 job.status = PipelineJobStatus.CANCELLED
                 job.last_error = error_msg
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 job.locked_by = None
                 job.locked_at = None
                 ctx.db_session.commit()
@@ -814,7 +814,7 @@ class StageExecutor:
             if job:
                 job.status = PipelineJobStatus.QUARANTINED
                 job.last_error = error_msg
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 job.locked_by = None
                 ctx.db_session.commit()
 
@@ -835,7 +835,7 @@ class StageExecutor:
                 if job:
                     job.status = PipelineJobStatus.QUARANTINED
                     job.last_error = str(trans_err)
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     job.locked_by = None
                     ctx.db_session.commit()
                 emit(
@@ -859,7 +859,7 @@ class StageExecutor:
                 if job:
                     job.status = PipelineJobStatus.QUARANTINED
                     job.last_error = error_msg
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     job.locked_by = None
                     ctx.db_session.commit()
 
@@ -915,7 +915,7 @@ class StageExecutor:
 
         if job:
             job.status = PipelineJobStatus.RUNNING
-            job.locked_at = datetime.utcnow()
+            job.locked_at = datetime.now(timezone.utc).replace(tzinfo=None)
             ctx.db_session.commit()
 
         for st_name in stages_to_run:
@@ -925,7 +925,7 @@ class StageExecutor:
         if job:
             job.status = PipelineJobStatus.DONE
             job.stage = "COMPLETED"
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             job.locked_by = None
             job.locked_at = None
             ctx.db_session.commit()

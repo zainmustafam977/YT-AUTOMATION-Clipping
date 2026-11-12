@@ -6,7 +6,7 @@ Workers update heartbeat_at and locked_at periodically so long-running operation
 
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,7 @@ def reap_stale_jobs(
     Workers heartbeat (updating locked_at/heartbeat_at) every few minutes so long
     renders are not falsely reaped.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     should_close = False
     if db is None:
         db = session_factory()
@@ -100,7 +100,7 @@ def worker_heartbeat(
             logger.warning("Heartbeat rejected for job %s: owned by %s, not %s", job_id, job.locked_by, worker_id)
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         job.heartbeat_at = now
         job.locked_at = now
         db.commit()

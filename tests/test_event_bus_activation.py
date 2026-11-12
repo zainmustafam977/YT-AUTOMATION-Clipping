@@ -25,7 +25,7 @@ Validates:
 import json
 import time
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -236,7 +236,7 @@ def test_event_log_7_day_retention_pruning(db_session):
     Acceptance Criterion:
     Persist events to an event-log table with a retention limit (7 days).
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Create 3 old events (older than 7 days)
     old_dates = [now - timedelta(days=8), now - timedelta(days=15), now - timedelta(days=30)]
@@ -308,8 +308,8 @@ def test_api_events_recent_polling_and_catchup(api_client, db_session):
         db=db_session,
     )
 
-    from datetime import datetime, timedelta
-    t0 = datetime.utcnow()
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime.now(timezone.utc).replace(tzinfo=None)
     event1.created_at = t0
     event2.created_at = t0 + timedelta(seconds=1)
     event3.created_at = t0 + timedelta(seconds=2)
@@ -372,7 +372,7 @@ def test_queue_telemetry_emitters_record_to_database_and_bus(db_session):
         bus_emitter.emit_job_retried(
             job_id="job-102",
             attempt_count=1,
-            next_run_at=datetime.utcnow() + timedelta(seconds=5),
+            next_run_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=5),
             error="TransientError: connection reset",
             stage="reframe",
             extra={"subject_id": "clip-2"},

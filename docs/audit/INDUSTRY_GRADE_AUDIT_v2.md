@@ -70,6 +70,11 @@ Fresh evidence:
 - SSRF alerter refinement: alerter treats URLs as admin-trusted config; tightening requires decision on whether localhost/private hosts are permitted in prod. Blocked pending user decision.
 - Frontend tests: no test framework chosen; blocked pending user decision on framework (vitest/jest).
 
+## P2 progress (2026-11-11)
+
+- T-P2-2 datetime.utcnow modernization: Done (230 call sites + 55 default_factory; ruff/mypy clean; naive UTC preserved).
+- ruff: All checks passed; mypy 1030.
+
 ## Next actions
 1. Refine SSRF guard to allow loopback in dev/test for alerter (keep prod strict).
 2. Resolve circular import in publishing package.

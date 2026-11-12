@@ -13,7 +13,7 @@ Comprehensive tests for human review queue improvements:
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
@@ -131,7 +131,7 @@ def _seed_clip(db, video, clip_id, status=ClipStatus.WAITING_APPROVAL, queued_de
     db.add(cand)
     db.commit()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     queued_at = (now - queued_delta) if queued_delta else now
 
     clip = Clip(
@@ -162,7 +162,7 @@ def test_approve_clip_single_inline_success(test_env):
 
     mock_slot = MagicMock()
     mock_slot.id = "slot-test-01"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=2)
+    mock_slot.slot_start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
 
     mock_job = MagicMock()
     mock_job.id = "job-publish-01"
@@ -208,7 +208,7 @@ def test_approve_clip_race_condition_guard(test_env):
 
     mock_slot = MagicMock()
     mock_slot.id = "slot-test-race"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=3)
+    mock_slot.slot_start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
 
     mock_job = MagicMock()
     mock_job.id = "job-publish-race"
@@ -267,7 +267,7 @@ def test_bulk_approve_allocates_slots_and_enqueues_background_jobs(test_env):
 
     mock_slot = MagicMock()
     mock_slot.id = "slot-bulk-test"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=4)
+    mock_slot.slot_start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=4)
 
     mock_job = MagicMock()
     mock_job.id = "job-bulk-test"
@@ -308,7 +308,7 @@ def test_bulk_approve_partial_failure_does_not_abort_batch(test_env):
 
     mock_slot = MagicMock()
     mock_slot.id = "slot-part"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=5)
+    mock_slot.slot_start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=5)
 
     with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot), \
          patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue"), \
@@ -466,7 +466,7 @@ def test_queue_bulk_action_route_json(test_env):
 
     mock_slot = MagicMock()
     mock_slot.id = "slot-route-bulk"
-    mock_slot.slot_start = datetime.utcnow() + timedelta(hours=6)
+    mock_slot.slot_start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=6)
 
     with patch("shorts_engine.services.publishing.actions.publish_slot_service.allocate_slot", return_value=mock_slot), \
          patch("shorts_engine.services.publishing.actions.durable_job_queue.enqueue"), \
@@ -502,7 +502,7 @@ def test_durable_queue_claim_predicate_next_run_at(test_env):
     clip_past = _seed_clip(db, video, "clip_past_pred")
 
     # Enqueue a future publish job (+1 hour)
-    fut_time = datetime.utcnow() + timedelta(hours=1)
+    fut_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
     job_fut = durable_job_queue.enqueue(
         job_type="publish",
         entity_id=clip_fut.id,
@@ -521,7 +521,7 @@ def test_durable_queue_claim_predicate_next_run_at(test_env):
     assert claimed_fut is None, "Future job was claimed before its next_run_at!"
 
     # Enqueue a past publish job (-5 minutes)
-    past_time = datetime.utcnow() - timedelta(minutes=5)
+    past_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
     job_past = durable_job_queue.enqueue(
         job_type="publish",
         entity_id=clip_past.id,
@@ -605,7 +605,7 @@ def test_e2e_approval_to_worker_claim_publish_leg(test_env):
     assert job.status == PipelineJobStatus.PENDING
 
     # Fast-forward next_run_at to simulate arrival of the scheduled publish slot
-    job.next_run_at = datetime.utcnow() - timedelta(seconds=1)
+    job.next_run_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
     db.commit()
 
     # Step 3: Worker daemon claims and processes the job in dry_run mode (ALLOW_IN_PROCESS_PREVIEW)
@@ -654,7 +654,7 @@ def test_worker_execute_publish_past_slot_emits_late_publish_event(test_env):
     slot = publish_slot_service.allocate_slot(channel_id=channel.id, clip_id=clip.id, db=db)
     db.commit()
 
-    past_time = datetime.utcnow() - timedelta(minutes=15)
+    past_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=15)
     worker = YouTubePublishWorker(dry_run=True)
 
     with patch.dict("os.environ", {"ALLOW_IN_PROCESS_PREVIEW": "1"}):

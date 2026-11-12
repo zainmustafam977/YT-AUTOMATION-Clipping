@@ -136,7 +136,7 @@ class QuotaTracker:
                 operation=operation,
                 channel_id=channel_id,
                 job_id=job_id,
-                ts=datetime.utcnow(),
+                ts=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             session.add(entry)
             session.commit()

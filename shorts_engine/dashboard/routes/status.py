@@ -11,7 +11,7 @@ import shutil
 import asyncio
 import logging
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import httpx
@@ -280,7 +280,7 @@ def build_recent_videos_payload(
         .options(joinedload(SourceVideo.channel), joinedload(SourceVideo.transcript))
     )
 
-    now_naive = datetime.utcnow()
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     df = (date_filter or "all").lower()
 
     if df == "today":
@@ -349,7 +349,7 @@ def build_recent_videos_payload(
     }
 
     result = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for v in recent_videos_raw:
         cands = candidates_by_vid.get(v.id, [])

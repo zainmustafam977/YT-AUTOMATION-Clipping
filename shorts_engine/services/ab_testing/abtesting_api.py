@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -94,7 +94,7 @@ class ABTestService:
         self.db.flush()
         # Publish the first variant.
         first = sorted(test.variants, key=lambda v: v.created_at)[0]
-        first.last_published_at = datetime.utcnow()
+        first.last_published_at = datetime.now(timezone.utc).replace(tzinfo=None)
         clip.generated_title = first.title
         self.db.commit()
         return test
@@ -122,14 +122,14 @@ class ABTestService:
         snap = ABMetricSnapshot2(
             test_id=test.id,
             variant_id=retiring.id,
-            captured_at=datetime.utcnow(),
+            captured_at=datetime.now(timezone.utc).replace(tzinfo=None),
             impressions=retiring.impressions,
             views=retiring.views,
             ctr=(retiring.views / retiring.impressions) if retiring.impressions else 0.0,
         )
         self.db.add(snap)
         nxt = variants[(current + 1) % len(variants)]
-        nxt.last_published_at = datetime.utcnow()
+        nxt.last_published_at = datetime.now(timezone.utc).replace(tzinfo=None)
         clip = self.db.query(Clip).filter_by(id=test.clip_id).first()
         if clip is not None:
             clip.generated_title = nxt.title
@@ -155,7 +155,7 @@ class ABTestService:
         snap = ABMetricSnapshot2(
             test_id=test_id,
             variant_id=variant_id,
-            captured_at=datetime.utcnow(),
+            captured_at=datetime.now(timezone.utc).replace(tzinfo=None),
             impressions=impressions,
             views=views,
             ctr=(views / impressions) if impressions else 0.0,
@@ -192,7 +192,7 @@ class ABTestService:
         winner = self.pick_winner(test_id)
         test.winner_variant_id = winner.id if winner else None
         test.status = "COMPLETED"
-        test.completed_at = datetime.utcnow()
+        test.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if winner is not None:
             clip = self.db.query(Clip).filter_by(id=test.clip_id).first()
             if clip is not None:

@@ -9,7 +9,7 @@ Verifies:
 """
 
 import ast
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
@@ -242,7 +242,7 @@ def test_analytics_poll_scheduled_hourly_via_queue_run_at(db_session):
     assert job.status == PipelineJobStatus.PENDING
 
     # run_at must be strictly 1 hour in the future
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     assert job.next_run_at > now
     assert job.next_run_at >= now + timedelta(minutes=59)
     assert job.next_run_at <= now + timedelta(minutes=61)
@@ -296,7 +296,7 @@ def test_winner_daemon_reads_from_analytics_metrics_table(db_session):
         {"title": "Boring Baseline Title", "impressions": 1000, "clicks": 50, "is_active": True, "is_baseline": True},
         {"title": "Viral Breakthrough Title!", "impressions": 1500, "clicks": 240, "is_active": False, "is_baseline": False},
     ]
-    pub_log.published_at = datetime.utcnow() - timedelta(hours=80)
+    pub_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=80)
     db_session.commit()
 
     # Seed analytics_metrics table with 3 days of high-performing data

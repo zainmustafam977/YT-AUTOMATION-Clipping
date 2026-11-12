@@ -14,7 +14,7 @@ Tests for Publish Slots, Native publishAt Scheduling, and In-Place Post-Upload M
 
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock, patch
 import pytest
@@ -349,7 +349,7 @@ def test_reschedule_updates_publish_at_without_reupload(test_db, tmp_path):
     slot = test_db.query(PublishSlot).filter_by(clip_id=clip.id).first()
     job = test_db.query(PipelineJob).filter_by(id=app_res["job_id"]).first()
 
-    new_time = (datetime.utcnow() + timedelta(days=3)).replace(microsecond=0)
+    new_time = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3)).replace(microsecond=0)
     res_res = service.reschedule_clip(clip_id=clip.id, new_slot_time=new_time, db=test_db)
 
     assert res_res["success"] is True
@@ -458,7 +458,7 @@ def test_legacy_drip_feed_clips_migration(test_db, tmp_path):
         status=ClipStatus.APPROVED,
         rendered_path=str(video_file),
     )
-    future_time = datetime.utcnow() + timedelta(days=2)
+    future_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
     legacy_clip.scheduled_publish_at = future_time
     test_db.commit()
 

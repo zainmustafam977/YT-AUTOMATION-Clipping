@@ -8,7 +8,7 @@ Persists state atomically to storage/ai_token_costs.json.
 import json
 import logging
 import threading
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -149,7 +149,7 @@ class AITokenCostTracker:
         tot = inp + out
         cost = self.calculate_cost(provider, model, inp, out)
         today_str = date.today().isoformat()
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         prov_key = provider.lower()
 
         with self._mutex:
@@ -268,7 +268,7 @@ class AITokenCostTracker:
                     video_id=video_id,
                     clip_id=clip_id,
                     stage=stage,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 session.add(log_entry)
                 session.commit()
@@ -350,7 +350,7 @@ class AITokenCostTracker:
                 return round(float(day_data.get("estimated_cost_usd", 0.0)), 6)
 
         db_cost = 0.0
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(hour=0, minute=0, second=0, microsecond=0)
         try:
             from shorts_engine.db.models import LLMUsageLog
             from shorts_engine.db.session import engine
@@ -620,7 +620,7 @@ class AITokenCostTracker:
                     })
                 return results
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
         try:
             from shorts_engine.db.models import LLMUsageLog
             from shorts_engine.db.session import engine

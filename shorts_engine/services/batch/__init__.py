@@ -26,7 +26,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -73,7 +73,7 @@ class BatchResult:
     batch_id: str
     operation: str
     items: List[BatchItemResult] = field(default_factory=list)
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     finished_at: Optional[datetime] = None
     ok: int = 0
     failed: int = 0
@@ -142,7 +142,7 @@ def _h_reject(ctx: _Ctx, item_id: str, params: Dict[str, Any]) -> BatchItemResul
     }
     clip.status = ClipStatus.REJECTED
     clip.rejection_reason_code = reason
-    clip.rejected_at = datetime.utcnow()
+    clip.rejected_at = datetime.now(timezone.utc).replace(tzinfo=None)
     return BatchItemResult(
         item_id, "OK",
         before=before,
@@ -293,7 +293,7 @@ def _h_cancel(ctx: _Ctx, item_id: str, params: Dict[str, Any]) -> BatchItemResul
     before = {"status": clip.status.value if hasattr(clip.status, "value") else str(clip.status)}
     clip.status = ClipStatus.REJECTED
     clip.rejection_reason_code = "CANCELLED"
-    clip.rejected_at = datetime.utcnow()
+    clip.rejected_at = datetime.now(timezone.utc).replace(tzinfo=None)
     return BatchItemResult(item_id, "OK", before=before, after={"status": "REJECTED", "rejection_reason_code": "CANCELLED"})
 
 
@@ -577,7 +577,7 @@ class BatchEngine:
         except Exception:
             self.db.rollback()
             raise
-        result.finished_at = datetime.utcnow()
+        result.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self._record_batch(batch_id, operation, len(item_ids), result.ok, result.failed, actor)
         return result
 
@@ -626,7 +626,7 @@ class BatchEngine:
                 result.items.append(BatchItemResult(item_id, "FAILED", message=str(e)))
                 result.failed += 1
         self.db.commit()
-        result.finished_at = datetime.utcnow()
+        result.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return result
 
     # ------------------------------------------------------------------
@@ -661,7 +661,7 @@ class BatchEngine:
             batch_id=batch_id,
             operation=op,
             item_id=item_id,
-            acquired_at=datetime.utcnow(),
+            acquired_at=datetime.now(timezone.utc).replace(tzinfo=None),
         ))
         try:
             self.db.flush()
@@ -677,7 +677,7 @@ class BatchEngine:
             .first()
         )
         if existing is not None:
-            existing.released_at = datetime.utcnow()
+            existing.released_at = datetime.now(timezone.utc).replace(tzinfo=None)
             self.db.flush()
 
     def _audit(
@@ -694,7 +694,7 @@ class BatchEngine:
             before_json=json.dumps(r.before) if r.before else None,
             after_json=json.dumps(r.after) if r.after else None,
             idempotency_key=r.idempotency_key,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         ))
 
     def _record_batch(

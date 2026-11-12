@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ class CaptionEditor:
         self._validate(words)
         cand = self._candidate(clip_id)
         cand.caption_words_json = json.dumps(words, sort_keys=True)
-        cand.caption_edited_at = datetime.utcnow()
+        cand.caption_edited_at = datetime.now(timezone.utc).replace(tzinfo=None)
         cand.caption_edited_by = actor
         self.db.commit()
         return words

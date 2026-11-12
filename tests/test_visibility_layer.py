@@ -22,7 +22,7 @@ import time
 import shutil
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -160,7 +160,7 @@ def client(db_session):
 
 def test_metric_1_queue_depth_and_oldest_age(db_session, client):
     """Verifies pending queue depth breakdown by stage and oldest job age calculation."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Seed 2 pending ingest jobs, 1 pending render job, and 1 done job
     j1 = PipelineJob(
@@ -225,7 +225,7 @@ def test_metric_1_queue_depth_and_oldest_age(db_session, client):
 
 def test_metric_2_running_jobs(db_session, client):
     """Verifies reporting of active running jobs, worker lock owner, and progress."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     running_job = PipelineJob(
         id="job-run-1",
@@ -266,7 +266,7 @@ def test_metric_2_running_jobs(db_session, client):
 
 def test_metric_3_quarantined_jobs(db_session, client):
     """Verifies quarantined dead-letter jobs with failure reasons (last_error)."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     q_job = PipelineJob(
         id="job-quar-1",
@@ -303,7 +303,7 @@ def test_metric_3_quarantined_jobs(db_session, client):
 
 def test_metric_4_channels_token_health_and_last_publish(db_session, client):
     """Verifies channel token status (HEALTHY / NEEDS_REAUTH) and last publish metadata."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 1. Healthy channel with successful publish
     chan1 = Channel(
@@ -397,7 +397,7 @@ def test_metric_5_quota_visibility(db_session, client):
         operation="videos.insert",
         units=1600,
         channel_id="UC_SAMPLE",
-        ts=datetime.utcnow(),
+        ts=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db_session.add(entry)
     db_session.commit()
@@ -443,7 +443,7 @@ def test_metric_6_media_root_disk_usage(client):
 
 def test_metric_7_jobs_summary_24h(db_session, client):
     """Verifies calculation of job outcomes in the rolling 24-hour window."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 3 DONE jobs in last 24h
     for i in range(3):
@@ -520,7 +520,7 @@ def test_overview_snapshot_and_html_panel(db_session, client):
         entity_id="vid-test-overview",
         entity_type="source_video",
         status="PENDING",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     ))
     db_session.commit()
 

@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from shorts_engine.config.settings import settings
@@ -141,7 +141,7 @@ class PipelineAlerter:
                     "level": level,
                     "title": title,
                     "message": message,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                     "context": context or {},
                 }
                 req = urllib.request.Request(

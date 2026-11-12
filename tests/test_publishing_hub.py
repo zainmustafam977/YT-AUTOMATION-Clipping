@@ -9,7 +9,7 @@ Verifies:
 """
 
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -50,7 +50,7 @@ def test_publish_overview_endpoint(tmp_path):
         id="log1",
         clip_id="clip-test-overview",
         youtube_video_id="dQw4w9WgXcQ",
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None),
         title="Published Viral Short",
         description="Check it out #Shorts",
         status="SUCCESS",
@@ -134,7 +134,7 @@ def test_publish_execute_schedule_mode(tmp_path):
     client = TestClient(app)
 
     try:
-        target_time = (datetime.utcnow() + timedelta(days=2)).isoformat() + "Z"
+        target_time = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)).isoformat() + "Z"
         payload = {
             "clip_id": "clip-sched",
             "publish_mode": "schedule",

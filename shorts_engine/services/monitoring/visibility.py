@@ -17,7 +17,7 @@ and system storage headroom without introducing new instrumentation:
 
 import shutil
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
@@ -70,7 +70,7 @@ def get_queue_depth_and_oldest_age(db: Session) -> Dict[str, Any]:
     """
     Computes pending queue depth per stage and the elapsed age of the oldest pending job.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     pending_jobs = (
         db.query(PipelineJob)
         .filter(PipelineJob.status == "PENDING")
@@ -114,7 +114,7 @@ def get_running_jobs(db: Session) -> List[Dict[str, Any]]:
     """
     Lists currently active running jobs with their lock holder, duration, and progress.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     running = (
         db.query(PipelineJob)
         .filter(PipelineJob.status == "RUNNING")
@@ -332,7 +332,7 @@ def get_jobs_summary_24h(db: Session) -> Dict[str, Any]:
     Derives job success and failure statistics in the rolling 24-hour window
     from pipeline_jobs and event_logs.
     """
-    cutoff = datetime.utcnow() - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
 
     # 1. Direct PipelineJob status breakdown
     succeeded_jobs = (
@@ -405,7 +405,7 @@ def get_full_visibility_snapshot(db: Session) -> Dict[str, Any]:
         upcoming_data = []
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "queue": queue_data,
         "running_jobs": running_data,
         "running_count": len(running_data),
@@ -505,7 +505,7 @@ def evaluate_system_thresholds_and_alert(db: Session, wait: bool = False) -> Dic
             alerts_fired.append("llm_budget_exceeded")
 
     return {
-        "alerts_checked_at": datetime.utcnow().isoformat(),
+        "alerts_checked_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "alerts_fired": alerts_fired,
         "count": len(alerts_fired),
     }

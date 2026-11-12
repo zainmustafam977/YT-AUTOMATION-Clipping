@@ -14,7 +14,7 @@ Implements Section 4 of the Enterprise Shorts Engine Specification:
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
@@ -159,7 +159,7 @@ class PublishOrchestrator:
             # Revert to PAUSED_NEEDS_ATTENTION so operator can resume or retry safely without duplicate
             job.status = PublishJobStatus.PAUSED_NEEDS_ATTENTION.value
             job.last_error = "Server restarted while upload was in progress. Resumption or manual retry required."
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             reconciled_count += 1
 
             audit = AuditLog(

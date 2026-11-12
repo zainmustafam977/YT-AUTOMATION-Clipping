@@ -7,7 +7,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from shorts_engine.services.publishing.worker import (
     build_youtube_client,
@@ -169,7 +169,7 @@ class YouTubePublisher:
             publish_log = PublishLog(
                 clip_id=clip.id,
                 youtube_video_id=None,
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 title=metadata.title,
                 description=metadata.description,
                 tags_json=json.dumps(metadata.tags),
@@ -238,7 +238,7 @@ class YouTubePublisher:
                     clip.status = ClipStatus.PUBLISHED
                     publish_log.youtube_video_id = existing_yt_id
                     publish_log.status = "RECLAIMED"
-                    publish_log.published_at = datetime.utcnow()
+                    publish_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     self.db.commit()
                     try:
                         global_event_bus.publish_sync(PlatformEvent(
@@ -301,7 +301,7 @@ class YouTubePublisher:
             # 5. Update Clip status and create PublishLog atomically
             clip.status = ClipStatus.PUBLISHED
             publish_log.youtube_video_id = youtube_video_id
-            publish_log.published_at = datetime.utcnow()
+            publish_log.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
             publish_log.status = status_label
             self.db.commit()
 

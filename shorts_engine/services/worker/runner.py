@@ -11,7 +11,7 @@ import json
 import uuid
 import socket
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
@@ -199,7 +199,7 @@ def reconcile_stale_claims(db: Session, stale_timeout_sec: int = 600) -> int:
     Returns the number of reclaimed clips.
     """
     from datetime import datetime
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     reclaimed = 0
 
     try:
@@ -237,8 +237,8 @@ def claim_clip_by_id(db: Session, clip_id: str, worker_id: Optional[str] = None)
 
     # If already claimed, check if holding PID is alive
     if target_clip.rendered_path and target_clip.rendered_path.startswith("CLAIMED:"):
-        from datetime import datetime
-        if is_claim_stale(target_clip.rendered_path, target_clip.updated_at, datetime.utcnow()):
+        from datetime import datetime, timezone
+        if is_claim_stale(target_clip.rendered_path, target_clip.updated_at, datetime.now(timezone.utc).replace(tzinfo=None)):
             logger.info("Stealing/reclaiming clip %s from stale claim %s", clip_id, target_clip.rendered_path)
         else:
             # Still held by an active live process or named worker, do not steal

@@ -14,7 +14,7 @@ Acceptance Criteria:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -90,7 +90,7 @@ def _create_clip_fixture(db, clip_id="clip_ab_001", published_hours_ago=80.0):
         title="Baseline Title A",
         description="Test Description",
         status="SUCCESS",
-        published_at=datetime.utcnow() - timedelta(hours=published_hours_ago),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=published_hours_ago),
     )
     db.add(pub_log)
     db.commit()

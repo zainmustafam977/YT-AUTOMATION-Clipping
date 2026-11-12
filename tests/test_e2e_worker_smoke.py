@@ -23,7 +23,7 @@ import time
 import shutil
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import pytest
 
 from shorts_engine.config.settings import settings
@@ -47,7 +47,7 @@ from shorts_engine.services.worker.daemon import WorkerDaemon
 )
 def test_e2e_worker_pipeline_smoke(tmp_path):
     """End-to-end integration smoke test running real media through WorkerDaemon."""
-    smoke_start_utc = datetime.utcnow()
+    smoke_start_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     watch_folder = Path(settings.STORAGE_DIR) / "watch_folder"
     watch_folder.mkdir(parents=True, exist_ok=True)
 

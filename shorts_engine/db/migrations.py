@@ -5,7 +5,7 @@ ensuring idempotent, transactional schema upgrades across SQLite and PostgreSQL.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, List, Any, Optional
 from sqlalchemy import text, Engine
 
@@ -41,7 +41,7 @@ def _record_migration(conn, version: str, description: str) -> None:
     """Records an applied migration in the schema_migrations table."""
     conn.execute(
         text("INSERT INTO schema_migrations (version, applied_at, description) VALUES (:ver, :ts, :desc)"),
-        {"ver": version, "ts": datetime.utcnow(), "desc": description},
+        {"ver": version, "ts": datetime.now(timezone.utc).replace(tzinfo=None), "desc": description},
     )
 
 

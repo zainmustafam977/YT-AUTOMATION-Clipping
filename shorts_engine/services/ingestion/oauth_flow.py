@@ -12,7 +12,7 @@ import json
 import time
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import httpx
 
@@ -126,7 +126,7 @@ class YouTubeDeviceOAuth:
                         "expires_in": expires_in,
                         "expires_at": int(time.time()) + expires_in,
                         "client_id": cid,
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                     }
                     cls.save_encrypted_token(token_record, token_path=token_path)
                     logger.info("Successfully received and encrypted YouTube OAuth2 token.")
@@ -192,7 +192,7 @@ class YouTubeDeviceOAuth:
             "version": "1.0",
             "encrypted_data": encrypted_payload,
             "client_id": tokens.get("client_id", ""),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         with open(target_path, "w", encoding="utf-8") as f:
@@ -275,7 +275,7 @@ class YouTubeDeviceOAuth:
                 tokens["access_token"] = new_access
                 tokens["expires_in"] = expires_in
                 tokens["expires_at"] = int(time.time()) + expires_in
-                tokens["updated_at"] = datetime.utcnow().isoformat()
+                tokens["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 if "refresh_token" in data:
                     tokens["refresh_token"] = data["refresh_token"]
 

@@ -8,7 +8,7 @@ Unit and integration tests for:
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
 from shorts_engine.db.models import Clip, ClipStatus, SourceVideo, SourceVideoStatus, User, UserRole
@@ -101,7 +101,7 @@ def test_open_in_folder_cross_platform(tmp_path):
 def test_resume_button_state_machine():
     now = MagicMock()
 
-    now_time = datetime.utcnow()
+    now_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Case 1: Video is currently RUNNING (recently updated, lock is held)
     video_running = MagicMock(spec=SourceVideo)

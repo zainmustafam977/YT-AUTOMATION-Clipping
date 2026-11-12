@@ -10,7 +10,7 @@ Fault-injection acceptance test suite for:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
@@ -166,7 +166,7 @@ def test_acceptance_transient_failure_twice_then_success(in_memory_db, recording
     assert job.attempt_count == 1
     assert "Temporary network blip (failure #1)" in job.last_error
     assert job.next_run_at is not None
-    assert job.next_run_at > datetime.utcnow()
+    assert job.next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)
     assert len(recording_emitter.retried_events) == 1
     assert recording_emitter.retried_events[0]["attempt_count"] == 1
 
@@ -272,7 +272,7 @@ def test_acceptance_simulated_killed_worker_recovered_by_reaper(in_memory_db):
     ACCEPTANCE CRITERION 3:
     A simulated killed worker (stale locked_at) has its job recovered by the reaper.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     stale_time = now - timedelta(seconds=900)  # 15 minutes ago (threshold is 10 mins = 600s)
 
     # Job leased by crashed worker
@@ -324,7 +324,7 @@ def test_acceptance_simulated_killed_worker_recovered_by_reaper(in_memory_db):
 # ==============================================================================
 
 def test_worker_heartbeat_prevents_reaping(in_memory_db):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     long_render_job = PipelineJob(
         job_type="RENDER_CLIP",
         entity_type="clip",
@@ -342,8 +342,8 @@ def test_worker_heartbeat_prevents_reaping(in_memory_db):
     assert success is True
 
     in_memory_db.refresh(long_render_job)
-    assert (datetime.utcnow() - long_render_job.locked_at).total_seconds() < 5
-    assert (datetime.utcnow() - long_render_job.heartbeat_at).total_seconds() < 5
+    assert (datetime.now(timezone.utc).replace(tzinfo=None) - long_render_job.locked_at).total_seconds() < 5
+    assert (datetime.now(timezone.utc).replace(tzinfo=None) - long_render_job.heartbeat_at).total_seconds() < 5
 
     # Reaper runs -> Job must NOT be reaped
     reaped = reap_stale_jobs(stale_threshold_sec=600, db=in_memory_db)

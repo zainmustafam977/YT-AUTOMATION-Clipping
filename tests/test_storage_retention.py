@@ -4,7 +4,7 @@ PathManager Deletions, and 80% Disk Capacity Alerting.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
@@ -121,7 +121,7 @@ def test_aged_raw_source_purged_when_all_clips_published(test_db, storage_env):
     test_db.commit()
 
     # Create 2 candidates and 2 published clips published 15 days ago
-    aged_pub_date = datetime.utcnow() - timedelta(days=15)
+    aged_pub_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=15)
     for i in (1, 2):
         cand = ClipCandidate(
             id=f"cand-{sv.id}-{i}",
@@ -202,7 +202,7 @@ def test_raw_source_survives_if_recently_published(test_db, storage_env):
     p_log = PublishLog(
         clip_id=clip.id,
         youtube_video_id="yt-recent",
-        published_at=datetime.utcnow() - timedelta(days=5),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=5),
         title="Recent Clip",
         description="5 days ago",
         status="SUCCESS",
@@ -242,7 +242,7 @@ def test_raw_source_survives_if_clip_pending_approval(test_db, storage_env):
     test_db.commit()
     test_db.add(PublishLog(
         clip_id=clip1.id,
-        published_at=datetime.utcnow() - timedelta(days=20),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=20),
         title="Clip 1",
         description="",
     ))
@@ -286,7 +286,7 @@ def test_raw_source_protected_by_active_pipeline_job(test_db, storage_env):
     test_db.commit()
     test_db.add(PublishLog(
         clip_id=clip.id,
-        published_at=datetime.utcnow() - timedelta(days=60),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=60),
         title="Old Clip",
         description="",
     ))
@@ -353,7 +353,7 @@ def test_intermediates_purged_while_final_render_preserved(test_db, storage_env)
     # Published 5 days ago (> 3 days)
     test_db.add(PublishLog(
         clip_id=clip.id,
-        published_at=datetime.utcnow() - timedelta(days=5),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=5),
         title="Published Clip",
         description="",
     ))
@@ -405,7 +405,7 @@ def test_intermediates_survive_if_recently_published(test_db, storage_env):
     # Published 1 day ago (< 3 days)
     test_db.add(PublishLog(
         clip_id=clip.id,
-        published_at=datetime.utcnow() - timedelta(days=1),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1),
         title="Recent",
         description="",
     ))
@@ -474,7 +474,7 @@ def test_daily_cleanup_queue_stage_execution(test_db, storage_env):
     test_db.commit()
     test_db.add(PublishLog(
         clip_id=clip.id,
-        published_at=datetime.utcnow() - timedelta(days=20),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=20),
         title="Old",
         description="",
     ))
@@ -518,4 +518,4 @@ def test_daily_cleanup_queue_stage_execution(test_db, storage_env):
     assert len(next_jobs) >= 1
     scheduled_job = next_jobs[-1]
     assert scheduled_job.next_run_at is not None
-    assert scheduled_job.next_run_at > datetime.utcnow()
+    assert scheduled_job.next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)

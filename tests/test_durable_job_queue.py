@@ -10,7 +10,7 @@ Verifies:
 7. Orphaned worker lease reclamation.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -148,7 +148,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     assert f1.retry_count == 1
     assert f1.status == PipelineJobStatus.PENDING
     assert f1.next_run_at is not None
-    assert f1.next_run_at > datetime.utcnow()
+    assert f1.next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Attempt to claim immediately -> None (next_run_at is in future)
     assert queue.claim_next_job(worker_id="worker-node1-111-aaa") is None
@@ -156,7 +156,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     # Simulate arrival of next_run_at by shifting next_run_at to past
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update(
-            {"next_run_at": datetime.utcnow() - timedelta(seconds=1)}
+            {"next_run_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)}
         )
         session.commit()
 
@@ -170,7 +170,7 @@ def test_fail_job_exponential_backoff_and_dlq(test_queue):
     # Fast forward next_run_at again
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update(
-            {"next_run_at": datetime.utcnow() - timedelta(seconds=1)}
+            {"next_run_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)}
         )
         session.commit()
 
@@ -219,8 +219,8 @@ def test_reconcile_orphaned_jobs(test_queue):
     # Simulate that heartbeat was 15 minutes ago
     with SessionFactory() as session:
         session.query(PipelineJob).filter_by(id=claimed.id).update({
-            "heartbeat_at": datetime.utcnow() - timedelta(seconds=900),
-            "locked_at": datetime.utcnow() - timedelta(seconds=900),
+            "heartbeat_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=900),
+            "locked_at": datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=900),
         })
         session.commit()
 

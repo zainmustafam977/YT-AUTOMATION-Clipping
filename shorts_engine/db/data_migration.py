@@ -6,7 +6,7 @@ topological foreign-key ordering, datatype normalization, and row-count verifica
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from sqlalchemy import create_engine, inspect, text, Table, MetaData, Boolean, DateTime
@@ -101,7 +101,7 @@ def migrate_sqlite_to_postgres(
     Executes an end-to-end migration of SQLite data into a target database (typically PostgreSQL).
     Idempotent: Initializes target schema, migrates rows, and verifies parity.
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
     source_sqlite_path = Path(source_sqlite_path)
 
     if not source_sqlite_path.exists():
@@ -240,7 +240,7 @@ def migrate_sqlite_to_postgres(
             ))
 
     # 3. Final summary check
-    summary.duration_seconds = round((datetime.utcnow() - start_time).total_seconds(), 2)
+    summary.duration_seconds = round((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds(), 2)
     summary.success = len(summary.errors) == 0
 
     logger.info(

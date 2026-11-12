@@ -372,14 +372,14 @@ def test_winner_daemon_promotes_both_title_and_thumbnail(db_session, tmp_path):
     db_session.add(clip)
     db_session.flush()
 
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     pub_log = PublishLog(
         clip_id=clip.id,
         youtube_video_id="yt_win_789",
         status="PUBLISHED",
         title="Baseline Title",
         description="Test Description",
-        published_at=datetime.utcnow() - timedelta(days=4),
+        published_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=4),
     )
     db_session.add(pub_log)
     db_session.commit()

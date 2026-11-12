@@ -6,7 +6,7 @@ atomic publish slot allocation, and bulk review operations.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
@@ -232,7 +232,7 @@ def reject_clip_action(
                 .update(
                     {
                         PipelineJob.status: PipelineJobStatus.CANCELLED,
-                        PipelineJob.completed_at: datetime.utcnow(),
+                        PipelineJob.completed_at: datetime.now(timezone.utc).replace(tzinfo=None),
                         PipelineJob.locked_by: None,
                         PipelineJob.locked_at: None,
                     },
@@ -271,7 +271,7 @@ def reject_clip_action(
     clip.scheduled_publish_at = None
     clip.rejection_reason_code = code
     clip.rejection_note = note
-    clip.rejected_at = datetime.utcnow()
+    clip.rejected_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Dual-write into quality_check_result
     try:
@@ -385,7 +385,7 @@ def recover_publish_job(
     if slot_id:
         slot = db.query(PublishSlot).filter_by(id=slot_id).first()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     slot_is_valid = (
         slot is not None
         and slot.status == PublishSlotStatus.RESERVED.value

@@ -19,7 +19,7 @@ import logging
 import argparse
 import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
@@ -152,7 +152,7 @@ class WorkerDaemon:
         lock_info = {
             "pid": os.getpid(),
             "worker_id": self.worker_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         self.lock_file.write_text(json.dumps(lock_info))
         self._lock_acquired = True
@@ -372,7 +372,7 @@ class WorkerDaemon:
             # Mark job DONE only if not cancelled
             if job_db.status != PipelineJobStatus.CANCELLED:
                 job_db.status = PipelineJobStatus.DONE
-                job_db.completed_at = datetime.utcnow()
+                job_db.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 job_db.locked_by = None
                 job_db.locked_at = None
                 if result and isinstance(result, dict):

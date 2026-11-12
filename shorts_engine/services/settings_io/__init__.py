@@ -16,7 +16,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -92,7 +92,7 @@ def get_exportable_settings(actor: str = "system") -> Dict[str, Any]:
     for key in EXPORTABLE_KEYS:
         snap[key] = os.getenv(key)
     snap["_actor"] = actor
-    snap["_exported_at"] = datetime.utcnow().isoformat() + "Z"
+    snap["_exported_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
     return snap
 
 
