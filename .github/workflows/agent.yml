@@ -98,6 +98,11 @@ jobs:
         env:
           DASHBOARD_SECRET_KEY: "test-key-for-ci-only-not-a-real-secret-1234"
           ENCRYPTION_KEY: "test-fernet-key-for-ci-only"
+      - name: Fetch large assets (Git LFS)
+        run: |
+          git lfs install
+          git lfs pull
+          python scripts/ensure_large_assets.py
       - name: Run tests
         env:
           OMP_NUM_THREADS: "1"
