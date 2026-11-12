@@ -41,7 +41,7 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     container_name: yt-shorts-postgres
     restart: always
     environment:
@@ -58,7 +58,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     container_name: yt-shorts-redis
     restart: always
     volumes:
@@ -125,7 +125,7 @@ services:
     command: ["python", "cli.py", "worker", "--concurrency", "1", "--poll-interval", "5"]
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
     container_name: yt-shorts-caddy
     restart: always
     profiles:

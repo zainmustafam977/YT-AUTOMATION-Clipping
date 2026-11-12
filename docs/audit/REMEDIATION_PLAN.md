@@ -124,7 +124,7 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 
 - T-P2-2 datetime.utcnow modernization: Done (230 call sites + 55 default_factory converted; ruff/mypy clean; semantics preserved as naive UTC).
 - T-P2-1 Ruff scope expansion: Done (removed tests from exclude; fixed 159 F401/F841/E741; ruff check . clean).
-- T-P2-5 Docker digest pinning: Pending.
+- T-P2-5 Docker digest pinning: Done (Dockerfile + docker-compose images pinned by sha256 digest).
 - T-P2-6 Large asset LFS: Pending.
 - T-P2-3 Dead/unwired feature audit: Pending.
 - T-P2-4 Batch UI/CLI: Pending.

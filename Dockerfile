@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for YouTube Shorts Automation Platform
 # Includes FFmpeg 7+, libass, Python 3.11, and GPU/CPU inference dependencies.
 
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for ultra-fast dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 /uv /bin/uv
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ RUN uv venv /opt/venv && \
     uv pip install --no-cache -r requirements.txt pytest
 
 # Final Production Stage
-FROM python:3.11-slim AS runner
+FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535 AS runner
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
