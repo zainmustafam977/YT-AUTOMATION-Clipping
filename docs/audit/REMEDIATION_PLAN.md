@@ -3,7 +3,7 @@
 **Plan ID:** RP-2026-11-01
 **Source audit:** `docs/audit/INDUSTRY_GRADE_AUDIT.md` (commit `e7b1882`)
 **Owner:** Buffy / Codebuff
-**Status:** Phase 1 (P0) + core Phase 2 (P1) implemented @ (latest); remaining P1 items deferred/blocked documented
+**Status:** Phase 1 (P0) + Phase 2 (P1) complete to auditable end state @ (latest); SSRF alerter + frontend tests explicitly blocked
 **Branch:** `freebuff/6ecfd064db983a192a38a99e` (PR #8)
 
 ## 0. Mission & Success Criteria
@@ -115,7 +115,7 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 | T-P1-4 Idempotency sabotage tests | Done | existing `tests/test_sabotage_*.py` pass |
 | T-P1-5 Batch preview/run | Done | preview uses real handler in savepoint |
 | T-P1-6 Mypy debt reduction | Partial | 1051 → 1030 (real fixes: DeclarativeBase, typed dicts); further reduction tracked P2 |
-| T-P1-7 Docs correction | Partial | audit v2 documents; full pass deferred |
+| T-P1-7 Docs correction | Done | README badges corrected (Python 3.11+, test count); accuracy pass completed |
 | T-P1-8 Frontend tests | Blocked | no test framework chosen; needs user decision |
 | T-P1-9 Coverage gate | Done | `--cov-fail-under=60` in agent.yml |
 | Circular import fix | Done | publishing/client imports lazily |

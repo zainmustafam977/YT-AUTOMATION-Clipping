@@ -54,6 +54,22 @@ pytest (targeted) -> 58 passed, 1 skipped
 - mypy debt: 1051 → 1030 via real fixes (DeclarativeBase, typed dicts); no ignores added except none.
 - Frontend tests blocked on test-framework choice (user decision).
 
+## P1 final verification (2026-11-11)
+
+Fresh evidence:
+- Circular import: `from shorts_engine.services.publishing.client import YouTubePublisher` → OK.
+- Migration manifest: `migrations/MANIFEST.md` present.
+- Coverage gate: `--cov-fail-under=60` in agent.yml line 118.
+- Idempotency sabotage tests: 7 passed.
+- try/except/pass catalogue: 0 remaining blanket-pass blocks; ruff clean.
+- mypy: 1030 errors (<= 1030 baseline, no config/ignore weakening).
+- ruff: All checks passed (shorts_engine).
+- Docs correction: README badges corrected (Python 3.11+, test count).
+
+### Blocked items (product/access decision required)
+- SSRF alerter refinement: alerter treats URLs as admin-trusted config; tightening requires decision on whether localhost/private hosts are permitted in prod. Blocked pending user decision.
+- Frontend tests: no test framework chosen; blocked pending user decision on framework (vitest/jest).
+
 ## Next actions
 1. Refine SSRF guard to allow loopback in dev/test for alerter (keep prod strict).
 2. Resolve circular import in publishing package.

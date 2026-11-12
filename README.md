@@ -1,12 +1,12 @@
 # ⚡ YouTube Shorts Autonomous Production & Syndication Engine
 
 [![CI/CD Reliability Gate](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml/badge.svg)](https://github.com/zainmustafam977/YT-AUTOMATION-Clipping/actions/workflows/ci.yml)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Database](https://img.shields.io/badge/database-SQLite%20%7C%20PostgreSQL-blue.svg)](https://www.sqlite.org/)
 [![AI Models](https://img.shields.io/badge/AI-Gemini%203.8%20%7C%20Groq%20%7C%20Whisper-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![Hardware Accel](https://img.shields.io/badge/Hardware-NVENC%20%7C%20QSV%20%7C%20VAAPI-green.svg)](https://ffmpeg.org)
 [![Security Audited](https://img.shields.io/badge/Security-AES--256--GCM%20Vault-red.svg)](#security--secrets-management)
-[![Test Coverage](https://img.shields.io/badge/Tests-337%2B%20Passing%20(100%25)-brightgreen.svg)](#test-suite--reliability-verification)
+[![Test Coverage](https://img.shields.io/badge/Tests-1100%2B%20Passing-brightgreen.svg)](#test-suite--reliability-verification)
 
 An enterprise-grade, end-to-end autonomous media processing and publishing platform designed for high-throughput video ingestion, AI-driven clip boundary extraction, intelligent face-tracking reframing (9:16), word-level synchronized subtitle animation, broadcast-grade audio mastering, and automated multi-platform syndication (YouTube Shorts, Instagram Reels, TikTok).
 
