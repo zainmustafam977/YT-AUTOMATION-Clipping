@@ -127,7 +127,7 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 - T-P2-5 Docker digest pinning: Done (Dockerfile + docker-compose images pinned by sha256 digest).
 - T-P2-6 Large asset LFS: Done (seguiemj.ttf tracked via LFS; .gitattributes added; CI fetch step + ensure_large_assets.py).
 - T-P2-3 Dead/unwired feature audit: Done (audit doc; no safe removals; all surveyed features referenced).
-- T-P2-4 Batch UI/CLI: Pending.
+- T-P2-4 Batch UI/CLI: Done (typer `batch` command group: preview/run/list; smoke tests).
 - T-P2-7 Unverified features: Pending.
 
 ## 7. Verification & Exit
