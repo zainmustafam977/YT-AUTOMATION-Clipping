@@ -67,8 +67,8 @@ Fresh evidence:
 - Docs correction: README badges corrected (Python 3.11+, test count).
 
 ### Blocked items (product/access decision required)
-- SSRF alerter refinement: alerter treats URLs as admin-trusted config; tightening requires decision on whether localhost/private hosts are permitted in prod. Blocked pending user decision.
-- Frontend tests: no test framework chosen; blocked pending user decision on framework (vitest/jest).
+- SSRF alerter refinement: resolved by user decision — private/localhost hosts permitted in prod (admin-trusted config retained; no code change).
+- Frontend tests: resolved — Vitest chosen; `npm run test` (1 passing) and `npm run lint` clean.
 
 ## P2 progress (2026-11-11)
 

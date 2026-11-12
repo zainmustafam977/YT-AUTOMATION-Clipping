@@ -3,7 +3,7 @@
 **Plan ID:** RP-2026-11-01
 **Source audit:** `docs/audit/INDUSTRY_GRADE_AUDIT.md` (commit `e7b1882`)
 **Owner:** Buffy / Codebuff
-**Status:** Phase 1 (P0) + Phase 2 (P1) complete to auditable end state @ (latest); SSRF alerter + frontend tests explicitly blocked
+**Status:** Phase 1 (P0) + Phase 2 (P1) complete to auditable end state @ (latest); SSRF alerter resolved by user decision (allow private/localhost in prod); frontend tests via Vitest
 **Branch:** `freebuff/6ecfd064db983a192a38a99e` (PR #8)
 
 ## 0. Mission & Success Criteria
@@ -116,7 +116,7 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 | T-P1-5 Batch preview/run | Done | preview uses real handler in savepoint |
 | T-P1-6 Mypy debt reduction | Partial | 1051 → 1030 (real fixes: DeclarativeBase, typed dicts); further reduction tracked P2 |
 | T-P1-7 Docs correction | Done | README badges corrected (Python 3.11+, test count); accuracy pass completed |
-| T-P1-8 Frontend tests | Blocked | no test framework chosen; needs user decision |
+| T-P1-8 Frontend tests | Done | Vitest chosen per user decision; smoke test added |
 | T-P1-9 Coverage gate | Done | `--cov-fail-under=60` in agent.yml |
 | Circular import fix | Done | publishing/client imports lazily |
 
@@ -129,6 +129,7 @@ Every finding in `INDUSTRY_GRADE_AUDIT.md` §12 maps to a task above. Verified: 
 - T-P2-3 Dead/unwired feature audit: Done (audit doc; no safe removals; all surveyed features referenced).
 - T-P2-4 Batch UI/CLI: Done (typer `batch` command group: preview/run/list; smoke tests).
 - T-P2-7 Unverified features: Done (commit 39b657e) — F-12 SRT/VTT sidecars implemented + tested; F-17 rights ledger implemented (model + migration 013 + service + tests); F-23/24 already resolved.
+- T-P1-8 Frontend tests: Done — Vitest configured (jsdom, setup, smoke test); `npm run test` passes; `npm run lint` clean.
 
 ## 7. Verification & Exit
 
