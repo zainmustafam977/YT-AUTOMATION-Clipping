@@ -6,8 +6,6 @@ Tests:
 3. Autonomous A/B Variant Suite Generation (3 Diverse Thumbnails, Titles, and YouTube Promotion).
 """
 
-import os
-import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -31,15 +29,12 @@ from shorts_engine.services.reframing.detector import DetectedFace
 from shorts_engine.services.rendering.compositor import VideoCompositor
 from shorts_engine.services.captioning.templates import (
     get_caption_template,
-    CaptionStyleTemplate,
     BUILTIN_TEMPLATES,
-    TEMPLATE_ALIASES,
 )
 from shorts_engine.services.captioning.ass_generator import ASSSubtitleGenerator
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.ab_testing.thumbnail_generator import ThumbnailVariantGenerator
 from shorts_engine.services.ab_testing.coordinator import ABVariantCoordinator
-from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer, VariantEvaluationResult
 from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip
 from shorts_engine.services.publishing.client import YouTubePublisher
 

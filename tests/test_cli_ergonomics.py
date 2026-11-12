@@ -1,5 +1,4 @@
 """Tests for E-023 CLI ergonomics."""
-import json
 import pytest
 
 from shorts_engine.cli.ergonomics import (

@@ -1,9 +1,6 @@
 import uuid
-import pytest
-from pathlib import Path
-from sqlalchemy.orm.session import Session
 
-from shorts_engine.db.session import SessionLocal, Base, engine
+from shorts_engine.db.session import SessionLocal
 from shorts_engine.db.models import (
     SourceVideo,
     SourceVideoStatus,

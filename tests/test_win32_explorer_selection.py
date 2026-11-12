@@ -168,7 +168,7 @@ def test_explorer_selection_db_clip_lookup(tmp_path):
 
     with patch("platform.system", return_value="Windows"), \
          patch("sys.platform", "win32"), \
-         patch("subprocess.Popen") as mock_popen:
+         patch("subprocess.Popen"):
 
         # 1. Test passing Clip model object directly
         res_clip = ClipRecoveryService.open_in_folder(clip)

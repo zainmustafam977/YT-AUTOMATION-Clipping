@@ -5,7 +5,6 @@ reject every notification, because accepting unsigned pushes would let anyone
 enqueue arbitrary videos for ingestion.
 """
 
-import pytest
 
 from shorts_engine.services.detection.websub import WebSubNotificationParser
 

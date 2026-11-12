@@ -4,20 +4,19 @@ Database Logging, Rollup Queries, Daily Budget Brake Deferral, and Multi-Key 429
 """
 
 import json
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from pydantic import BaseModel, Field
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from shorts_engine.config.settings import settings, PipelineSettings
+from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import (
     LLMUsageLog,
     PipelineJob,
     PipelineJobStatus,
-    SourceVideo,
     User,
     UserRole,
 )

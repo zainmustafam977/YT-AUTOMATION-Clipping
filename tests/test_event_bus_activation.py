@@ -26,7 +26,6 @@ import json
 import time
 import threading
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

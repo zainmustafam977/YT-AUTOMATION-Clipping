@@ -1,7 +1,4 @@
 """Tests for E-011 overlay HTTP routes."""
-import os
-import sqlite3
-import tempfile
 
 import pytest
 
@@ -204,7 +201,7 @@ def test_import_preset(client):
 
 
 def test_import_unverified_preset(client):
-    from shorts_engine.services.overlay.spec import OverlaySpec, OverlayLayer, LayerType, TextStyle, serialize_spec
+    from shorts_engine.services.overlay.spec import OverlaySpec, OverlayLayer, LayerType, TextStyle
     from shorts_engine.services.overlay.presets import preset_sha256
     spec = OverlaySpec(name="unverified-import", base_w=720, base_h=1280, layers=[
         OverlayLayer(layer_type=LayerType.TEXT, text="hi", x=0.5, y=0.5, text_style=TextStyle()),

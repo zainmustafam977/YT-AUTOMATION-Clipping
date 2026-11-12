@@ -1,5 +1,3 @@
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from shorts_engine.orchestration.stage_registry import caption_stage, render_stage, StageContext
@@ -72,7 +70,7 @@ def test_render_stage_supports_both_cropplan_and_dict_shapes(tmp_path):
 
     with patch("shorts_engine.services.rendering.compositor.VideoCompositor.render_short", return_value={"output_path": "out.mp4"}) as mock_render, \
          patch("shorts_engine.services.storage.path_manager.PathManager.get_subtitle_path", return_value=tmp_path / "sub.ass"):
-        res = render_stage(ctx_live)
+        render_stage(ctx_live)
         assert mock_render.called
         plan_used = mock_render.call_args[1]["crop_plan"]
         assert isinstance(plan_used, CropPlan)
@@ -103,7 +101,7 @@ def test_render_stage_supports_both_cropplan_and_dict_shapes(tmp_path):
 
     with patch("shorts_engine.services.rendering.compositor.VideoCompositor.render_short", return_value={"output_path": "out.mp4"}) as mock_render, \
          patch("shorts_engine.services.storage.path_manager.PathManager.get_subtitle_path", return_value=tmp_path / "sub.ass"):
-        res = render_stage(ctx_dict)
+        render_stage(ctx_dict)
         assert mock_render.called
         plan_used = mock_render.call_args[1]["crop_plan"]
         assert isinstance(plan_used, CropPlan)

@@ -1,11 +1,9 @@
 """Tests for E-011 presets + E-012 export/import with SHA-256."""
-import json
 import sqlite3
 import pytest
 
 from shorts_engine.services.overlay.spec import OverlaySpec, OverlayLayer, LayerType, TextStyle
 from shorts_engine.services.overlay.presets import (
-    BUILTIN_PRESETS,
     list_builtin_presets,
     get_builtin_preset,
     upsert_preset,

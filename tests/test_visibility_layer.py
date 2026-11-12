@@ -19,11 +19,9 @@ Validates:
 
 import json
 import time
-import shutil
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -35,8 +33,6 @@ from shorts_engine.config.settings import settings
 from shorts_engine.db.session import Base
 from shorts_engine.db.models import (
     PipelineJob,
-    PipelineJobStatus,
-    EventLog,
     Channel,
     ChannelCredential,
     PublishLog,
@@ -60,7 +56,6 @@ from shorts_engine.services.monitoring.visibility import (
     get_quota_visibility,
     get_media_root_disk_usage,
     get_jobs_summary_24h,
-    get_full_visibility_snapshot,
     evaluate_system_thresholds_and_alert,
 )
 from shorts_engine.services.events.taxonomy import (
@@ -69,7 +64,6 @@ from shorts_engine.services.events.taxonomy import (
     CHANNEL_HEALTH,
     QUOTA_LOW,
 )
-from shorts_engine.services.monitoring.alerter import pipeline_alerter
 
 
 # ── Local Webhook Receiver for Acceptance Testing ────────────────────────────

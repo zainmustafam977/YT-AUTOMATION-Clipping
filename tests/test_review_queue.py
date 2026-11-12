@@ -503,7 +503,7 @@ def test_durable_queue_claim_predicate_next_run_at(test_env):
 
     # Enqueue a future publish job (+1 hour)
     fut_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
-    job_fut = durable_job_queue.enqueue(
+    durable_job_queue.enqueue(
         job_type="publish",
         entity_id=clip_fut.id,
         stage="publish",

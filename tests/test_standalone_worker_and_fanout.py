@@ -10,13 +10,9 @@ ACCEPTANCE CRITERIA:
 5. Graceful shutdown: on SIGTERM/SIGINT, active in-flight job completes before worker exits.
 """
 
-import os
 import time
-import json
 import logging
 import threading
-from pathlib import Path
-from datetime import datetime
 from typing import List, Tuple
 from unittest.mock import patch, MagicMock
 
@@ -25,21 +21,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from shorts_engine.db.session import Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import (
     SourceVideo,
     SourceVideoStatus,
-    ClipCandidate,
     Clip,
     ClipStatus,
     PipelineJob,
     PipelineJobStatus,
-    Transcript,
 )
 from shorts_engine.services.queue.durable_queue import DurableJobQueue
-from shorts_engine.services.worker.daemon import WorkerDaemon, DEFAULT_GROUP_CONCURRENCY
+from shorts_engine.services.worker.daemon import WorkerDaemon
 from shorts_engine.services.ingestion.watch_folder import WatchFolderDaemon
-from shorts_engine.orchestration.stage_registry import Stage, StageContext, StageExecutor
+from shorts_engine.orchestration.stage_registry import Stage, StageExecutor
 
 logger = logging.getLogger("test_worker_acceptance")
 
@@ -265,7 +259,7 @@ def test_dropping_same_file_twice_produces_one_pipeline_run(test_env):
         watch_daemon.scan_directory_candidates()
         watch_daemon.poll_and_process_stable_files()
         time.sleep(0.05)
-        ready2 = watch_daemon.poll_and_process_stable_files()
+        watch_daemon.poll_and_process_stable_files()
 
         # Database state: Only 1 SourceVideo and exactly 1 'ingest' PipelineJob must exist
         with SessionFactory() as db:
@@ -338,15 +332,14 @@ def test_postgres_render_concurrency_and_transcribe_overlap(test_env):
     On Postgres: while one video renders (render concurrency = 1), another video's transcription
     proceeds concurrently (demonstrated with overlapping execution timestamps and logs).
     """
-    from typing import List, Tuple
 
     SessionFactory = test_env["SessionFactory"]
     queue = DurableJobQueue(session_factory=SessionFactory)
 
     # Video 1 has a render job; Video 2 has a transcribe job
-    job_render_1 = queue.enqueue("render", "vid_01", entity_type="clip", stage="render")
-    job_transcribe_2 = queue.enqueue("transcribe", "vid_02", entity_type="source_video", stage="transcribe")
-    job_render_2 = queue.enqueue("render", "vid_03", entity_type="clip", stage="render")
+    queue.enqueue("render", "vid_01", entity_type="clip", stage="render")
+    queue.enqueue("transcribe", "vid_02", entity_type="source_video", stage="transcribe")
+    queue.enqueue("render", "vid_03", entity_type="clip", stage="render")
 
     timeline: List[Tuple[str, str, float]] = []
     timeline_lock = threading.Lock()

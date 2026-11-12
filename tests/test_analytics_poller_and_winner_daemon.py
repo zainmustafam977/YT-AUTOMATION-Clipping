@@ -30,9 +30,9 @@ from shorts_engine.db.models import (
     PipelineJobStatus,
 )
 from shorts_engine.services.analytics.poller import AnalyticsPoller
-from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip, check_and_promote_ab_winners
+from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip
 from shorts_engine.services.queue.durable_queue import durable_job_queue
-from shorts_engine.orchestration.stage_registry import StageContext, analytics_poll_stage, PIPELINE
+from shorts_engine.orchestration.stage_registry import StageContext, analytics_poll_stage
 
 
 @pytest.fixture

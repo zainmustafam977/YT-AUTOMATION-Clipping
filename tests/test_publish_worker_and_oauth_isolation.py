@@ -8,12 +8,8 @@ Verifies all 5 Acceptance Criteria:
 5. dry_run path logs payload, skips API calls, and consumes zero quota.
 """
 
-import os
 import ast
-import json
-import random
-import subprocess
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
@@ -31,23 +27,18 @@ from shorts_engine.db.models import (
     ClipStatus,
     PipelineJob,
     PipelineJobStatus,
-    PublishJob,
     PublishLog,
 )
 from shorts_engine.db.security import encrypt_secret
 from shorts_engine.services.publishing.worker import (
     YouTubePublishWorker,
     format_idempotency_tag,
-    build_youtube_client,
     HttpError,
     DEFAULT_SCOPES,
 )
 from shorts_engine.services.publishing.quota import (
     QuotaTracker,
     get_next_pacific_midnight,
-    VIDEOS_INSERT_COST_UNITS,
-    VIDEOS_UPDATE_COST_UNITS,
-    CHANNELS_LIST_COST_UNITS,
 )
 
 
@@ -180,7 +171,7 @@ def test_oauth_and_youtube_client_import_isolation():
                         violating_files.append((rel_path, node.lineno, mod_name, "google OAuth/client library allowed only in services/publishing/"))
 
     assert not violating_files, (
-        f"Forbidden Google client library imports found:\n"
+        "Forbidden Google client library imports found:\n"
         + "\n".join(f"  {f}:{line} imports '{mod}' ({reason})" for f, line, mod, reason in violating_files)
     )
 
@@ -353,7 +344,7 @@ def test_simulated_ambiguous_failure_triggers_tag_verification(db_session):
     mock_client.videos.return_value.insert.return_value = mock_request
 
     # Also mock tracker
-    tracker = QuotaTracker()
+    QuotaTracker()
 
     with patch("shorts_engine.services.publishing.worker.build_youtube_client", return_value=mock_client):
         # We simulate the first call finding nothing, then upload encountering network dropout

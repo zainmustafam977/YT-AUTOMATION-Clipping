@@ -56,7 +56,7 @@ def test_rss_poller_parses_new_video():
     db.add(channel)
     db.commit()
 
-    atom_feed = _make_atom_feed([("UC_testchannel", "NEW_VIDEO_001")])
+    _make_atom_feed([("UC_testchannel", "NEW_VIDEO_001")])
     poller = RSSPoller()
 
     with patch.object(poller, "fetch_feed", return_value=[("NEW_VIDEO_001", __import__("datetime").datetime.now())]):

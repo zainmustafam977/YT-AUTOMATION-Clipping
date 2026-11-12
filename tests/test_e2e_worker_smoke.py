@@ -17,10 +17,7 @@ MANUAL INVOCATION:
 """
 
 import os
-import sys
-import json
 import time
-import shutil
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone

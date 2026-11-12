@@ -10,18 +10,14 @@ Verifies:
 import os
 import socket
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from shorts_engine.db.session import (
-    Base,
     init_db,
     ensure_schema_upgrades,
-    is_postgres,
 )
 from shorts_engine.db.models import (
     Channel,
@@ -39,8 +35,6 @@ from shorts_engine.services.worker.runner import (
     parse_claim_info,
     extract_pid_from_claim,
     is_claim_stale,
-    claim_next_clip,
-    reconcile_stale_claims,
 )
 from shorts_engine.db.data_migration import migrate_sqlite_to_postgres
 

@@ -115,7 +115,7 @@ def test_video_compositor_broll_filter_complex(tmp_path, monkeypatch):
     monkeypatch.setattr(compositor, "validate_render", lambda p: MagicMock(is_valid=False))
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
 
-    res = compositor.render_short(
+    compositor.render_short(
         source_video_path=source_video,
         start_ms=1000,
         end_ms=6000,

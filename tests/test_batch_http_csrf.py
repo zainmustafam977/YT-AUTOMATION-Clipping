@@ -14,7 +14,6 @@ from shorts_engine.db.models import User, UserRole
 from shorts_engine.dashboard.app import app
 from shorts_engine.dashboard.auth import (
     create_session_token,
-    generate_csrf_token,
     SESSION_COOKIE_NAME,
 )
 

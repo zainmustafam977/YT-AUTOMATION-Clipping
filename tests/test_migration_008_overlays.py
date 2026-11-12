@@ -1,5 +1,4 @@
 """Tests for the overlay migration (008_overlay_engine.sql) and rollback."""
-import os
 import re
 from pathlib import Path
 

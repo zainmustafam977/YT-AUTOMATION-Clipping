@@ -13,9 +13,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker
 
-import pytest
 
-from shorts_engine.db.session import engine as global_engine, Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import (
     Channel,
     SourceVideo,

@@ -84,7 +84,6 @@ exclude = [
     "build",
     "*.egg-info",
     "docs",
-    "tests",
     "scripts",
     "patch.py",
 ]

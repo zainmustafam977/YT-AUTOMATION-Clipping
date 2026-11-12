@@ -16,7 +16,7 @@ import json
 import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -34,14 +34,12 @@ from shorts_engine.db.models import (
     ChannelCredential,
     PublishSlot,
     PublishSlotStatus,
-    PublishLog,
     PipelineJob,
     PipelineJobStatus,
 )
 from shorts_engine.services.publishing.slots import PublishSlotService
 from shorts_engine.services.publishing.actions import approve_clip_for_publishing
 from shorts_engine.services.publishing.quota import QuotaTracker
-from shorts_engine.services.publishing.worker import YouTubePublishWorker
 
 
 @pytest.fixture

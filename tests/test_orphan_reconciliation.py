@@ -12,12 +12,12 @@ Visibility: job.reconciled platform event emitted with db session.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from shorts_engine.db.session import Base, init_db
+from shorts_engine.db.session import init_db
 from shorts_engine.db.models import (
     Channel,
     SourceVideo,

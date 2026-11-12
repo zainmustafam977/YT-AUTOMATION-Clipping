@@ -1,13 +1,10 @@
 """Tests for E-011 OverlaySpec serialization + validation."""
-import json
-import pytest
 
 from shorts_engine.services.overlay.spec import (
     OverlaySpec,
     OverlayLayer,
     LayerType,
     TextStyle,
-    ImageStyle,
     StickerStyle,
     ShapeStyle,
     parse_spec,

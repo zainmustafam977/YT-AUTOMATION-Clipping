@@ -9,7 +9,6 @@ Guarantees:
 """
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
@@ -36,9 +35,7 @@ from shorts_engine.db.models import (
     AuditLog,
     PipelineJob,
     PipelineJobStatus,
-    EventLog,
 )
-from shorts_engine.config.settings import settings
 from shorts_engine.services.queue.durable_queue import durable_job_queue
 from shorts_engine.services.worker.daemon import WorkerDaemon
 from shorts_engine.services.publishing.worker import YouTubePublishWorker
@@ -47,7 +44,6 @@ from shorts_engine.services.publishing.quota import QuotaTracker, VIDEOS_INSERT_
 from shorts_engine.services.publishing.actions import (
     approve_clip_for_publishing,
     reject_clip_action,
-    recover_publish_job,
 )
 from shorts_engine.orchestration.exceptions import (
     PermanentError,

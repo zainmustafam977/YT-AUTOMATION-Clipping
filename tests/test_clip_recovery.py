@@ -99,7 +99,7 @@ def test_open_in_folder_cross_platform(tmp_path):
 
 
 def test_resume_button_state_machine():
-    now = MagicMock()
+    MagicMock()
 
     now_time = datetime.now(timezone.utc).replace(tzinfo=None)
 

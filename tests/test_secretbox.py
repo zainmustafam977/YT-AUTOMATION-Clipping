@@ -4,7 +4,6 @@ Tests fail-fast behavior when SECRETS_MASTER_KEY is unset,
 Fernet encryption roundtrip, tampering detection, and key rotation.
 """
 
-import os
 import pytest
 from cryptography.fernet import Fernet
 from shorts_engine.security import secretbox

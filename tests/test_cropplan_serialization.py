@@ -1,5 +1,4 @@
 import json
-import pytest
 from shorts_engine.services.reframing.cropper import CropPlan
 
 

@@ -1,7 +1,5 @@
 """Tests for E-011 engine: apply preset to candidate + audit."""
-import os
 import sqlite3
-import tempfile
 
 import pytest
 

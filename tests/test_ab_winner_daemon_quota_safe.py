@@ -29,10 +29,8 @@ from shorts_engine.db.models import (
     SourceVideo,
     Channel,
     PublishLog,
-    AnalyticsMetric,
     PipelineJob,
 )
-from shorts_engine.services.ab_testing.bandit import BayesianVariantOptimizer
 from shorts_engine.services.ab_testing.winner_daemon import evaluate_and_promote_clip
 import shorts_engine.services.ab_testing.bandit as bandit_mod
 import shorts_engine.services.ab_testing.winner_daemon as daemon_mod

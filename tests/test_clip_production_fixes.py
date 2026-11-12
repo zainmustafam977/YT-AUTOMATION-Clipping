@@ -11,13 +11,10 @@ Unit and integration tests for clip production fixes:
    - Rendered clip audio measures within +/- 1 LU of -14 LUFS.
 """
 
-import json
 import logging
 import subprocess
-from pathlib import Path
 from PIL import Image
 import numpy as np
-import pytest
 
 from shorts_engine.config.settings import settings
 from shorts_engine.services.captioning.ass_generator import (
@@ -28,7 +25,7 @@ from shorts_engine.services.captioning.ass_generator import (
 )
 from shorts_engine.services.transcription.formatter import WordSegment
 from shorts_engine.services.audio.mastering import AudioMasteringEngine
-from shorts_engine.services.rendering.compositor import get_ass_filter_string, escape_ffmpeg_filter_path
+from shorts_engine.services.rendering.compositor import get_ass_filter_string
 
 
 # =====================================================================
